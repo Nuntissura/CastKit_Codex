@@ -85,6 +85,7 @@ export function MediaPane({
   const [filterRatingValue, setFilterRatingValue] = React.useState<number>(0);
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState<boolean>(false);
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
+  const [draftNotes, setDraftNotes] = React.useState<string>('');
 
   React.useEffect(() => {
     // Keep selection valid when the underlying image list changes.
@@ -108,6 +109,15 @@ export function MediaPane({
 
   const selected = selectedId ? filteredImages.find((i) => i.id === selectedId) ?? null : null;
   const isBusy = !!busyImageId && busyImageId === selected?.id;
+  const notesIsDirty = !!selected && String(draftNotes ?? '') !== String(selected.notes ?? '');
+
+  React.useEffect(() => {
+    if (!selected) {
+      setDraftNotes('');
+      return;
+    }
+    setDraftNotes(String(selected.notes ?? ''));
+  }, [selected?.id, selected?.notes]);
 
   const patchMeta = async (
     imageId: string,
@@ -238,28 +248,6 @@ export function MediaPane({
               </button>
             </div>
 
-            <div className={styles.tags}>
-              {(['carousel', 'frontpage'] as const).map((tag) => {
-                const active = (selected.tags || []).includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    className={styles.tagBtn}
-                    data-active={active ? '1' : '0'}
-                    disabled={isBusy}
-                    onClick={() => {
-                      const base = Array.isArray(selected.tags) ? selected.tags : [];
-                      const next = active ? base.filter((t) => t !== tag) : Array.from(new Set([...base, tag]));
-                      void patchMeta(selected.id, { tags: next });
-                    }}
-                    title={`Toggle tag: ${tag}`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-
             <div className={styles.filterRow}>
               <div className={styles.filterTitle}>Filters</div>
               <label className={styles.filterItem}>
@@ -288,6 +276,57 @@ export function MediaPane({
                   ))}
                 </select>
               </label>
+            </div>
+          </div>
+        ) : null}
+
+        {selected && showControls ? (
+          <div className={styles.bottomBar} aria-label="Image metadata">
+            <div className={styles.bottomTags} aria-label="Tags">
+              {(['carousel', 'frontpage'] as const).map((tag) => {
+                const active = (selected.tags || []).includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    className={styles.tagBtn}
+                    data-active={active ? '1' : '0'}
+                    disabled={isBusy}
+                    onClick={() => {
+                      const base = Array.isArray(selected.tags) ? selected.tags : [];
+                      const next = active ? base.filter((t) => t !== tag) : Array.from(new Set([...base, tag]));
+                      void patchMeta(selected.id, { tags: next });
+                    }}
+                    title={`Toggle tag: ${tag}`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className={styles.bottomNotes}>
+              <div className={styles.notesRow}>
+                <div className={styles.notesTitle}>Notes</div>
+                <button
+                  className={styles.notesSave}
+                  disabled={isBusy || !notesIsDirty}
+                  onClick={() => void patchMeta(selected.id, { notes: String(draftNotes ?? '') })}
+                  title="Save notes"
+                >
+                  {isBusy ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
+                </button>
+              </div>
+              <textarea
+                className={styles.notesInput}
+                value={draftNotes}
+                onChange={(e) => setDraftNotes(e.target.value)}
+                onBlur={() => {
+                  if (!selected) return;
+                  if (!notesIsDirty) return;
+                  void patchMeta(selected.id, { notes: String(draftNotes ?? '') });
+                }}
+                placeholder="Notes…"
+              />
             </div>
           </div>
         ) : null}

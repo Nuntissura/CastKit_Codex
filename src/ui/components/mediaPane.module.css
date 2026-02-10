@@ -125,6 +125,67 @@
   border-color: var(--accent-color);
 }
 
+.bottomBar {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.92);
+  padding: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  max-width: min(980px, 96vw);
+}
+
+.bottomTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  flex: 0 0 auto;
+  max-width: 320px;
+}
+
+.bottomNotes {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notesRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notesTitle {
+  font-weight: 800;
+}
+
+.notesSave {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.notesInput {
+  width: 100%;
+  height: 74px;
+  resize: none;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
 .thumbs {
   flex: 0 0 auto;
   display: flex;

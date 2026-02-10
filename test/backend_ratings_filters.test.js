@@ -29,7 +29,6 @@ test('rating operators filter characters; global carousel prefers frontpage', as
   const builtInTemplatePath = path.join(__dirname, '..', 'app', 'templates', 'CHARACTER_SHEET__v2.00.txt');
   const lib = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
   await lib.initialize();
-  t.after(() => lib.close());
 
   const a = await lib.createCharacter({ displayName: 'A' });
   const b = await lib.createCharacter({ displayName: 'B' });
@@ -46,7 +45,8 @@ test('rating operators filter characters; global carousel prefers frontpage', as
   assert.equal(importedB.imported.length, 1);
   const imgB = importedB.imported[0].id;
 
-  await lib.setImageMeta({ imageId: imgA, rating: 5, favorite: true, tags: ['carousel'] });
+  const notesText = 'Line 1\r\nLine 2\nLine 3 — dash\n';
+  await lib.setImageMeta({ imageId: imgA, rating: 5, favorite: true, tags: ['carousel'], notes: notesText });
   await lib.setImageMeta({ imageId: imgB, rating: 1, favorite: false, tags: ['carousel'] });
 
   const ge4 = await lib.listCharacters({ galleryFilters: { ratingOp: '>=', ratingValue: 4 } });
@@ -75,5 +75,17 @@ test('rating operators filter characters; global carousel prefers frontpage', as
   const preferCarousel = await lib.listGlobalCarouselImages({ preferFrontpage: false });
   assert.ok(!preferCarousel.some((img) => img.id === imgA));
   assert.ok(preferCarousel.some((img) => img.id === imgB));
-});
 
+  lib.close();
+
+  // "App restart" persistence: reopen and ensure image notes persist too.
+  const lib2 = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
+  await lib2.initialize();
+
+  const reopened = await lib2.listGlobalCarouselImages({ preferFrontpage: true });
+  const reopenedA = reopened.find((img) => img.id === imgA);
+  assert.ok(reopenedA);
+  assert.equal(reopenedA.notes, notesText);
+
+  lib2.close();
+});
