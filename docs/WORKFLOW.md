@@ -15,8 +15,8 @@ On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Boar
    - push to origin so GitHub stays current
 
 3. **Update spec with every addition**
-   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.020.md`
-   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.020.md`
+   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.021.md`
+   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.021.md`
    - Session dump (verbatim requirements): `docs/SESSION_DUMP_2026-02-10.md`
    - When bumping spec version, move the previous version into `CKC_GOV/spec/archive_spec/`
 

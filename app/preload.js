@@ -64,10 +64,13 @@ contextBridge.exposeInMainWorld('ckc', {
     ingestApply: (params) => ipcRenderer.invoke('ckc:ingestApply', params),
     ingestCreateCharacter: (params) => ipcRenderer.invoke('ckc:ingestCreateCharacter', params),
     openTextFileDialog: (opts) => ipcRenderer.invoke('ckc:openTextFileDialog', opts),
+    selectFolderDialog: (opts) => ipcRenderer.invoke('ckc:selectFolderDialog', opts),
 
     patchPreview: (params) => ipcRenderer.invoke('ckc:patchPreview', params),
     patchApply: (params) => ipcRenderer.invoke('ckc:patchApply', params),
 
+    exportEmptyTemplate: (params) => ipcRenderer.invoke('ckc:exportEmptyTemplate', params),
+    exportTemplateFieldPack: (params) => ipcRenderer.invoke('ckc:exportTemplateFieldPack', params),
     exportBundle: (params) => ipcRenderer.invoke('ckc:exportBundle', params),
     listVersions: (characterId) => ipcRenderer.invoke('ckc:listVersions', characterId),
     diffVersions: (params) => ipcRenderer.invoke('ckc:diffVersions', params),

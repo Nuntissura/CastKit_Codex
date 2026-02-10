@@ -105,6 +105,26 @@ type CKCTemplateDetail = {
   rawText: string;
 };
 
+type CKCSpinOffFormat = 'llm_pack_strict' | 'fieldpack_with_values';
+
+type CKCSpinOffListItem = {
+  id: string;
+  templateId: string;
+  templateHashAtCreate: string;
+  outOfDate: boolean;
+  name: string;
+  description: string;
+  format: CKCSpinOffFormat;
+  fieldCount: number;
+  isBuiltin: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CKCSpinOffDetail = CKCSpinOffListItem & {
+  fieldIds: string[];
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -122,6 +142,22 @@ interface Window {
     deleteDoc: (params?: unknown) => Promise<{ ok: true }>;
     getTemplate: () => Promise<CKCTemplateAst>;
     getTemplateDetail: (templateId?: string | null) => Promise<CKCTemplateDetail | null>;
+    listSpinOffs: (params?: unknown) => Promise<CKCSpinOffListItem[]>;
+    getSpinOff: (spinoffId: string) => Promise<CKCSpinOffDetail>;
+    createSpinOff: (params?: unknown) => Promise<string>;
+    updateSpinOff: (params?: unknown) => Promise<{ ok: true }>;
+    deleteSpinOff: (spinoffId: string) => Promise<{ ok: true }>;
+    selectFolderDialog: (opts?: unknown) => Promise<string | null>;
+    exportEmptyTemplate: (params?: unknown) => Promise<{ ok: true; path: string; templateId: string }>;
+    exportTemplateFieldPack: (params?: unknown) => Promise<{
+      ok: true;
+      path: string;
+      lineCount: number;
+      templateId: string;
+      spinoffId: string | null;
+      name: string;
+    }>;
+    openPath: (filePath: string) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
     setImageMeta: (params: unknown) => Promise<unknown>;

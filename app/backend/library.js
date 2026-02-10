@@ -16,6 +16,33 @@ function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
 
+function sanitizeFileName(name, fallback) {
+  const raw = String(name ?? '').trim();
+  const base = raw.length ? raw : String(fallback ?? 'export.txt');
+  // Windows-safe filename sanitization.
+  const cleaned = base
+    .replaceAll(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  return cleaned.length ? cleaned.slice(0, 180) : 'export.txt';
+}
+
+function uniquePath(dir, fileName) {
+  const base = String(fileName || 'export.txt');
+  const ext = path.extname(base);
+  const stem = base.slice(0, Math.max(0, base.length - ext.length)) || 'export';
+
+  let candidate = path.join(dir, base);
+  if (!fs.existsSync(candidate)) return candidate;
+
+  for (let i = 2; i < 10_000; i++) {
+    candidate = path.join(dir, `${stem}__${i}${ext}`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+
+  return path.join(dir, `${stem}__${toIsoSafeTimestamp()}${ext}`);
+}
+
 function toIsoSafeTimestamp(date = new Date()) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(
@@ -207,6 +234,7 @@ class CKCLibrary {
 
     await this.ensureTemplateLoaded();
     await this.ensureBuiltinSafeSubsetPack();
+    await this.ensureBuiltinAllFieldsPack();
   }
 
   close() {
@@ -455,6 +483,56 @@ class CKCLibrary {
          SET template_hash_at_create = ?, field_id_list = ?, updated_at = CURRENT_TIMESTAMP
          WHERE template_id = ? AND name = ? AND is_builtin = 1`,
         [templateAst.hash, JSON.stringify(includedFieldIds), templateId, name]
+      );
+    }
+  }
+
+  async ensureBuiltinAllFieldsPack() {
+    const templateId = 'v2.00';
+    const name = 'LLM Pack (strict) — All Fields';
+
+    const existing = await get(this.db, 'SELECT spinoff_id FROM TemplateSpinOff WHERE template_id = ? AND name = ?', [
+      templateId,
+      name,
+    ]);
+
+    const templateAst = await this.getTemplateAst(templateId);
+    const includedFieldIds = [];
+    for (const section of templateAst.sections) {
+      for (const field of section.fields) {
+        if (field.type === 'rule') continue;
+        includedFieldIds.push(field.id);
+      }
+    }
+
+    // Filter to template-known Field IDs (never emit unknown IDs).
+    const validIds = new Set(templateAst.sections.flatMap((s) => s.fields.map((f) => f.id)));
+    const filtered = includedFieldIds.filter((id) => validIds.has(id));
+
+    if (!existing) {
+      await run(
+        this.db,
+        `INSERT INTO TemplateSpinOff(
+           spinoff_id, template_id, template_hash_at_create, name, description,
+           field_id_list, format, is_builtin
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          randomId('spinoff_'),
+          templateId,
+          templateAst.hash,
+          name,
+          'Built-in LLM-friendly pack (strict). Includes all non-rule fields for template v2.00.',
+          JSON.stringify(filtered),
+          'llm_pack_strict',
+        ]
+      );
+    } else {
+      await run(
+        this.db,
+        `UPDATE TemplateSpinOff
+         SET template_hash_at_create = ?, field_id_list = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE template_id = ? AND name = ? AND is_builtin = 1`,
+        [templateAst.hash, JSON.stringify(filtered), templateId, name]
       );
     }
   }
@@ -2357,6 +2435,112 @@ class CKCLibrary {
     });
 
     return { path: outPath, lineCount: lines.length, spinoffId: row.spinoff_id, name: packName };
+  }
+
+  async exportEmptyTemplate({ templateId = null, outDir = null, fileName = null } = {}) {
+    const id = templateId || this.defaultTemplateId;
+    const detail = await this.getTemplateDetail(id);
+    if (!detail) throw new Error('Template not found');
+
+    const dir = outDir ? String(outDir) : this.getPaths().exportsDir;
+    ensureDir(dir);
+
+    const baseName = sanitizeFileName(fileName, `CHARACTER_SHEET__${id}.txt`);
+    const outPath = uniquePath(dir, baseName);
+
+    const sourcePath = detail.sourcePath ? String(detail.sourcePath) : null;
+    if (sourcePath && fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, outPath);
+    } else {
+      fs.writeFileSync(outPath, String(detail.rawText ?? ''), 'utf8');
+    }
+
+    await this._audit('template.exportEmpty', null, { templateId: id, outPath });
+    return { ok: true, path: outPath, templateId: id };
+  }
+
+  async exportTemplateFieldPack({
+    templateId = null,
+    spinoffId = null,
+    spinoffName = null,
+    outDir = null,
+    fileName = null,
+    includeSections = null,
+  } = {}) {
+    const tid = templateId || this.defaultTemplateId;
+    const templateAst = await this.getTemplateAst(tid);
+
+    let row = null;
+    if (spinoffId != null) {
+      row = await get(this.db, `SELECT spinoff_id, template_id, name, field_id_list FROM TemplateSpinOff WHERE spinoff_id = ?`, [
+        spinoffId,
+      ]);
+    } else if (spinoffName != null) {
+      row = await get(
+        this.db,
+        `SELECT spinoff_id, template_id, name, field_id_list FROM TemplateSpinOff WHERE template_id = ? AND name = ?`,
+        [tid, spinoffName]
+      );
+    }
+
+    let fieldIds = [];
+    if (row) {
+      if (String(row.template_id || '') !== String(tid || '')) throw new Error('Spin-off template does not match');
+      try {
+        const parsed = JSON.parse(row.field_id_list || '[]');
+        fieldIds = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+      } catch {
+        fieldIds = [];
+      }
+    } else {
+      for (const section of templateAst.sections) {
+        for (const field of section.fields) {
+          if (field.type === 'rule') continue;
+          fieldIds.push(field.id);
+        }
+      }
+    }
+
+    const validIds = new Set(templateAst.sections.flatMap((s) => s.fields.map((f) => f.id)));
+    fieldIds = fieldIds.filter((id) => validIds.has(id));
+
+    if (Array.isArray(includeSections) && includeSections.length > 0) {
+      const allowed = new Set();
+      const sectionSet = new Set(includeSections.map((s) => String(s)));
+      for (const section of templateAst.sections) {
+        if (!sectionSet.has(section.title)) continue;
+        for (const f of section.fields) allowed.add(f.id);
+      }
+      fieldIds = fieldIds.filter((id) => allowed.has(id));
+    }
+
+    const lines = fieldIds.map((fid) => `${fid}: `);
+
+    const dir = outDir ? String(outDir) : this.getPaths().exportsDir;
+    ensureDir(dir);
+
+    const presetName = row ? String(row.name || '') : 'All Fields';
+    const fallbackName = `LLM_EMPTY__${tid}__${presetName.replaceAll(/\s+/g, '_')}.txt`;
+    const baseName = sanitizeFileName(fileName, fallbackName);
+    const outPath = uniquePath(dir, baseName);
+
+    fs.writeFileSync(outPath, lines.join('\n') + '\n', 'utf8');
+    await this._audit('template.exportFieldPack', null, {
+      templateId: tid,
+      spinoffId: row ? row.spinoff_id : null,
+      name: presetName,
+      lineCount: lines.length,
+      outPath,
+    });
+
+    return {
+      ok: true,
+      path: outPath,
+      lineCount: lines.length,
+      templateId: tid,
+      spinoffId: row ? row.spinoff_id : null,
+      name: presetName,
+    };
   }
 }
 

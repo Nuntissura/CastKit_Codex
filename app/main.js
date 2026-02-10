@@ -485,6 +485,25 @@ function registerIpcHandlers() {
         return { path: p, text };
     });
 
+    ipcMain.handle('ckc:selectFolderDialog', async (_evt, opts) => {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: opts?.title || 'Select Folder',
+            properties: ['openDirectory', 'createDirectory'],
+        });
+        if (result.canceled || !result.filePaths[0]) return null;
+        return result.filePaths[0];
+    });
+
+    ipcMain.handle('ckc:exportEmptyTemplate', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportEmptyTemplate(params || {});
+    });
+
+    ipcMain.handle('ckc:exportTemplateFieldPack', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportTemplateFieldPack(params || {});
+    });
+
     ipcMain.handle('ckc:patchPreview', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.patchPreview(params);

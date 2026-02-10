@@ -3,6 +3,12 @@ import { MediaPane } from '../components/MediaPane';
 import { CommandBar } from '../components/CommandBar';
 import styles from './libraryView.module.css';
 
+function joinPath(a: string, b: string): string {
+  const left = String(a || '').replace(/[\\/]+$/, '');
+  if (!left) return String(b || '');
+  return `${left}\\${String(b || '').replace(/^[\\/]+/, '')}`;
+}
+
 export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId: string) => void }) {
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
   const [carouselImages, setCarouselImages] = React.useState<
@@ -10,11 +16,44 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   >([]);
   const [error, setError] = React.useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = React.useState<boolean>(false);
+  const [showExportsBar, setShowExportsBar] = React.useState<boolean>(false);
 
   const [queryText, setQueryText] = React.useState<string>('');
   const [favoriteOnly, setFavoriteOnly] = React.useState<boolean>(false);
   const [ratingOp, setRatingOp] = React.useState<'any' | '=' | '<' | '<=' | '>' | '>='>('any');
   const [ratingValue, setRatingValue] = React.useState<number>(0);
+
+  const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
+  const [exportDir, setExportDir] = React.useState<string | null>(null);
+  const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
+  const [selectedSpinOffId, setSelectedSpinOffId] = React.useState<string | null>(null);
+  const [exportError, setExportError] = React.useState<string | null>(null);
+  const [lastExportPath, setLastExportPath] = React.useState<string | null>(null);
+  const [isExporting, setIsExporting] = React.useState<boolean>(false);
+
+  const defaultExportsDir = React.useMemo(() => {
+    return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
+  }, [libraryRoot]);
+
+  React.useEffect(() => {
+    window.ckc
+      .getConfig()
+      .then((cfg: any) => {
+        if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+      })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    window.ckc
+      .listSpinOffs({})
+      .then((rows) => {
+        setSpinOffs(rows);
+        const safe = rows.find((r) => String(r.name || '').toLowerCase().includes('safe subset'));
+        setSelectedSpinOffId((safe?.id ?? rows[0]?.id ?? null) as any);
+      })
+      .catch((err: unknown) => setExportError(err instanceof Error ? err.message : String(err)));
+  }, []);
 
   const reloadCarousel = React.useCallback(() => {
     window.ckc
@@ -96,7 +135,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       </section>
 
       <aside className={styles.right}>
-        <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)}>
+        <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)} label="Search / Filters">
           <label>
             Search{' '}
             <input
@@ -138,6 +177,111 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
             Clear
           </button>
         </CommandBar>
+
+        <div style={{ marginTop: 10 }}>
+          <CommandBar isOpen={showExportsBar} onToggle={() => setShowExportsBar((v) => !v)} label="Exports">
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
+              <code style={{ fontSize: '0.85rem' }}>{exportDir ?? '(default exports folder)'}</code>
+              <button
+                onClick={async () => {
+                  setExportError(null);
+                  const dir = await window.ckc.selectFolderDialog({ title: 'Select export folder' });
+                  if (!dir) return;
+                  setExportDir(dir);
+                }}
+              >
+                Choose folder…
+              </button>
+              {exportDir ? (
+                <button onClick={() => setExportDir(null)} title="Use libraryRoot\\exports">
+                  Default
+                </button>
+              ) : null}
+              <button
+                disabled={!(exportDir || defaultExportsDir)}
+                onClick={() => {
+                  const target = exportDir || defaultExportsDir;
+                  if (!target) return;
+                  void window.ckc.openPath(target);
+                }}
+              >
+                Open folder
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                disabled={isExporting}
+                onClick={async () => {
+                  setExportError(null);
+                  setIsExporting(true);
+                  try {
+                    const res = await window.ckc.exportEmptyTemplate({ outDir: exportDir });
+                    setLastExportPath(res.path);
+                  } catch (err: unknown) {
+                    setExportError(err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setIsExporting(false);
+                  }
+                }}
+              >
+                Export empty template
+              </button>
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Preset{' '}
+                <select
+                  value={selectedSpinOffId ?? ''}
+                  onChange={(e) => setSelectedSpinOffId(e.target.value || null)}
+                  disabled={!spinOffs || spinOffs.length === 0}
+                >
+                  {(spinOffs || []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.outOfDate ? ' (out of date)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                disabled={isExporting || !selectedSpinOffId}
+                onClick={async () => {
+                  setExportError(null);
+                  setIsExporting(true);
+                  try {
+                    const res = await window.ckc.exportTemplateFieldPack({ outDir: exportDir, spinoffId: selectedSpinOffId });
+                    setLastExportPath(res.path);
+                  } catch (err: unknown) {
+                    setExportError(err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setIsExporting(false);
+                  }
+                }}
+              >
+                Export LLM empty
+              </button>
+
+              {lastExportPath ? (
+                <button
+                  onClick={() => {
+                    void window.ckc.openPath(lastExportPath);
+                  }}
+                >
+                  Open last
+                </button>
+              ) : null}
+            </div>
+
+            {exportError ? <div className={styles.error}>{exportError}</div> : null}
+            {lastExportPath ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                Last export: <code>{lastExportPath}</code>
+              </div>
+            ) : null}
+          </CommandBar>
+        </div>
 
         <div className={styles.panelHeader}>
           <div className={styles.panelTitle}>Characters</div>
