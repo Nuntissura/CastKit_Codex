@@ -29,7 +29,6 @@ test('character icon can be set/cleared and persists in get/list', async (t) => 
   const builtInTemplatePath = path.join(__dirname, '..', 'app', 'templates', 'CHARACTER_SHEET__v2.00.txt');
   const lib = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
   await lib.initialize();
-  t.after(() => lib.close());
 
   const characterId = await lib.createCharacter({ displayName: 'Icon Test' });
 
@@ -54,10 +53,29 @@ test('character icon can be set/cleared and persists in get/list', async (t) => 
   assert.equal(listed.iconFocusX, 0.25);
   assert.equal(listed.iconFocusY, 0.75);
 
-  await lib.setCharacterIcon({ characterId, imageId: null });
-  const cleared = await lib.getCharacter(characterId);
+  lib.close();
+
+  // "App restart" persistence: reopen the library and confirm the icon is still there.
+  const lib2 = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
+  await lib2.initialize();
+
+  const full2 = await lib2.getCharacter(characterId);
+  assert.ok(full2);
+  assert.equal(full2.iconImageId, imageId);
+  assert.equal(full2.iconFocusX, 0.25);
+  assert.equal(full2.iconFocusY, 0.75);
+
+  await lib2.setCharacterIcon({ characterId, imageId: null });
+  lib2.close();
+
+  // Reopen again and confirm clearing persists too.
+  const lib3 = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
+  await lib3.initialize();
+
+  const cleared = await lib3.getCharacter(characterId);
   assert.ok(cleared);
   assert.equal(cleared.iconImageId, null);
+  lib3.close();
 });
 
 test('setCharacterIcon rejects image ids from other characters', async (t) => {
@@ -85,4 +103,3 @@ test('setCharacterIcon rejects image ids from other characters', async (t) => {
 
   await assert.rejects(() => lib.setCharacterIcon({ characterId: b, imageId }), /not found for character/i);
 });
-

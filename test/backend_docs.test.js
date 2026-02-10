@@ -21,19 +21,25 @@ function makeLib(t) {
   });
 
   const builtInTemplatePath = path.join(__dirname, '..', 'app', 'templates', 'CHARACTER_SHEET__v2.00.txt');
-  const lib = new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
-  return { lib, libraryRoot };
+  const makeInstance = () =>
+    new CKCLibrary({ libraryRoot, builtInTemplatePath, defaultTemplateId: 'v2.00', electronNativeImage: null });
+  return { makeInstance, libraryRoot };
 }
 
 async function expectDocCrudRoundtrip(t, docType, content) {
-  const { lib } = makeLib(t);
+  const { makeInstance } = makeLib(t);
+  const lib = makeInstance();
   await lib.initialize();
-  t.after(() => lib.close());
 
   const created = await lib.upsertDoc({ docType, title: `Doc ${docType}`, content, tags: ['  alpha ', 'beta', 'beta'] });
   assert.equal(created.ok, true);
+  lib.close();
 
-  const got = await lib.getDoc({ docType, docId: created.docId });
+  // "App restart" persistence: reopen the library and confirm the doc is still there.
+  const lib2 = makeInstance();
+  await lib2.initialize();
+
+  const got = await lib2.getDoc({ docType, docId: created.docId });
   assert.ok(got);
   assert.equal(got.id, created.docId);
   assert.equal(got.docType, created.docType);
@@ -41,13 +47,19 @@ async function expectDocCrudRoundtrip(t, docType, content) {
   assert.equal(got.content, content);
   assert.deepEqual(got.tags, ['alpha', 'beta']);
 
-  const list = await lib.listDocs({ docType, queryText: `Doc ${docType}` });
+  const list = await lib2.listDocs({ docType, queryText: `Doc ${docType}` });
   assert.ok(Array.isArray(list));
   assert.ok(list.some((d) => d.id === created.docId));
 
-  await lib.deleteDoc({ docType, docId: created.docId });
-  const afterDelete = await lib.getDoc({ docType, docId: created.docId });
+  await lib2.deleteDoc({ docType, docId: created.docId });
+  lib2.close();
+
+  // Reopen again and confirm deletion persists too.
+  const lib3 = makeInstance();
+  await lib3.initialize();
+  const afterDelete = await lib3.getDoc({ docType, docId: created.docId });
   assert.equal(afterDelete, null);
+  lib3.close();
 }
 
 test('notes CRUD roundtrip preserves bytes', async (t) => {
@@ -69,4 +81,3 @@ test('moodboard CRUD roundtrip preserves JSON string', async (t) => {
   const content = JSON.stringify(board, null, 2) + '\n';
   await expectDocCrudRoundtrip(t, 'moodboard', content);
 });
-
