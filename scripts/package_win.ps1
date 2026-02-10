@@ -1,6 +1,7 @@
 param(
   [ValidateSet('x64')]
-  [string]$Arch = 'x64'
+  [string]$Arch = 'x64',
+  [string]$GovRoot = $null
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +21,11 @@ function Assert-LastExitOk([string]$Context) {
 }
 
 $repoRoot = Resolve-FullPath (Join-Path $PSScriptRoot '..')
-$govRoot = Resolve-FullPath (Path-Combine @($repoRoot, '..', 'CKC_GOV'))
+$govRootCandidate = $GovRoot
+if (-not $govRootCandidate) { $govRootCandidate = $env:CKC_GOV_ROOT }
+if (-not $govRootCandidate) { $govRootCandidate = (Path-Combine @($repoRoot, '..', 'CKC_GOV')) }
+New-Item -ItemType Directory -Force -Path $govRootCandidate | Out-Null
+$govRoot = Resolve-FullPath $govRootCandidate
 
 $cacheRoot = Path-Combine @($govRoot, 'targets', 'cache')
 $ckcTargets = Path-Combine @($govRoot, 'targets', 'CKC')

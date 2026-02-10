@@ -1,0 +1,56 @@
+name: Release (Windows)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Package (installer + portable)
+        run: npm run package:win
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          $govRoot = Resolve-Path (Join-Path $PWD.Path '..' 'CKC_GOV')
+          $latest = Join-Path $govRoot 'targets' 'CKC' 'artifacts' 'LATEST_BUILD.txt'
+          if (!(Test-Path -LiteralPath $latest)) { throw "Missing: $latest" }
+
+          $artifactLine = (Get-Content -LiteralPath $latest) | Where-Object { $_ -like 'artifacts:*' } | Select-Object -First 1
+          if (-not $artifactLine) { throw "LATEST_BUILD.txt missing 'artifacts:' line" }
+
+          $artifactsPath = $artifactLine.Substring('artifacts:'.Length).Trim()
+          if (!(Test-Path -LiteralPath $artifactsPath)) { throw "Artifacts path not found: $artifactsPath" }
+
+          New-Item -ItemType Directory -Force -Path 'release_assets' | Out-Null
+          Get-ChildItem -LiteralPath $artifactsPath -Filter '*.exe' | ForEach-Object {
+            Copy-Item -Force -LiteralPath $_.FullName -Destination 'release_assets'
+          }
+
+          Write-Host "Release assets:"
+          Get-ChildItem release_assets | Select-Object Name,Length | Format-Table -AutoSize
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_assets/*
+          generate_release_notes: true
+
