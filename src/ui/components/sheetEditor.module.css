@@ -1,0 +1,95 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.sectionHeader {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sectionHeader:hover {
+  background: var(--bg-accent);
+}
+
+.sectionTitle {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.sectionMeta {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.field {
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.5);
+  padding: 10px;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.fieldLabel {
+  font-weight: 700;
+}
+
+.fieldId {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.88);
+  padding: 8px 10px;
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.ruleText {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.65);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+

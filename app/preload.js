@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('ckc', {
 
     listCharacters: (params) => ipcRenderer.invoke('ckc:listCharacters', params),
     listAllTags: () => ipcRenderer.invoke('ckc:listAllTags'),
+    listGlobalCarouselImages: (params) => ipcRenderer.invoke('ckc:listGlobalCarouselImages', params),
+    listDocs: (params) => ipcRenderer.invoke('ckc:listDocs', params),
+    getDoc: (params) => ipcRenderer.invoke('ckc:getDoc', params),
+    upsertDoc: (params) => ipcRenderer.invoke('ckc:upsertDoc', params),
+    deleteDoc: (params) => ipcRenderer.invoke('ckc:deleteDoc', params),
 
     listSavedSearches: () => ipcRenderer.invoke('ckc:listSavedSearches'),
     createSavedSearch: (params) => ipcRenderer.invoke('ckc:createSavedSearch', params),

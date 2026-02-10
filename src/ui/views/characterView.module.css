@@ -55,6 +55,12 @@
   align-items: center;
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .name {
   font-weight: 800;
   font-size: 1.1rem;
@@ -115,6 +121,41 @@
   background: rgba(255, 0, 0, 0.06);
   padding: 10px 12px;
   margin: 10px 18px;
+}
+
+.issueBox {
+  border: 1px solid rgba(255, 0, 0, 0.25);
+  background: rgba(255, 0, 0, 0.05);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.issueTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.issueList {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.issueSeverity {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.issueSeverity[data-sev='error'] {
+  color: var(--danger);
+}
+
+.issueSeverity[data-sev='warn'] {
+  color: rgba(255, 0, 0, 0.75);
+}
+
+.issueField {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .middle {

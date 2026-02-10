@@ -9,6 +9,8 @@ type MediaImage = {
   tags: string[];
 };
 
+type RatingOp = 'any' | '=' | '<' | '<=' | '>' | '>=';
+
 function ratingFromKeyCode(code: string): number | null {
   switch (code) {
     case 'Digit1':
@@ -40,6 +42,27 @@ function isEditableActiveElement(): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select';
 }
 
+function passesRatingFilter(value: number, op: RatingOp, target: number): boolean {
+  const v = Number(value) || 0;
+  const t = Number(target) || 0;
+  switch (op) {
+    case 'any':
+      return true;
+    case '=':
+      return v === t;
+    case '<':
+      return v < t;
+    case '<=':
+      return v <= t;
+    case '>':
+      return v > t;
+    case '>=':
+      return v >= t;
+    default:
+      return true;
+  }
+}
+
 export function MediaPane({
   images,
   defaultShowThumbnails = false,
@@ -57,14 +80,33 @@ export function MediaPane({
   const [showThumbnails, setShowThumbnails] = React.useState<boolean>(defaultShowThumbnails);
   const [showControls, setShowControls] = React.useState<boolean>(defaultShowControls);
   const [busyImageId, setBusyImageId] = React.useState<string | null>(null);
+  const [filterFavoriteOnly, setFilterFavoriteOnly] = React.useState<boolean>(false);
+  const [filterRatingOp, setFilterRatingOp] = React.useState<RatingOp>('any');
+  const [filterRatingValue, setFilterRatingValue] = React.useState<number>(0);
+  const [isFullscreenOpen, setIsFullscreenOpen] = React.useState<boolean>(false);
+  const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
 
   React.useEffect(() => {
-    if (!images.some((i) => i.id === selectedId)) {
-      setSelectedId(images[0]?.id ?? null);
-    }
+    // Keep selection valid when the underlying image list changes.
+    if (!images.some((i) => i.id === selectedId)) setSelectedId(images[0]?.id ?? null);
   }, [images, selectedId]);
 
-  const selected = selectedId ? images.find((i) => i.id === selectedId) ?? null : null;
+  const filteredImages = React.useMemo(() => {
+    return images.filter((img) => {
+      if (filterFavoriteOnly && !img.favorite) return false;
+      if (!passesRatingFilter(img.rating, filterRatingOp, filterRatingValue)) return false;
+      return true;
+    });
+  }, [images, filterFavoriteOnly, filterRatingOp, filterRatingValue]);
+
+  React.useEffect(() => {
+    // Keep selection valid when filters change.
+    if (!filteredImages.some((i) => i.id === selectedId)) {
+      setSelectedId(filteredImages[0]?.id ?? null);
+    }
+  }, [filteredImages, selectedId]);
+
+  const selected = selectedId ? filteredImages.find((i) => i.id === selectedId) ?? null : null;
   const isBusy = !!busyImageId && busyImageId === selected?.id;
 
   const patchMeta = async (
@@ -100,6 +142,48 @@ export function MediaPane({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selected, isBusy, patchMeta]);
 
+  React.useEffect(() => {
+    if (!isFullscreenOpen) return;
+
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        setIsFullscreenOpen(false);
+        return;
+      }
+      if (evt.key === 'ArrowLeft') {
+        evt.preventDefault();
+        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
+        if (idx > 0) setSelectedId(filteredImages[idx - 1].id);
+        return;
+      }
+      if (evt.key === 'ArrowRight' || evt.key === ' ') {
+        evt.preventDefault();
+        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
+        if (idx >= 0 && idx < filteredImages.length - 1) setSelectedId(filteredImages[idx + 1].id);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isFullscreenOpen, filteredImages, selected]);
+
+  React.useEffect(() => {
+    if (!isFullscreenOpen || !slideshowOn) return;
+    if (filteredImages.length <= 1) return;
+
+    const id = window.setInterval(() => {
+      setSelectedId((cur) => {
+        const idx = cur ? filteredImages.findIndex((i) => i.id === cur) : -1;
+        const nextIdx = idx >= 0 ? (idx + 1) % filteredImages.length : 0;
+        return filteredImages[nextIdx]?.id ?? cur;
+      });
+    }, 2500);
+
+    return () => window.clearInterval(id);
+  }, [isFullscreenOpen, slideshowOn, filteredImages]);
+
   return (
     <div className={styles.root}>
       <div className={styles.viewer}>
@@ -115,6 +199,9 @@ export function MediaPane({
           </button>
           <button className={styles.overlayBtn} onClick={() => setShowThumbnails((v) => !v)}>
             {showThumbnails ? 'Hide thumbs' : 'Thumbs'}
+          </button>
+          <button className={styles.overlayBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!selected}>
+            Fullscreen
           </button>
         </div>
 
@@ -172,6 +259,36 @@ export function MediaPane({
                 );
               })}
             </div>
+
+            <div className={styles.filterRow}>
+              <div className={styles.filterTitle}>Filters</div>
+              <label className={styles.filterItem}>
+                <input
+                  type="checkbox"
+                  checked={filterFavoriteOnly}
+                  onChange={(e) => setFilterFavoriteOnly(e.target.checked)}
+                />{' '}
+                Favorites only
+              </label>
+              <label className={styles.filterItem}>
+                Rating{' '}
+                <select value={filterRatingOp} onChange={(e) => setFilterRatingOp(e.target.value as RatingOp)}>
+                  <option value="any">Any</option>
+                  <option value="=">=</option>
+                  <option value=">=">≥</option>
+                  <option value="<=">≤</option>
+                  <option value=">">&gt;</option>
+                  <option value="<">&lt;</option>
+                </select>{' '}
+                <select value={String(filterRatingValue)} onChange={(e) => setFilterRatingValue(Number(e.target.value) || 0)}>
+                  {[0, 1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         ) : null}
       </div>
@@ -184,7 +301,7 @@ export function MediaPane({
             evt.currentTarget.scrollLeft += evt.deltaY;
           }}
         >
-          {images.map((img) => (
+          {filteredImages.map((img) => (
             <button
               key={img.id}
               className={styles.thumbBtn}
@@ -195,6 +312,37 @@ export function MediaPane({
               <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
             </button>
           ))}
+        </div>
+      ) : null}
+
+      {isFullscreenOpen ? (
+        <div className={styles.fullscreen} role="dialog" aria-label="Fullscreen viewer">
+          <div className={styles.fullscreenTop}>
+            <div className={styles.fullscreenTitle}>
+              {filteredImages.length ? `${filteredImages.findIndex((i) => i.id === selectedId) + 1} / ${filteredImages.length}` : ''}
+            </div>
+            <div className={styles.fullscreenActions}>
+              <button className={styles.overlayBtn} onClick={() => setSlideshowOn((v) => !v)} disabled={filteredImages.length <= 1}>
+                {slideshowOn ? 'Stop' : 'Slideshow'}
+              </button>
+              <button className={styles.overlayBtn} onClick={() => setIsFullscreenOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.fullscreenBody} onClick={() => setIsFullscreenOpen(false)}>
+            {selected ? (
+              <img
+                className={styles.fullscreenImg}
+                src={`ckc://image/${encodeURIComponent(selected.id)}`}
+                alt=""
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <div className={styles.empty}>{emptyLabel}</div>
+            )}
+          </div>
         </div>
       ) : null}
     </div>

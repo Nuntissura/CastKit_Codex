@@ -6,15 +6,16 @@ import { useHotkeys } from './hooks/useHotkeys';
 import styles from './styles/app.module.css';
 
 type Page = 'library' | 'character';
+type DrawerMode = 'none' | 'menu' | 'library';
 
 export function App() {
   const [page, setPage] = React.useState<Page>('library');
   const [selectedCharacterId, setSelectedCharacterId] = React.useState<string | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = React.useState<boolean>(false);
+  const [drawerMode, setDrawerMode] = React.useState<DrawerMode>('none');
 
   useHotkeys({
-    onToggleMenu: () => setIsMenuOpen((v) => !v),
-    onCloseOverlays: () => setIsMenuOpen(false),
+    onToggleMenu: () => setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu')),
+    onCloseOverlays: () => setDrawerMode('none'),
   });
 
   React.useEffect(() => {
@@ -24,16 +25,20 @@ export function App() {
   return (
     <div className={styles.root}>
       <Drawer
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
+        isOpen={drawerMode === 'menu'}
+        onClose={() => setDrawerMode('none')}
         onNavigate={(nextPage) => {
           setPage(nextPage);
-          setIsMenuOpen(false);
+          setDrawerMode('none');
         }}
       />
 
       <div className={styles.topLeft}>
-        <button className={styles.iconButton} onClick={() => setIsMenuOpen((v) => !v)} aria-label="Menu">
+        <button
+          className={styles.iconButton}
+          onClick={() => setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu'))}
+          aria-label="Menu"
+        >
           ☰
         </button>
       </div>
@@ -47,10 +52,15 @@ export function App() {
             }}
           />
         ) : (
-          <CharacterView characterId={selectedCharacterId} onBack={() => setPage('library')} />
+          <CharacterView
+            characterId={selectedCharacterId}
+            onBack={() => setPage('library')}
+            onOpenLibraryDrawer={() => setDrawerMode('library')}
+            isLibraryDrawerOpen={drawerMode === 'library'}
+            onCloseLibraryDrawer={() => setDrawerMode('none')}
+          />
         )}
       </div>
     </div>
   );
 }
-

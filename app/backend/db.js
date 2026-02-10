@@ -125,6 +125,45 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_audit_character_time ON AuditLog(character_id, created_at DESC);
   `
   );
+
+  // Notes / Stories / Moodboards (DB-first docs libraries).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS NoteDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body_text TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_note_updated ON NoteDoc(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS StoryDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body_text TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_story_updated ON StoryDoc(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS MoodboardDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      board_json TEXT NOT NULL DEFAULT '{}',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_moodboard_updated ON MoodboardDoc(updated_at DESC);
+  `
+  );
 }
 
 async function initSchema(db) {

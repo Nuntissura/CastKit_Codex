@@ -1,4 +1,4 @@
-# CKC workflow (Work Packets → Spec → Git)
+# CKC workflow (Work Packets -> Spec -> Git)
 
 This repo is `https://github.com/Nuntissura/CastKit_Codex`.
 
@@ -17,6 +17,7 @@ On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Boar
 3. **Update spec with every addition**
    - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.020.md`
    - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.020.md`
+   - Session dump (verbatim requirements): `docs/SESSION_DUMP_2026-02-10.md`
    - When bumping spec version, move the previous version into `CKC_GOV/spec/archive_spec/`
 
 4. **After a WP is done**

@@ -1,0 +1,37 @@
+.root {
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  padding: 10px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.toggle {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.toggle:hover {
+  background: var(--bg-accent);
+}
+
+.content {
+  flex: 1 1 auto;
+  display: none;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.content[data-open='1'] {
+  display: flex;
+}
+

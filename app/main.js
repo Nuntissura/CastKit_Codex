@@ -251,6 +251,31 @@ function registerIpcHandlers() {
         return lib.listAllTags();
     });
 
+    ipcMain.handle('ckc:listGlobalCarouselImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listGlobalCarouselImages(params || {});
+    });
+
+    ipcMain.handle('ckc:listDocs', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listDocs(params || {});
+    });
+
+    ipcMain.handle('ckc:getDoc', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getDoc(params || {});
+    });
+
+    ipcMain.handle('ckc:upsertDoc', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.upsertDoc(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteDoc', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteDoc(params || {});
+    });
+
     ipcMain.handle('ckc:listSavedSearches', async () => {
         const lib = await ensureLibrary();
         return lib.listSavedSearches();

@@ -643,13 +643,19 @@ class CKCLibrary {
       const gf = galleryFilters;
       const imgWhere = [];
       if (gf.favoriteOnly) imgWhere.push('favorite = 1');
-      if (gf.minRating != null) imgWhere.push('rating >= ?');
+
+      const clampRating = (x) => Math.max(0, Math.min(5, Number(x) || 0));
+      const opRaw = gf.ratingOp != null ? String(gf.ratingOp) : null;
+      const op = opRaw && ['=', '<', '<=', '>', '>='].includes(opRaw) ? opRaw : null;
+      if (op && gf.ratingValue != null) imgWhere.push(`rating ${op} ?`);
+      else if (gf.minRating != null) imgWhere.push('rating >= ?');
       const imgSql =
         imgWhere.length > 0
           ? `character_id IN (SELECT DISTINCT character_id FROM ImageAsset WHERE ${imgWhere.join(' AND ')})`
           : null;
       if (imgSql) clauses.push(imgSql);
-      if (gf.minRating != null) params.push(Number(gf.minRating) || 0);
+      if (op && gf.ratingValue != null) params.push(clampRating(gf.ratingValue));
+      else if (gf.minRating != null) params.push(clampRating(gf.minRating));
     }
 
     const wantsAll = !!flags.all || (flags.ids && flags.labels && flags.values && flags.tags && flags.name);
@@ -689,6 +695,173 @@ class CKCLibrary {
   async listAllTags() {
     const rows = await all(this.db, 'SELECT tag_text FROM Tag ORDER BY tag_text COLLATE NOCASE');
     return rows.map((r) => r.tag_text);
+  }
+
+  async listGlobalCarouselImages({ preferFrontpage = true } = {}) {
+    const rows = await all(
+      this.db,
+      `SELECT image_id, character_id, favorite, rating, notes, tags_json, added_at
+       FROM ImageAsset
+       ORDER BY favorite DESC, rating DESC, added_at DESC`
+    );
+
+    const parsed = rows.map((r) => ({
+      id: r.image_id,
+      characterId: r.character_id,
+      favorite: !!r.favorite,
+      rating: Number(r.rating) || 0,
+      notes: r.notes ?? '',
+      tags: (() => {
+        try {
+          const raw = r.tags_json ?? '[]';
+          const t = JSON.parse(raw);
+          return Array.isArray(t) ? t.map((x) => String(x)) : [];
+        } catch {
+          return [];
+        }
+      })(),
+      addedAt: r.added_at,
+    }));
+
+    const hasFrontpage = parsed.some((img) => img.tags.includes('frontpage'));
+    const chosenTag = preferFrontpage && hasFrontpage ? 'frontpage' : 'carousel';
+
+    return parsed.filter((img) => img.tags.includes(chosenTag));
+  }
+
+  _cleanTags(tags) {
+    const cleaned = [];
+    const seen = new Set();
+    for (const t of Array.isArray(tags) ? tags : []) {
+      const s = String(t ?? '').trim();
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      cleaned.push(s);
+    }
+    return cleaned;
+  }
+
+  _docTableForType(docType) {
+    const t = String(docType || '').toLowerCase();
+    if (t === 'stories' || t === 'story') return { type: 'stories', table: 'StoryDoc', contentCol: 'body_text' };
+    if (t === 'moodboard' || t === 'moodboards') return { type: 'moodboard', table: 'MoodboardDoc', contentCol: 'board_json' };
+    return { type: 'notes', table: 'NoteDoc', contentCol: 'body_text' };
+  }
+
+  async listDocs({ docType = 'notes', queryText = '', tagFilters = [] } = {}) {
+    const { type, table } = this._docTableForType(docType);
+    const rows = await all(
+      this.db,
+      `SELECT doc_id, title, tags_json, created_at, updated_at
+       FROM ${table}
+       ORDER BY updated_at DESC`
+    );
+
+    const q = String(queryText || '').trim().toLowerCase();
+    const qTokens = q ? q.split(/[\s\p{P}]+/u).map((t) => t.trim()).filter(Boolean) : [];
+    const wantsTags = Array.isArray(tagFilters) ? tagFilters.map((t) => String(t).trim()).filter(Boolean) : [];
+
+    const filtered = rows.filter((r) => {
+      const title = String(r.title || '');
+      if (qTokens.length > 0) {
+        const hay = title.toLowerCase();
+        if (!qTokens.every((tok) => hay.includes(tok))) return false;
+      }
+
+      if (wantsTags.length > 0) {
+        let tags = [];
+        try {
+          tags = JSON.parse(r.tags_json ?? '[]');
+          if (!Array.isArray(tags)) tags = [];
+        } catch {
+          tags = [];
+        }
+        const tagSet = new Set(tags.map((x) => String(x)));
+        if (!wantsTags.every((t) => tagSet.has(t))) return false;
+      }
+
+      return true;
+    });
+
+    return filtered.map((r) => ({
+      id: r.doc_id,
+      docType: type,
+      title: r.title,
+      tags: (() => {
+        try {
+          const parsed = JSON.parse(r.tags_json ?? '[]');
+          return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+        } catch {
+          return [];
+        }
+      })(),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  async getDoc({ docType = 'notes', docId }) {
+    if (!docId) throw new Error('docId is required');
+    const { type, table, contentCol } = this._docTableForType(docType);
+    const row = await get(
+      this.db,
+      `SELECT doc_id, title, ${contentCol} AS content, tags_json, created_at, updated_at
+       FROM ${table}
+       WHERE doc_id = ?`,
+      [docId]
+    );
+    if (!row) return null;
+
+    let tags = [];
+    try {
+      const parsed = JSON.parse(row.tags_json ?? '[]');
+      tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+    } catch {
+      tags = [];
+    }
+
+    return {
+      id: row.doc_id,
+      docType: type,
+      title: row.title,
+      content: row.content ?? '',
+      tags,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async upsertDoc({ docType = 'notes', docId = null, title = 'Untitled', content = '', tags = [] } = {}) {
+    const { type, table, contentCol } = this._docTableForType(docType);
+    const prefix = type === 'stories' ? 'story_' : type === 'moodboard' ? 'mood_' : 'note_';
+    const id = docId ? String(docId) : randomId(prefix);
+
+    const cleanedTitle = String(title ?? '').trim() || 'Untitled';
+    const cleanedTags = this._cleanTags(tags);
+
+    await run(
+      this.db,
+      `INSERT INTO ${table}(doc_id, title, ${contentCol}, tags_json)
+       VALUES(?, ?, ?, ?)
+       ON CONFLICT(doc_id) DO UPDATE SET
+         title = excluded.title,
+         ${contentCol} = excluded.${contentCol},
+         tags_json = excluded.tags_json,
+         updated_at = CURRENT_TIMESTAMP`,
+      [id, cleanedTitle, String(content ?? ''), JSON.stringify(cleanedTags)]
+    );
+
+    await this._audit('doc.upsert', null, { docType: type, docId: id });
+    return { ok: true, docId: id, docType: type };
+  }
+
+  async deleteDoc({ docType = 'notes', docId }) {
+    if (!docId) throw new Error('docId is required');
+    const { type, table } = this._docTableForType(docType);
+    await run(this.db, `DELETE FROM ${table} WHERE doc_id = ?`, [docId]);
+    await this._audit('doc.delete', null, { docType: type, docId });
+    return { ok: true };
   }
 
   async listSavedSearches() {
