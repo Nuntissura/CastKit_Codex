@@ -29,7 +29,8 @@ This file is mirrored into the git repo for visibility:
 | WP-0011 | Rating hotkeys (RAlt+1..5) | DONE | Codex | Added global keybind in MediaPane to set rating on the selected image; ignores keybinds while typing in inputs. |
 | WP-0012 | Character icons + focus framing | DONE | Codex | Pick icon from character images; store focusX/focusY; show icons in Library list/grid. |
 | WP-0013 | New dev onboarding + governance mirrors + NAS backup usage | DONE | Codex | Added `CKC_main/docs/PROJECT_CODEX.md` + `TASK_BOARD.md` mirrors; updated README/workflow with commit/push + backup commands. |
+| WP-0014 | Photo notes + bottom metadata bar | DONE | Codex | Per-image notes UI; tags/notes moved to bottom metadata bar; hotkeys ignore typing. |
 
 ## Current focus
-- Next: new WP(s) for smart tags / moodboard tools / photo notes UX.
+- Next: smart tags + moodboard tools.
 
