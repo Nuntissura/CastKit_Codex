@@ -126,3 +126,15 @@ try {
 }
 
 Write-Host "Done. Artifacts in: $artifactsRoot"
+
+$latestInfoPath = Path-Combine @($ckcTargets, 'artifacts', 'LATEST_BUILD.txt')
+$latestInfo = @(
+  "buildId: $buildId"
+  "version: $version"
+  "gitSha: $gitSha"
+  "createdAt: $(Get-Date -Format o)"
+  "artifacts: $artifactsRoot"
+  ''
+) -join "`n"
+[System.IO.File]::WriteAllText($latestInfoPath, $latestInfo, $utf8NoBom)
+Write-Host "Updated:  $latestInfoPath"
