@@ -15,8 +15,8 @@ On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Boar
    - push to origin so GitHub stays current
 
 3. **Update spec with every addition**
-   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.019.md`
-   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.019.md`
+   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.020.md`
+   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.020.md`
    - When bumping spec version, move the previous version into `CKC_GOV/spec/archive_spec/`
 
 4. **After a WP is done**
@@ -29,4 +29,3 @@ On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Boar
 Scripts live in `CKC_GOV/scripts/`:
 - `backup_to_mir.ps1` (ROBOCOPY `/MIR`)
 - `register_backup_task.ps1` (scheduled task helper)
-

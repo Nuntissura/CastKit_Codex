@@ -1,4 +1,4 @@
-# Technical Specification ? CastKit Codex (CKC) ? v00.019
+# Technical Specification — CastKit Codex (CKC) — v00.020
 
 Date: 2026-02-10  
 GitHub repo: https://github.com/Nuntissura/CastKit_Codex
@@ -12,7 +12,7 @@ This file is the **current working spec**.
 
 ### 0.X.1 Version bump rule (MUST)
 
-**CKC-SPEC-VERS-001 ? Patch bump:** Every internal change to this spec MUST increment the spec version by `+0.001` and MUST append a new entry to the changelog.
+**CKC-SPEC-VERS-001 — Patch bump:** Every internal change to this spec MUST increment the spec version by `+0.001` and MUST append a new entry to the changelog.
 
 ### 0.X.2 Archiving rule (MUST)
 
@@ -21,6 +21,7 @@ When a new spec version file is created, the previous version MUST be moved into
 ### 0.X.3 Changelog (append-only)
 
 - **v00.019 (2026-02-10):** Created as the new current spec from the recovered requirements in `SESSION_DUMP_2026-02-10.md`. Archived `v00.004` into `spec/archive_spec/`.
+- **v00.020 (2026-02-10):** Recorded decisions for rating shortcuts + DB-first docs storage; re-embedded Appendix A from `SESSION_DUMP_2026-02-10.md` to eliminate encoding artifacts.
 
 ## 1. Non-negotiables (summary)
 
@@ -30,15 +31,23 @@ If any conflict exists between this summary and Appendix A, **Appendix A wins**.
 - Adult/explicit fields are first-class and always enabled.
 - Template integrity gates matter. No silent drops of Field IDs.
 - Canonical template rule: descriptors MUST stay on the same line as their ID.
-- UI: minimal by default; sharp 90? corners.
-- Default layout is a 2-panel ?portfolio viewer? (images + character sheet). Notes/Stories/Moodboard is a 3-panel mode.
+- UI: minimal by default; sharp 90° corners.
+- Default layout is a 2-panel “portfolio viewer” (images + character sheet). Notes/Stories/Moodboard is a 3-panel mode.
 - Build/repo hygiene: build outputs + caches + logs live under `CKC_GOV/targets/` (no artifacts committed into `CKC_main`).
+
+## 2. Decisions (post-session dump)
+
+These decisions resolve/supersede items listed under “Open questions to decide during rebuild” in Appendix A.
+
+- Ratings assignment hotkeys: `RAlt+1`, `RAlt+2`, `RAlt+3`, `RAlt+4`, `RAlt+5` set rating to 1–5. (Clearing to 0: TBD.)
+- Notes/Stories/Moodboard persistence: DB-first (SQLite) is the source of truth; file exports are optional.
+- Global carousel selection rule (tentative): if any images are marked `isFrontpage`, show only those; otherwise show all `isCarousel`.
 
 ---
 
-## Appendix A ? SESSION_DUMP_2026-02-10 (verbatim)
+## Appendix A — SESSION_DUMP_2026-02-10 (verbatim)
 
-﻿# CKC — Session Dump (Recovered Requirements + Latest Iterations)
+# CKC — Session Dump (Recovered Requirements + Latest Iterations)
 
 Date: 2026-02-10
 
@@ -218,4 +227,3 @@ Suggested structure:
 - Exact keyboard shortcuts for rating assignment (1–5?), fullscreen, drawer toggle.
 - How to store docs/moodboard content in DB vs files (DB-first vs file-first).
 - Whether global carousel uses only `isCarousel`, or also uses `isFrontpage` as optional filter.
-
