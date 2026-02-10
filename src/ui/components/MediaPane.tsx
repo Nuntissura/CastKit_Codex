@@ -9,6 +9,37 @@ type MediaImage = {
   tags: string[];
 };
 
+function ratingFromKeyCode(code: string): number | null {
+  switch (code) {
+    case 'Digit1':
+    case 'Numpad1':
+      return 1;
+    case 'Digit2':
+    case 'Numpad2':
+      return 2;
+    case 'Digit3':
+    case 'Numpad3':
+      return 3;
+    case 'Digit4':
+    case 'Numpad4':
+      return 4;
+    case 'Digit5':
+    case 'Numpad5':
+      return 5;
+    default:
+      return null;
+  }
+}
+
+function isEditableActiveElement(): boolean {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (!(active instanceof HTMLElement)) return false;
+  if (active.isContentEditable) return true;
+  const tag = active.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
 export function MediaPane({
   images,
   defaultShowThumbnails = false,
@@ -48,6 +79,26 @@ export function MediaPane({
       setBusyImageId(null);
     }
   };
+
+  React.useEffect(() => {
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (!selected || isBusy) return;
+      if (evt.repeat) return;
+      if (isEditableActiveElement()) return;
+
+      const isAltGraph = evt.getModifierState?.('AltGraph') || (evt.ctrlKey && evt.altKey && !evt.metaKey);
+      if (!isAltGraph) return;
+
+      const rating = ratingFromKeyCode(evt.code);
+      if (!rating) return;
+
+      evt.preventDefault();
+      void patchMeta(selected.id, { rating });
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selected, isBusy, patchMeta]);
 
   return (
     <div className={styles.root}>
