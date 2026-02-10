@@ -21,3 +21,6 @@ Outputs to `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts`.
 npm run package:win
 ```
 
+Packaging creates a **versioned** output folder under:
+- `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts\`
+

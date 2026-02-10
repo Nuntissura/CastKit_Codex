@@ -9,7 +9,7 @@
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "build": "vite build",
     "preview": "vite preview",
-    "package:win": "npm run build && electron-builder --win --x64"
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -49,4 +49,3 @@
     }
   }
 }
-
