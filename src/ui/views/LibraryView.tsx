@@ -9,6 +9,11 @@ function joinPath(a: string, b: string): string {
   return `${left}\\${String(b || '').replace(/^[\\/]+/, '')}`;
 }
 
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0.5;
+  return Math.max(0, Math.min(1, n));
+}
+
 export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId: string) => void }) {
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
   const [carouselImages, setCarouselImages] = React.useState<
@@ -297,9 +302,28 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
           <div className={styles.characterList}>
             {characters.map((c) => (
               <button key={c.id} className={styles.characterItem} onClick={() => onOpenCharacter(c.id)}>
-                <div className={styles.characterName}>{c.displayName}</div>
-                <div className={styles.characterMeta}>
-                  {c.templateId} {c.templateVersion}
+                <div className={styles.characterItemInner}>
+                  <div className={styles.characterIcon}>
+                    {c.iconImageId ? (
+                      <img
+                        className={styles.characterIconImg}
+                        src={`ckc://thumb/${encodeURIComponent(c.iconImageId)}`}
+                        alt=""
+                        style={{
+                          objectPosition: `${Math.round(clamp01(c.iconFocusX) * 100)}% ${Math.round(clamp01(c.iconFocusY) * 100)}%`,
+                        }}
+                      />
+                    ) : (
+                      <div className={styles.characterIconPlaceholder}>No icon</div>
+                    )}
+                  </div>
+
+                  <div className={styles.characterText}>
+                    <div className={styles.characterName}>{c.displayName}</div>
+                    <div className={styles.characterMeta}>
+                      {c.templateId} {c.templateVersion}
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}

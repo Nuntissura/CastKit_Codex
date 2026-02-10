@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('ckc', {
     deleteSpinOff: (spinoffId) => ipcRenderer.invoke('ckc:deleteSpinOff', spinoffId),
 
     getCharacter: (characterId) => ipcRenderer.invoke('ckc:getCharacter', characterId),
+    setCharacterIcon: (params) => ipcRenderer.invoke('ckc:setCharacterIcon', params),
     createCharacter: (params) => ipcRenderer.invoke('ckc:createCharacter', params),
     importCharacterFromSheetDialog: () => ipcRenderer.invoke('ckc:importCharacterFromSheetDialog'),
     saveCharacter: (params) => ipcRenderer.invoke('ckc:saveCharacter', params),

@@ -100,3 +100,39 @@
   margin: 10px 0;
 }
 
+.characterItemInner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.characterIcon {
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.characterIconImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.characterIconPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.characterText {
+  min-width: 0;
+}

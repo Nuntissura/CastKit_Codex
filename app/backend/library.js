@@ -125,6 +125,12 @@ function isSafeIdForFolder(value) {
   return /^[A-Za-z0-9_-]+$/.test(String(value || ''));
 }
 
+function clamp01(n, fallback = 0.5) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(1, v));
+}
+
 class CKCLibrary {
   constructor({ libraryRoot, builtInTemplatePath, defaultTemplateId = 'v2.00', electronNativeImage = null }) {
     this.libraryRoot = libraryRoot;
@@ -755,7 +761,8 @@ class CKCLibrary {
       for (let i = 0; i < scopeCols.length; i++) params.push(`%${tok}%`);
     }
 
-    let baseSql = 'SELECT character_id, display_name, template_id, template_version, created_at, updated_at FROM Character';
+    let baseSql =
+      'SELECT character_id, display_name, template_id, template_version, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character';
     if (clauses.length > 0) baseSql += ` WHERE ${clauses.join(' AND ')}`;
     baseSql += ' ORDER BY updated_at DESC';
 
@@ -765,6 +772,9 @@ class CKCLibrary {
       displayName: r.display_name,
       templateId: r.template_id,
       templateVersion: r.template_version,
+      iconImageId: r.icon_image_id ?? null,
+      iconFocusX: Number.isFinite(Number(r.icon_focus_x)) ? Number(r.icon_focus_x) : 0.5,
+      iconFocusY: Number.isFinite(Number(r.icon_focus_y)) ? Number(r.icon_focus_y) : 0.5,
       updatedAt: r.updated_at,
       createdAt: r.created_at,
     }));
@@ -1237,7 +1247,7 @@ class CKCLibrary {
   async getCharacter(characterId) {
     const character = await get(
       this.db,
-      'SELECT character_id, display_name, template_id, template_version, template_hash, created_at, updated_at FROM Character WHERE character_id = ?',
+      'SELECT character_id, display_name, template_id, template_version, template_hash, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character WHERE character_id = ?',
       [characterId]
     );
     if (!character) return null;
@@ -1270,6 +1280,9 @@ class CKCLibrary {
       templateId: character.template_id,
       templateVersion: character.template_version,
       templateHash: character.template_hash,
+      iconImageId: character.icon_image_id ?? null,
+      iconFocusX: Number.isFinite(Number(character.icon_focus_x)) ? Number(character.icon_focus_x) : 0.5,
+      iconFocusY: Number.isFinite(Number(character.icon_focus_y)) ? Number(character.icon_focus_y) : 0.5,
       createdAt: character.created_at,
       updatedAt: character.updated_at,
       valuesById,
@@ -1295,6 +1308,47 @@ class CKCLibrary {
         addedAt: img.added_at,
       })),
     };
+  }
+
+  async setCharacterIcon({ characterId, imageId, focusX, focusY } = {}) {
+    if (!characterId) throw new Error('characterId is required');
+
+    const exists = await get(this.db, 'SELECT character_id FROM Character WHERE character_id = ?', [characterId]);
+    if (!exists) throw new Error('Character not found');
+
+    const shouldSetImage = imageId !== undefined;
+    const nextImageId = shouldSetImage ? (imageId === null ? null : String(imageId)) : null;
+    if (shouldSetImage && nextImageId) {
+      const img = await get(this.db, 'SELECT image_id FROM ImageAsset WHERE image_id = ? AND character_id = ?', [
+        nextImageId,
+        characterId,
+      ]);
+      if (!img) throw new Error('Icon image not found for character');
+    }
+
+    const shouldSetX = focusX !== undefined;
+    const shouldSetY = focusY !== undefined;
+    const nextX = shouldSetX ? clamp01(focusX, 0.5) : null;
+    const nextY = shouldSetY ? clamp01(focusY, 0.5) : null;
+
+    await run(
+      this.db,
+      `UPDATE Character
+       SET icon_image_id = CASE WHEN ? = 1 THEN ? ELSE icon_image_id END,
+           icon_focus_x = CASE WHEN ? = 1 THEN ? ELSE icon_focus_x END,
+           icon_focus_y = CASE WHEN ? = 1 THEN ? ELSE icon_focus_y END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE character_id = ?`,
+      [shouldSetImage ? 1 : 0, nextImageId, shouldSetX ? 1 : 0, nextX, shouldSetY ? 1 : 0, nextY, characterId]
+    );
+
+    await this._audit('character.setIcon', characterId, {
+      iconImageId: shouldSetImage ? nextImageId : undefined,
+      iconFocusX: shouldSetX ? nextX : undefined,
+      iconFocusY: shouldSetY ? nextY : undefined,
+    });
+
+    return { ok: true };
   }
 
   async createCharacter({ displayName = 'Unnamed', templateId = null } = {}) {

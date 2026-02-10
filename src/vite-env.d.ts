@@ -5,6 +5,9 @@ type CKCCharacterListItem = {
   displayName: string;
   templateId: string;
   templateVersion: string;
+  iconImageId: string | null;
+  iconFocusX: number;
+  iconFocusY: number;
   updatedAt: string;
   createdAt: string;
 };
@@ -40,6 +43,9 @@ type CKCCharacter = {
   templateId: string;
   templateVersion: string;
   templateHash: string;
+  iconImageId: string | null;
+  iconFocusX: number;
+  iconFocusY: number;
   createdAt: string;
   updatedAt: string;
   valuesById: Record<string, string>;
@@ -158,6 +164,7 @@ interface Window {
       name: string;
     }>;
     openPath: (filePath: string) => Promise<{ ok: true }>;
+    setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
     setImageMeta: (params: unknown) => Promise<unknown>;

@@ -1,4 +1,4 @@
-# Technical Specification — CastKit Codex (CKC) — v00.021
+# Technical Specification — CastKit Codex (CKC) — v00.022
 
 Date: 2026-02-10  
 GitHub repo: https://github.com/Nuntissura/CastKit_Codex
@@ -23,6 +23,7 @@ When a new spec version file is created, the previous version MUST be moved into
 - **v00.019 (2026-02-10):** Created as the new current spec from the recovered requirements in `SESSION_DUMP_2026-02-10.md`. Archived `v00.004` into `spec/archive_spec/`.
 - **v00.020 (2026-02-10):** Recorded decisions for rating shortcuts + DB-first docs storage; re-embedded Appendix A from `SESSION_DUMP_2026-02-10.md` to eliminate encoding artifacts.
 - **v00.021 (2026-02-10):** Added frontpage exports (empty canonical template + LLM-friendly empty packs) and output folder picker; mirrored session dump into `CKC_main/docs/`; added built-in “All Fields” LLM pack preset.
+- **v00.022 (2026-02-10):** Added character icons with stored focus framing (`focusX/focusY`) and Library list rendering.
 
 ## 1. Non-negotiables (summary)
 

@@ -386,6 +386,11 @@ function registerIpcHandlers() {
         return lib.getCharacter(characterId);
     });
 
+    ipcMain.handle('ckc:setCharacterIcon', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setCharacterIcon(params || {});
+    });
+
     ipcMain.handle('ckc:createCharacter', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.createCharacter(params || {});

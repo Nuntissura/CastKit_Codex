@@ -21,6 +21,17 @@ function emptyMoodboard(): MoodboardState {
   return { version: 1, strokes: [], images: [] };
 }
 
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0.5;
+  return Math.max(0, Math.min(1, n));
+}
+
+function fileNameFromRelativePath(rel: string): string {
+  const raw = String(rel || '');
+  const parts = raw.split(/[\\/]/);
+  return parts[parts.length - 1] || raw;
+}
+
 export function CharacterView({
   characterId,
   onBack,
@@ -43,6 +54,12 @@ export function CharacterView({
   const [draftValuesById, setDraftValuesById] = React.useState<Record<string, string>>({});
   const [saveIssues, setSaveIssues] = React.useState<Array<{ fieldId: string; severity: string; message: string }> | null>(null);
   const [isSaving, setIsSaving] = React.useState<boolean>(false);
+
+  const [iconDraftImageId, setIconDraftImageId] = React.useState<string | null>(null);
+  const [iconDraftFocusX, setIconDraftFocusX] = React.useState<number>(0.5);
+  const [iconDraftFocusY, setIconDraftFocusY] = React.useState<number>(0.5);
+  const [iconError, setIconError] = React.useState<string | null>(null);
+  const [isIconSaving, setIsIconSaving] = React.useState<boolean>(false);
 
   const [docType, setDocType] = React.useState<CKCDocType>('notes');
   const [docQueryText, setDocQueryText] = React.useState<string>('');
@@ -67,6 +84,10 @@ export function CharacterView({
     setTemplateAst(null);
     setDraftValuesById({});
     setSaveIssues(null);
+    setIconDraftImageId(null);
+    setIconDraftFocusX(0.5);
+    setIconDraftFocusY(0.5);
+    setIconError(null);
 
     window.ckc
       .getCharacter(characterId)
@@ -79,6 +100,15 @@ export function CharacterView({
     setDraftValuesById(character.valuesById || {});
     void window.ckc.getTemplateDetail(character.templateId).then((detail) => setTemplateAst(detail?.ast ?? null));
   }, [character]);
+
+  React.useEffect(() => {
+    if (!characterId) return;
+    if (!character) return;
+    setIconDraftImageId(character.iconImageId ?? null);
+    setIconDraftFocusX(clamp01(character.iconFocusX));
+    setIconDraftFocusY(clamp01(character.iconFocusY));
+    setIconError(null);
+  }, [characterId, character?.iconImageId, character?.iconFocusX, character?.iconFocusY]);
 
   const reloadDocs = React.useCallback(() => {
     window.ckc
@@ -164,6 +194,44 @@ export function CharacterView({
     }
     return false;
   }, [character, draftValuesById]);
+
+  const iconIsDirty = React.useMemo(() => {
+    if (!character) return false;
+    const aId = character.iconImageId ?? null;
+    const bId = iconDraftImageId ?? null;
+    if (aId !== bId) return true;
+    if (Math.abs(clamp01(character.iconFocusX) - clamp01(iconDraftFocusX)) > 1e-6) return true;
+    if (Math.abs(clamp01(character.iconFocusY) - clamp01(iconDraftFocusY)) > 1e-6) return true;
+    return false;
+  }, [character, iconDraftImageId, iconDraftFocusX, iconDraftFocusY]);
+
+  const saveIcon = async () => {
+    if (!characterId) return;
+    setIsIconSaving(true);
+    setIconError(null);
+    try {
+      await window.ckc.setCharacterIcon({
+        characterId,
+        imageId: iconDraftImageId,
+        focusX: clamp01(iconDraftFocusX),
+        focusY: clamp01(iconDraftFocusY),
+      });
+
+      setCharacter((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          iconImageId: iconDraftImageId ?? null,
+          iconFocusX: clamp01(iconDraftFocusX),
+          iconFocusY: clamp01(iconDraftFocusY),
+        };
+      });
+    } catch (err: unknown) {
+      setIconError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsIconSaving(false);
+    }
+  };
 
   const saveSheet = async () => {
     if (!characterId) return;
@@ -595,7 +663,107 @@ export function CharacterView({
               ) : tab === 'tools' ? (
                 <>
                   <div className={styles.sectionTitle}>Tools</div>
-                  <div className={styles.muted}>Next: exports, packs, template tools, etc.</div>
+                  <div className={styles.smallNote}>Character icon is shown in the Library list. Focus sliders control the crop.</div>
+
+                  <div className={styles.iconRow}>
+                    <div className={styles.iconPreview}>
+                      {iconDraftImageId ? (
+                        <img
+                          className={styles.iconImg}
+                          src={`ckc://thumb/${encodeURIComponent(iconDraftImageId)}`}
+                          alt=""
+                          style={{
+                            objectPosition: `${Math.round(clamp01(iconDraftFocusX) * 100)}% ${Math.round(
+                              clamp01(iconDraftFocusY) * 100
+                            )}%`,
+                          }}
+                        />
+                      ) : (
+                        <div className={styles.iconPlaceholder}>No icon</div>
+                      )}
+                    </div>
+
+                    <div className={styles.iconControls}>
+                      <div className={styles.iconControlRow}>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void saveIcon()}
+                          disabled={!character || isIconSaving || !iconIsDirty}
+                        >
+                          {isIconSaving ? 'Saving…' : iconIsDirty ? 'Save icon' : 'Icon saved'}
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => setIconDraftImageId(null)}
+                          disabled={!character || isIconSaving || !iconDraftImageId}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            setIconDraftFocusX(0.5);
+                            setIconDraftFocusY(0.5);
+                          }}
+                          disabled={!character || isIconSaving}
+                        >
+                          Center
+                        </button>
+                      </div>
+
+                      <div className={styles.iconControlRow}>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          Image{' '}
+                          <select
+                            value={iconDraftImageId ?? ''}
+                            onChange={(e) => setIconDraftImageId(e.target.value ? e.target.value : null)}
+                            disabled={!character || isIconSaving}
+                          >
+                            <option value="">(none)</option>
+                            {(character?.images || []).map((img) => (
+                              <option key={img.id} value={img.id}>
+                                {fileNameFromRelativePath(img.relativePath) || img.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className={styles.iconControlRow}>
+                        <div className={styles.iconSlider}>
+                          <span>Focus X</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={String(Math.round(clamp01(iconDraftFocusX) * 100))}
+                            onChange={(e) => setIconDraftFocusX((Number(e.target.value) || 0) / 100)}
+                            disabled={!character || isIconSaving || !iconDraftImageId}
+                          />
+                          <code>{Math.round(clamp01(iconDraftFocusX) * 100)}%</code>
+                        </div>
+
+                        <div className={styles.iconSlider}>
+                          <span>Focus Y</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={String(Math.round(clamp01(iconDraftFocusY) * 100))}
+                            onChange={(e) => setIconDraftFocusY((Number(e.target.value) || 0) / 100)}
+                            disabled={!character || isIconSaving || !iconDraftImageId}
+                          />
+                          <code>{Math.round(clamp01(iconDraftFocusY) * 100)}%</code>
+                        </div>
+                      </div>
+
+                      {iconError ? (
+                        <div className={styles.error} style={{ margin: '10px 0' }}>
+                          {iconError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
@@ -610,4 +778,3 @@ export function CharacterView({
     </>
   );
 }
-
