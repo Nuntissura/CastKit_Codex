@@ -16,7 +16,7 @@ This file is mirrored into the git repo for visibility:
 ## Work packets
 | ID | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| WP-0001 | Rebuild `CKC_main` source repo on K: | IN_PROGRESS | Codex | `npm test` passes; packaging outputs to `CKC_GOV/targets/CKC/artifacts`; repo stays clean (no `dist/`). |
+| WP-0001 | Rebuild `CKC_main` source repo on K: | DONE | Codex | `npm test` passes; `npm run dev` + `npm run electron:dev` smoke-verified; packaging outputs to `CKC_GOV/targets/CKC/artifacts`; repo stays clean (no `dist/`). |
 | WP-0002 | Bring spec up to date (v00.019+) | DONE | Codex | `v00.019` created + mirrored into `CKC_main/docs/`; `v00.004` archived in `spec/archive_spec/`. |
 | WP-0003 | Portfolio layout + drawers + minimal UI | IN_PROGRESS | Codex | Two-panel default, 3-panel docs mode, menu/library drawers, hidden command bars. |
 | WP-0004 | Ratings (0–5) assign + filter ops + slideshow | IN_PROGRESS | Codex | Hotkeys + star UI; operator filters; fullscreen + slideshow; needs manual smoke verification. |
