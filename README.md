@@ -10,7 +10,13 @@ npm install
 npm run dev
 ```
 
+Run the full Electron app (renderer + main process):
+```powershell
+npm run electron:dev
+```
+
 ## Build (local)
+Build output goes to `K:\CastKit Codex\CKC_GOV\targets\scratch\renderer-dist`.
 ```powershell
 npm run build
 ```
@@ -23,4 +29,3 @@ npm run package:win
 
 Packaging creates a **versioned** output folder under:
 - `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts\`
-

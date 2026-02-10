@@ -6,10 +6,13 @@
   "scripts": {
     "dev:renderer": "vite --port 5173",
     "dev:electron": "wait-on tcp:5173 && electron .",
-    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "build": "vite build",
-    "preview": "vite preview",
-    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1"
+    "dev": "npm run dev:renderer",
+    "electron:dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "build": "vite build --emptyOutDir --outDir ../CKC_GOV/targets/scratch/renderer-dist",
+    "preview": "vite preview --outDir ../CKC_GOV/targets/scratch/renderer-dist",
+    "test": "node --test",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
+    "electron:build": "npm run package:win"
   },
   "dependencies": {
     "react": "^19.1.0",

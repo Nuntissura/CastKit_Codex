@@ -63,8 +63,8 @@ Copy-Item -Recurse -Force -LiteralPath (Join-Path $repoRoot 'app') -Destination 
 # Build renderer into stage\dist (keeps build output out of the repo)
 Push-Location $repoRoot
 try {
-  npm run build -- --outDir "$stageRoot\\dist" --emptyOutDir
-  Assert-LastExitOk 'vite build'
+  npx --no-install vite build --outDir "$stageRoot\\dist" --emptyOutDir
+  Assert-LastExitOk 'vite build (stage)'
 } finally {
   Pop-Location
 }
