@@ -9,7 +9,7 @@ On this workstation, the governance folder (`CKC_GOV`) is the source of truth. K
 - `docs/PROJECT_CODEX.md` (workflow, build targets, backup)
 - `docs/WORKFLOW.md` (WP -> Spec -> Git)
 - `docs/TASK_BOARD.md` (status)
-- `docs/CastKit_Codex_Spec_v00.022.md` (current spec)
+- `docs/CastKit_Codex_Spec_v00.023.md` (current spec)
 - `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
 
 Workflow (MUST):

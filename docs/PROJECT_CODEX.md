@@ -12,7 +12,7 @@ This file is mirrored into the git repo for visibility:
 Read these first (order matters):
 1. Project Codex (this file): `K:\CastKit Codex\CKC_GOV\PROJECT_CODEX.md`
 2. Task board (status): `K:\CastKit Codex\CKC_GOV\taskboard\TASK_BOARD.md`
-3. Current spec (requirements): `K:\CastKit Codex\CKC_GOV\spec\CastKit_Codex_Spec_v00.022.md`
+3. Current spec (requirements): `K:\CastKit Codex\CKC_GOV\spec\CastKit_Codex_Spec_v00.023.md`
 4. Session dump (verbatim requirements): `K:\CastKit Codex\CKC_GOV\spec\SESSION_DUMP_2026-02-10.md`
 
 If you are reading these in PowerShell and you see garbage like `â€”`, open with UTF-8:
@@ -51,7 +51,7 @@ Expected structure:
 Path: `K:\CastKit Codex\CKC_GOV`
 
 - `spec/`
-  - `CastKit_Codex_Spec_v00.022.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.023.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
