@@ -133,12 +133,42 @@ try {
 Write-Host "Done. Artifacts in: $artifactsRoot"
 
 $latestInfoPath = Path-Combine @($ckcTargets, 'artifacts', 'LATEST_BUILD.txt')
+$createdAt = (Get-Date -Format o)
+
+$topFiles = Get-ChildItem -LiteralPath $artifactsRoot -File | Sort-Object Name
+$manifest = [ordered]@{
+  buildId = $buildId
+  version = $version
+  gitSha = $gitSha
+  createdAt = $createdAt
+  artifacts = $artifactsRoot
+  files = @(
+    foreach ($f in $topFiles) {
+      $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $f.FullName).Hash.ToLowerInvariant()
+      [ordered]@{
+        name = $f.Name
+        sizeBytes = $f.Length
+        sha256 = $hash
+      }
+    }
+  )
+}
+
+$manifestPath = Join-Path $artifactsRoot 'manifest.json'
+[System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), $utf8NoBom)
+
+$shaPath = Join-Path $artifactsRoot 'SHA256SUMS.txt'
+$shaLines = foreach ($entry in $manifest.files) { "{0}  {1}" -f $entry.sha256, $entry.name }
+[System.IO.File]::WriteAllText($shaPath, (($shaLines -join "`n") + "`n"), $utf8NoBom)
+
 $latestInfo = @(
   "buildId: $buildId"
   "version: $version"
   "gitSha: $gitSha"
-  "createdAt: $(Get-Date -Format o)"
+  "createdAt: $createdAt"
   "artifacts: $artifactsRoot"
+  "manifest: $manifestPath"
+  "sha256: $shaPath"
   ''
 ) -join "`n"
 [System.IO.File]::WriteAllText($latestInfoPath, $latestInfo, $utf8NoBom)
