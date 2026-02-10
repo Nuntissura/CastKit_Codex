@@ -4,6 +4,12 @@ This repo is `https://github.com/Nuntissura/CastKit_Codex`.
 
 On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Board, Work Packets, spec archive, targets/artifacts).
 
+Start here:
+- `docs/PROJECT_CODEX.md` (mirrored from `CKC_GOV/PROJECT_CODEX.md`)
+- `docs/TASK_BOARD.md` (mirrored from `CKC_GOV/taskboard/TASK_BOARD.md`)
+- `docs/CastKit_Codex_Spec_v00.022.md` (mirrored from `CKC_GOV/spec/`)
+- `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
+
 ## Rules (MUST)
 
 1. **Create a Work Packet before coding**
@@ -25,8 +31,29 @@ On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Boar
    - Then commit + push the code
    - Commit messages include the WP ID (example: `WP-0001: tighten packaging outputs`)
 
+Typical commands:
+```powershell
+cd "K:\CastKit Codex\CKC_main"
+npm test
+npx tsc --noEmit
+git status
+git add -A
+git commit -m "WP-xxxx: short description"
+git push origin main
+```
+
 ## Backup (NAS mirror)
 
 Scripts live in `CKC_GOV/scripts/`:
 - `backup_to_mir.ps1` (ROBOCOPY `/MIR`)
 - `register_backup_task.ps1` (scheduled task helper)
+
+Run a backup now:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\backup_to_mir.ps1"
+```
+
+Note: if PowerShell shows `â€”`/`â€¦` garbage when viewing docs, use UTF-8:
+```powershell
+Get-Content -Encoding utf8 .\\docs\\WORKFLOW.md
+```
