@@ -28,7 +28,7 @@ This file is mirrored into the git repo for visibility:
 | WP-0010 | Record open-question decisions | DONE | Codex | Captured rating hotkeys (RAlt+1..5), DB-first docs storage, and tentative `isFrontpage` rule in spec v00.020. |
 | WP-0011 | Rating hotkeys (RAlt+1..5) | DONE | Codex | Added global keybind in MediaPane to set rating on the selected image; ignores keybinds while typing in inputs. |
 | WP-0012 | Character icons + focus framing | IN_PROGRESS | Codex | Pick icon from character images; store focusX/focusY; show icons in Library list/grid. |
-| WP-0013 | New dev onboarding + governance mirrors + NAS backup usage | IN_PROGRESS | Codex | Added `CKC_main/docs/PROJECT_CODEX.md` + `TASK_BOARD.md` mirrors; updated README/workflow with commit/push + backup commands. |
+| WP-0013 | New dev onboarding + governance mirrors + NAS backup usage | DONE | Codex | Added `CKC_main/docs/PROJECT_CODEX.md` + `TASK_BOARD.md` mirrors; updated README/workflow with commit/push + backup commands. |
 
 ## Current focus
 - Next: WP-0003 / WP-0004 / WP-0005 (manual smoke + tighten UX)
