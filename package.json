@@ -1,0 +1,52 @@
+{
+  "name": "castkit-codex",
+  "version": "0.2.0",
+  "private": true,
+  "main": "app/main.js",
+  "scripts": {
+    "dev:renderer": "vite --port 5173",
+    "dev:electron": "wait-on tcp:5173 && electron .",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "package:win": "npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.2",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.nuntissura.castkitcodex",
+    "productName": "CastKit Codex",
+    "directories": {
+      "output": "../CKC_GOV/targets/CKC/artifacts"
+    },
+    "files": [
+      "app/**/*",
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "app/icon.ico"
+    }
+  }
+}
+

@@ -1,0 +1,40 @@
+:root {
+  --bg-primary: #fdf5e6;
+  --bg-secondary: #f7efd9;
+  --bg-accent: rgba(26, 26, 26, 0.04);
+  --text-primary: #1a1a1a;
+  --text-secondary: rgba(26, 26, 26, 0.65);
+  --accent-color: #ff0000;
+  --danger: #ff4500;
+  --success: #008080;
+  --glass: rgba(253, 245, 230, 0.72);
+  --glass-border: rgba(26, 26, 26, 0.16);
+  --shadow-lg: 0 22px 55px rgba(26, 26, 26, 0.12);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* sharp corners everywhere by default */
+* {
+  border-radius: 0 !important;
+}
+

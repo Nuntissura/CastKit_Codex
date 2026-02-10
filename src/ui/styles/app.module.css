@@ -1,0 +1,30 @@
+.root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.topLeft {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+}
+
+.iconButton {
+  height: 40px;
+  width: 40px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--text-primary);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.content {
+  height: 100%;
+  width: 100%;
+}
+

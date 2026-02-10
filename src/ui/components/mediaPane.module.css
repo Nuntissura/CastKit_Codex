@@ -1,0 +1,140 @@
+.root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.viewer {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.viewerImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.empty {
+  color: var(--text-secondary);
+  padding: 24px;
+  text-align: center;
+}
+
+.overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.overlayBtn {
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.88);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.controls {
+  position: absolute;
+  top: 56px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.92);
+  max-width: min(520px, 92vw);
+}
+
+.controlBtn {
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.stars {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.starBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.clearBtn {
+  margin-left: 8px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.tagBtn[data-active='1'] {
+  border-color: var(--accent-color);
+}
+
+.thumbs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--glass-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.thumbBtn {
+  height: 96px;
+  width: 140px;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.thumbBtn[data-selected='1'] {
+  border-color: var(--accent-color);
+}
+
+.thumbImg {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}

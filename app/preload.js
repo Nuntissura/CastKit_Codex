@@ -1,0 +1,79 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('ckc', {
+    initialize: () => ipcRenderer.invoke('ckc:initialize'),
+    getConfig: () => ipcRenderer.invoke('ckc:getConfig'),
+    setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
+    selectLibraryRoot: () => ipcRenderer.invoke('ckc:selectLibraryRoot'),
+
+    getTemplate: () => ipcRenderer.invoke('ckc:getTemplate'),
+    listTemplates: () => ipcRenderer.invoke('ckc:listTemplates'),
+    getTemplateDetail: (templateId) => ipcRenderer.invoke('ckc:getTemplateDetail', templateId),
+    setDefaultTemplateId: (templateId) => ipcRenderer.invoke('ckc:setDefaultTemplateId', templateId),
+    importTemplateFromDialog: () => ipcRenderer.invoke('ckc:importTemplateFromDialog'),
+
+    listCharacters: (params) => ipcRenderer.invoke('ckc:listCharacters', params),
+    listAllTags: () => ipcRenderer.invoke('ckc:listAllTags'),
+
+    listSavedSearches: () => ipcRenderer.invoke('ckc:listSavedSearches'),
+    createSavedSearch: (params) => ipcRenderer.invoke('ckc:createSavedSearch', params),
+    updateSavedSearch: (params) => ipcRenderer.invoke('ckc:updateSavedSearch', params),
+    deleteSavedSearch: (searchId) => ipcRenderer.invoke('ckc:deleteSavedSearch', searchId),
+
+    listTagTemplates: () => ipcRenderer.invoke('ckc:listTagTemplates'),
+    listTagTemplateVersions: (templateName) => ipcRenderer.invoke('ckc:listTagTemplateVersions', templateName),
+    upsertTagTemplate: (params) => ipcRenderer.invoke('ckc:upsertTagTemplate', params),
+    deleteTagTemplateVersion: (params) => ipcRenderer.invoke('ckc:deleteTagTemplateVersion', params),
+    applyTagTemplateToCharacter: (params) => ipcRenderer.invoke('ckc:applyTagTemplateToCharacter', params),
+
+    listTagRules: (params) => ipcRenderer.invoke('ckc:listTagRules', params),
+    createTagRule: (params) => ipcRenderer.invoke('ckc:createTagRule', params),
+    updateTagRule: (params) => ipcRenderer.invoke('ckc:updateTagRule', params),
+    deleteTagRule: (ruleId) => ipcRenderer.invoke('ckc:deleteTagRule', ruleId),
+    recomputeDerivedTags: (characterId) => ipcRenderer.invoke('ckc:recomputeDerivedTags', characterId),
+    recomputeDerivedTagsAll: () => ipcRenderer.invoke('ckc:recomputeDerivedTagsAll'),
+
+    listAuditLog: (params) => ipcRenderer.invoke('ckc:listAuditLog', params),
+
+    listSpinOffs: (params) => ipcRenderer.invoke('ckc:listSpinOffs', params),
+    getSpinOff: (spinoffId) => ipcRenderer.invoke('ckc:getSpinOff', spinoffId),
+    createSpinOff: (params) => ipcRenderer.invoke('ckc:createSpinOff', params),
+    updateSpinOff: (params) => ipcRenderer.invoke('ckc:updateSpinOff', params),
+    deleteSpinOff: (spinoffId) => ipcRenderer.invoke('ckc:deleteSpinOff', spinoffId),
+
+    getCharacter: (characterId) => ipcRenderer.invoke('ckc:getCharacter', characterId),
+    createCharacter: (params) => ipcRenderer.invoke('ckc:createCharacter', params),
+    importCharacterFromSheetDialog: () => ipcRenderer.invoke('ckc:importCharacterFromSheetDialog'),
+    saveCharacter: (params) => ipcRenderer.invoke('ckc:saveCharacter', params),
+
+    addManualTag: (params) => ipcRenderer.invoke('ckc:addManualTag', params),
+    removeManualTag: (params) => ipcRenderer.invoke('ckc:removeManualTag', params),
+
+    listProtectedFieldIds: (characterId) => ipcRenderer.invoke('ckc:listProtectedFieldIds', characterId),
+    listProtectedFieldIdsGlobal: () => ipcRenderer.invoke('ckc:listProtectedFieldIdsGlobal'),
+    listProtectedFieldIdsForCharacter: (characterId) => ipcRenderer.invoke('ckc:listProtectedFieldIdsForCharacter', characterId),
+    setProtectedFieldIdsGlobal: (fieldIds) => ipcRenderer.invoke('ckc:setProtectedFieldIdsGlobal', fieldIds),
+    setProtectedFieldIdsForCharacter: (params) => ipcRenderer.invoke('ckc:setProtectedFieldIdsForCharacter', params),
+
+    ingestPreview: (params) => ipcRenderer.invoke('ckc:ingestPreview', params),
+    ingestApply: (params) => ipcRenderer.invoke('ckc:ingestApply', params),
+    ingestCreateCharacter: (params) => ipcRenderer.invoke('ckc:ingestCreateCharacter', params),
+    openTextFileDialog: (opts) => ipcRenderer.invoke('ckc:openTextFileDialog', opts),
+
+    patchPreview: (params) => ipcRenderer.invoke('ckc:patchPreview', params),
+    patchApply: (params) => ipcRenderer.invoke('ckc:patchApply', params),
+
+    exportBundle: (params) => ipcRenderer.invoke('ckc:exportBundle', params),
+    listVersions: (characterId) => ipcRenderer.invoke('ckc:listVersions', characterId),
+    diffVersions: (params) => ipcRenderer.invoke('ckc:diffVersions', params),
+    revertPreviewFromVersion: (params) => ipcRenderer.invoke('ckc:revertPreviewFromVersion', params),
+    revertApplyFromVersion: (params) => ipcRenderer.invoke('ckc:revertApplyFromVersion', params),
+    repairCharacterFolders: (characterId) => ipcRenderer.invoke('ckc:repairCharacterFolders', characterId),
+    exportFieldPack: (params) => ipcRenderer.invoke('ckc:exportFieldPack', params),
+
+    importImages: (params) => ipcRenderer.invoke('ckc:importImages', params),
+    repairThumbnails: (characterId) => ipcRenderer.invoke('ckc:repairThumbnails', characterId),
+    setImageMeta: (params) => ipcRenderer.invoke('ckc:setImageMeta', params),
+
+    openPath: (filePath) => ipcRenderer.invoke('ckc:openPath', filePath),
+});
