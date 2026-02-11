@@ -18,15 +18,43 @@ protocol.registerSchemesAsPrivileged([
     },
 ]);
 
+function getPortableBaseDir() {
+    const dir = process.env.PORTABLE_EXECUTABLE_DIR;
+    if (!dir || typeof dir !== 'string') return null;
+    const trimmed = dir.trim();
+    return trimmed.length ? trimmed : null;
+}
+
 function getDefaultLibraryRoot() {
+    const portableDir = getPortableBaseDir();
+    if (portableDir) return path.join(portableDir, 'CastKit Codex Library');
     return path.join(app.getPath('documents'), 'CastKit Codex Library');
 }
 
+function getPrimaryConfigPath() {
+    const portableDir = getPortableBaseDir();
+    if (portableDir) return path.join(portableDir, CONFIG_FILE);
+    return path.join(app.getPath('userData'), CONFIG_FILE);
+}
+
+function getFallbackUserDataConfigPath() {
+    return path.join(app.getPath('userData'), CONFIG_FILE);
+}
+
 function loadConfig() {
-    const configPath = path.join(app.getPath('userData'), CONFIG_FILE);
+    const primaryConfigPath = getPrimaryConfigPath();
+    const fallbackConfigPath = getFallbackUserDataConfigPath();
+    let configPath = primaryConfigPath;
     try {
-        if (fs.existsSync(configPath)) {
-            const raw = fs.readFileSync(configPath, 'utf8');
+        if (fs.existsSync(primaryConfigPath)) {
+            const raw = fs.readFileSync(primaryConfigPath, 'utf8');
+            return { configPath: primaryConfigPath, config: JSON.parse(raw) };
+        }
+        // Portable migration: if no portable config exists yet, but we have a userData config,
+        // reuse it once and start saving into the portable location.
+        if (primaryConfigPath !== fallbackConfigPath && fs.existsSync(fallbackConfigPath)) {
+            const raw = fs.readFileSync(fallbackConfigPath, 'utf8');
+            configPath = primaryConfigPath;
             return { configPath, config: JSON.parse(raw) };
         }
     } catch {
@@ -94,20 +122,114 @@ async function writePdfFromText(text, outPath) {
 
 let mainWindow = null;
 let ckcLibrary = null;
+let ckcLibraryInitPromise = null;
 let appConfigPath = null;
 let appConfig = null;
 
-async function ensureLibrary() {
-    if (ckcLibrary) return ckcLibrary;
-    const builtInTemplatePath = path.join(__dirname, 'templates', 'CHARACTER_SHEET__v2.00.txt');
-    ckcLibrary = new CKCLibrary({
-        libraryRoot: appConfig.libraryRoot,
-        builtInTemplatePath,
-        defaultTemplateId: appConfig.defaultTemplateId,
-        electronNativeImage: nativeImage,
+function looksLikeLibraryRoot(absPath) {
+    try {
+        if (!absPath || typeof absPath !== 'string') return false;
+        if (!fs.existsSync(absPath)) return false;
+        const dbPath = path.join(absPath, 'db', 'codex.db');
+        const charactersDir = path.join(absPath, 'characters');
+        return fs.existsSync(dbPath) || fs.existsSync(charactersDir);
+    } catch {
+        return false;
+    }
+}
+
+async function ensureLibraryRootAvailable() {
+    const configured = String(appConfig?.libraryRoot || '').trim();
+    if (configured && fs.existsSync(configured)) return;
+
+    const portableDir = getPortableBaseDir();
+    const defaultRoot = getDefaultLibraryRoot();
+    const nearExeCandidate = portableDir ? path.join(portableDir, 'CastKit Codex Library') : null;
+
+    // If portable and a near-exe candidate exists, prefer it automatically.
+    if (nearExeCandidate && looksLikeLibraryRoot(nearExeCandidate)) {
+        appConfig.libraryRoot = nearExeCandidate;
+        saveConfig(appConfigPath, appConfig);
+        return;
+    }
+
+    // Non-interactive fallback when no window yet: just use default.
+    if (!mainWindow) {
+        appConfig.libraryRoot = defaultRoot;
+        saveConfig(appConfigPath, appConfig);
+        return;
+    }
+
+    const missing = configured || '(not set)';
+    const createLabel = portableDir ? `Create new next to portable .exe` : 'Create new at default location';
+    const createDetail = portableDir ? defaultRoot : defaultRoot;
+
+    const res = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        message: 'CastKit Codex library folder not found.',
+        detail: `Configured libraryRoot:\n${missing}\n\nChoose an existing library root folder, or create a new one.\n\nDefault:\n${createDetail}`,
+        buttons: ['Select existing…', createLabel, 'Quit'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
     });
-    await ckcLibrary.initialize();
-    return ckcLibrary;
+
+    if (res.response === 2) {
+        app.quit();
+        throw new Error('Library root missing (user quit).');
+    }
+
+    if (res.response === 1) {
+        appConfig.libraryRoot = defaultRoot;
+        saveConfig(appConfigPath, appConfig);
+        return;
+    }
+
+    const picked = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Library Root',
+        properties: ['openDirectory', 'createDirectory'],
+    });
+    if (picked.canceled || !picked.filePaths[0]) {
+        app.quit();
+        throw new Error('Library root missing (no folder selected).');
+    }
+    appConfig.libraryRoot = picked.filePaths[0];
+    saveConfig(appConfigPath, appConfig);
+}
+
+function resetLibrary() {
+    if (ckcLibrary) {
+        ckcLibrary.close();
+        ckcLibrary = null;
+    }
+    ckcLibraryInitPromise = null;
+}
+
+async function ensureLibrary() {
+    if (ckcLibraryInitPromise) return ckcLibraryInitPromise;
+
+    ckcLibraryInitPromise = (async () => {
+        await ensureLibraryRootAvailable();
+        if (ckcLibrary) return ckcLibrary;
+
+        const builtInTemplatePath = path.join(__dirname, 'templates', 'CHARACTER_SHEET__v2.00.txt');
+        ckcLibrary = new CKCLibrary({
+            libraryRoot: appConfig.libraryRoot,
+            builtInTemplatePath,
+            defaultTemplateId: appConfig.defaultTemplateId,
+            electronNativeImage: nativeImage,
+        });
+        await ckcLibrary.initialize();
+        return ckcLibrary;
+    })();
+
+    try {
+        return await ckcLibraryInitPromise;
+    } catch (err) {
+        // If initialization fails, allow retry on next call.
+        resetLibrary();
+        throw err;
+    }
 }
 
 function contentTypeFromPath(filePath) {
@@ -178,10 +300,7 @@ function registerIpcHandlers() {
         appConfig = { ...appConfig, ...nextConfig };
         saveConfig(appConfigPath, appConfig);
         // Reinitialize library if libraryRoot changed.
-        if (ckcLibrary) {
-            ckcLibrary.close();
-            ckcLibrary = null;
-        }
+        resetLibrary();
         await ensureLibrary();
         return appConfig;
     });
@@ -200,10 +319,7 @@ function registerIpcHandlers() {
         if (result.canceled || !result.filePaths[0]) return null;
         appConfig.libraryRoot = result.filePaths[0];
         saveConfig(appConfigPath, appConfig);
-        if (ckcLibrary) {
-            ckcLibrary.close();
-            ckcLibrary = null;
-        }
+        resetLibrary();
         await ensureLibrary();
         return appConfig.libraryRoot;
     });
@@ -638,6 +754,24 @@ app.whenReady().then(async () => {
     registerIpcHandlers();
     registerProtocolHandlers();
     createWindow();
+
+    // Initialize the library eagerly so the renderer cannot observe a partially-initialized instance.
+    try {
+        await ensureLibrary();
+    } catch (err) {
+        try {
+            await dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                message: 'Failed to initialize CastKit Codex library.',
+                detail: String(err?.message || err || 'Unknown error'),
+                buttons: ['Quit'],
+                defaultId: 0,
+                noLink: true,
+            });
+        } finally {
+            app.quit();
+        }
+    }
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
