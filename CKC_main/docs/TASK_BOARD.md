@@ -44,7 +44,7 @@ This is a mirror of the canonical Task Board:
 | WP-0026 | Repair tool: rehydrate missing images by hash | DONE | Codex | Scan recovery folder, match by hash, copy into library layout, regen thumbs, write report. |
 | WP-0027 | Backup task: silent + covers libraryRoot | DONE | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
 | WP-0028 | Startup: library init concurrency + portable defaults | DONE | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
-| WP-0029 | Resizable panels + persisted layouts (2/3 panel) | BACKLOG | Codex | Splitters; remember 2-panel vs 3-panel widths; persist on restart. |
+| WP-0029 | Resizable panels + persisted layouts (2/3 panel) | IN_PROGRESS | Codex | Splitters; remember 2-panel vs 3-panel widths; persist on restart. |
 | WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | DONE | Codex | Header controls (no overlay), arrow nav, bigger thumbs, no-match clear filters, per-thumb carousel toggle, hamburger-safe header inset, rating hotkeys LAlt+0..5. |
 | WP-0031 | Docs mode: autosave + drawer search + layout restoration | BACKLOG | Codex | Notes always visible; below show stories/moodboard; autosave; full docs library view + filters. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | BACKLOG | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |

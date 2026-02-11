@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add draggable splitters so panel widths can be adjusted in 2-panel and 3-panel modes, persist the layouts per mode, and restore them on restart.
@@ -40,4 +40,3 @@ CKC is used as a “portfolio book” with a primary 2-panel layout (media left,
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
 - [ ] Spec impact: yes (layout persistence). Bump spec + mirror into `CKC_main/docs/`.
-
