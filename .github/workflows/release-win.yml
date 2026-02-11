@@ -37,8 +37,16 @@ jobs:
           $artifactLine = (Get-Content -LiteralPath $latest) | Where-Object { $_ -like 'artifacts:*' } | Select-Object -First 1
           if (-not $artifactLine) { throw "LATEST_BUILD.txt missing 'artifacts:' line" }
 
-          $artifactsPath = $artifactLine.Substring('artifacts:'.Length).Trim()
-          if (!(Test-Path -LiteralPath $artifactsPath)) { throw "Artifacts path not found: $artifactsPath" }
+          $artifactsPathRaw = $artifactLine.Substring('artifacts:'.Length).Trim()
+          if (-not $artifactsPathRaw) { throw "LATEST_BUILD.txt has empty 'artifacts:' value" }
+
+          # Support both absolute and relative paths (relative is resolved against the LATEST_BUILD.txt directory).
+          $latestDir = Split-Path -Parent $latest
+          $artifactsPath = $artifactsPathRaw
+          if (-not [System.IO.Path]::IsPathRooted($artifactsPath)) {
+            $artifactsPath = Join-Path $latestDir $artifactsPath
+          }
+          $artifactsPath = (Resolve-Path -LiteralPath $artifactsPath).Path
 
           New-Item -ItemType Directory -Force -Path 'release_assets' | Out-Null
           Get-ChildItem -LiteralPath $artifactsPath -Filter '*.exe' | ForEach-Object {
@@ -53,4 +61,3 @@ jobs:
         with:
           files: release_assets/*
           generate_release_notes: true
-
