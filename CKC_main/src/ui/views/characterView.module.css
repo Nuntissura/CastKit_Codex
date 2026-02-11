@@ -172,6 +172,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .middleTitle {
@@ -246,4 +248,230 @@
 .smallNote {
   color: var(--text-secondary);
   font-size: 0.85rem;
+}
+
+.headerLeft {
+  min-width: 0;
+}
+
+.docsDrawer {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.docsDrawerTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.docsDrawerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.docsTypeRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.docsSearch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.docsSearch input {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+}
+
+.docsTagRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.docsTagRow input {
+  flex: 1 1 180px;
+  min-width: 180px;
+}
+
+.tagChips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tagChip {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tagChip:hover {
+  background: var(--bg-accent);
+}
+
+.smartTagsBox summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.smartTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.docsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.docsItem {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docsItem[data-active='1'] {
+  border-color: var(--accent-color);
+}
+
+.docsItemTitle {
+  font-weight: 800;
+}
+
+.docsItemMeta {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.docsActionsRow {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.docForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.docLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+  min-width: 260px;
+  flex: 1 1 260px;
+}
+
+.docLabel input {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+}
+
+.docText {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(980px, 96vw);
+  max-height: 86vh;
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.modalTitle {
+  font-weight: 800;
+}
+
+.modalTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.modalGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.modalImgBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+}
+
+.modalImgBtn:hover {
+  border-color: var(--accent-color);
+}
+
+.modalImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: rgba(26, 26, 26, 0.04);
 }

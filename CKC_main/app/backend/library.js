@@ -781,8 +781,45 @@ class CKCLibrary {
   }
 
   async listAllTags() {
-    const rows = await all(this.db, 'SELECT tag_text FROM Tag ORDER BY tag_text COLLATE NOCASE');
-    return rows.map((r) => r.tag_text);
+    const seen = new Set();
+
+    const addTag = (t) => {
+      const s = String(t ?? '').trim();
+      if (!s) return;
+      if (this._isSystemTag(s)) return;
+      seen.add(s);
+    };
+
+    const addFromJson = (raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        for (const t of parsed) addTag(t);
+      } catch {
+        // Ignore invalid rows deterministically.
+      }
+    };
+
+    // Character tag dictionary
+    const rows = await all(this.db, 'SELECT tag_text FROM Tag');
+    for (const r of rows) addTag(r.tag_text);
+
+    // Image tags
+    const imageRows = await all(this.db, 'SELECT tags_json FROM ImageAsset');
+    for (const r of imageRows) addFromJson(r.tags_json);
+
+    // Doc tags
+    for (const table of ['NoteDoc', 'StoryDoc', 'MoodboardDoc']) {
+      try {
+        const docRows = await all(this.db, `SELECT tags_json FROM ${table}`);
+        for (const r of docRows) addFromJson(r.tags_json);
+      } catch {
+        // Older DBs may not have doc tables yet.
+      }
+    }
+
+    return Array.from(seen).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }
 
   async listGlobalCarouselImages({ preferFrontpage = true } = {}) {
@@ -828,6 +865,21 @@ class CKCLibrary {
       cleaned.push(s);
     }
     return cleaned;
+  }
+
+  _isSystemTag(tagText) {
+    const s = String(tagText ?? '');
+    return s.startsWith('__ckc_');
+  }
+
+  _docTypeTag(docType) {
+    return `__ckc_docType:${String(docType || '').toLowerCase()}`;
+  }
+
+  _docTagMeta(docType, tagText) {
+    const dt = String(docType || '').toLowerCase();
+    const tt = String(tagText ?? '');
+    return `__ckc_docTag:${dt}:${tt}`;
   }
 
   _docTableForType(docType) {
@@ -879,7 +931,7 @@ class CKCLibrary {
       tags: (() => {
         try {
           const parsed = JSON.parse(r.tags_json ?? '[]');
-          return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+          return Array.isArray(parsed) ? parsed.map((x) => String(x)).filter((t) => !this._isSystemTag(t)) : [];
         } catch {
           return [];
         }
@@ -904,7 +956,7 @@ class CKCLibrary {
     let tags = [];
     try {
       const parsed = JSON.parse(row.tags_json ?? '[]');
-      tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+      tags = Array.isArray(parsed) ? parsed.map((x) => String(x)).filter((t) => !this._isSystemTag(t)) : [];
     } catch {
       tags = [];
     }
@@ -926,7 +978,9 @@ class CKCLibrary {
     const id = docId ? String(docId) : randomId(prefix);
 
     const cleanedTitle = String(title ?? '').trim() || 'Untitled';
-    const cleanedTags = this._cleanTags(tags);
+    const userTags = this._cleanTags(tags).filter((t) => !this._isSystemTag(t));
+    const metaTags = [this._docTypeTag(type), ...userTags.map((t) => this._docTagMeta(type, t))];
+    const cleanedTags = this._cleanTags([...userTags, ...metaTags]);
 
     await run(
       this.db,
@@ -1987,23 +2041,26 @@ class CKCLibrary {
     return { ok: true, issues: result.issues };
   }
 
-  async exportBundle({ characterId }) {
+  async exportBundle({ characterId, outDir = null } = {}) {
     const character = await this.getCharacter(characterId);
     if (!character) throw new Error('Character not found');
 
     const paths = this.getCharacterPaths(characterId);
-    ensureDir(paths.exportsDir);
+    const exportDir = outDir
+      ? path.join(String(outDir), 'characters', sanitizeFileName(null, `${character.displayName}__${characterId}`))
+      : paths.exportsDir;
+    ensureDir(exportDir);
 
     // Canonical TXT is the sheet itself.
     const sheetText = fs.readFileSync(paths.sheetTxtPath, 'utf8');
-    const txtPath = path.join(paths.exportsDir, 'character.txt');
+    const txtPath = path.join(exportDir, 'character.txt');
     fs.writeFileSync(txtPath, sheetText, 'utf8');
 
     const md = this._sheetTextToMarkdown(sheetText);
-    const mdPath = path.join(paths.exportsDir, 'character.md');
+    const mdPath = path.join(exportDir, 'character.md');
     fs.writeFileSync(mdPath, md, 'utf8');
 
-    const pdfPath = path.join(paths.exportsDir, 'character.pdf');
+    const pdfPath = path.join(exportDir, 'character.pdf');
     // PDF is generated in the Electron main process via printToPDF to avoid extra deps.
 
     return {
@@ -2379,6 +2436,7 @@ class CKCLibrary {
       for (const t of Array.isArray(tags) ? tags : []) {
         const s = String(t ?? '').trim();
         if (!s) continue;
+        if (this._isSystemTag(s)) continue;
         if (seen.has(s)) continue;
         seen.add(s);
         cleaned.push(s);
@@ -2414,6 +2472,7 @@ class CKCLibrary {
     const includeEmptyOnly = params?.includeEmptyOnly ?? true;
     const includeValues = params?.includeValues ?? false;
     const includeSections = params?.includeSections ?? null;
+    const outDir = params?.outDir ?? null;
 
     const character = await this.getCharacter(characterId);
     if (!character) throw new Error('Character not found');
@@ -2473,11 +2532,15 @@ class CKCLibrary {
 
     const packName = String(row.name || spinoffName);
     const paths = this.getCharacterPaths(characterId);
-    const packDir = path.join(paths.packsDir, packName.replaceAll('/', '_'));
+
+    const packRoot = outDir
+      ? path.join(String(outDir), 'packs', sanitizeFileName(null, `${character.displayName}__${characterId}`))
+      : paths.packsDir;
+    const packDir = path.join(packRoot, sanitizeFileName(null, packName.replaceAll('/', '_')));
     ensureDir(packDir);
 
     const fileName = `${toIsoSafeTimestamp()}_${packName.replaceAll(/\s+/g, '_').replaceAll(/[^\w\-]+/g, '').toLowerCase()}.txt`;
-    const outPath = path.join(packDir, fileName);
+    const outPath = uniquePath(packDir, fileName);
     fs.writeFileSync(outPath, lines.join('\n') + '\n', 'utf8');
 
     await this._audit('spinoff.export', characterId, {

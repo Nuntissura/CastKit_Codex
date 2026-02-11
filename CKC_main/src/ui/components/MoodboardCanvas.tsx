@@ -1,8 +1,11 @@
 import React from 'react';
 import styles from './moodboardCanvas.module.css';
 
+type MoodboardTool = 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'eraser' | 'move' | 'bucket' | 'gradient';
+type MoodboardDrawTool = 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'eraser';
+
 export type MoodboardStroke = {
-  tool: 'pen' | 'eraser';
+  tool: MoodboardDrawTool;
   color: string;
   size: number;
   points: Array<{ x: number; y: number }>; // normalized 0..1
@@ -18,6 +21,7 @@ export type MoodboardImage = {
 
 export type MoodboardState = {
   version: 1;
+  background?: { kind: 'paper' } | { kind: 'solid'; color: string } | { kind: 'gradient'; from: string; to: string; angle: number };
   strokes: MoodboardStroke[];
   images: MoodboardImage[];
 };
@@ -49,14 +53,18 @@ export function MoodboardCanvas({
   const imageCacheRef = React.useRef<Map<string, HTMLImageElement>>(new Map());
   const dragRef = React.useRef<null | { index: number; offsetX: number; offsetY: number }>(null);
   const valueRef = React.useRef<MoodboardState>(value);
-  const toolRef = React.useRef<'pen' | 'eraser' | 'move'>('pen');
+  const toolRef = React.useRef<MoodboardTool>('pen');
   const sizeRef = React.useRef<number>(3);
   const colorRef = React.useRef<string>('#111111');
+  const gradientToRef = React.useRef<string>('#ffffff');
+  const gradientAngleRef = React.useRef<number>(0);
   const selectedImageIndexRef = React.useRef<number | null>(null);
 
-  const [tool, setTool] = React.useState<'pen' | 'eraser' | 'move'>('pen');
+  const [tool, setTool] = React.useState<MoodboardTool>('pen');
   const [size, setSize] = React.useState<number>(3);
   const [color, setColor] = React.useState<string>('#111111');
+  const [gradientTo, setGradientTo] = React.useState<string>('#ffffff');
+  const [gradientAngle, setGradientAngle] = React.useState<number>(0);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState<number | null>(null);
 
   React.useEffect(() => {
@@ -75,6 +83,14 @@ export function MoodboardCanvas({
   React.useEffect(() => {
     colorRef.current = color;
   }, [color]);
+
+  React.useEffect(() => {
+    gradientToRef.current = gradientTo;
+  }, [gradientTo]);
+
+  React.useEffect(() => {
+    gradientAngleRef.current = gradientAngle;
+  }, [gradientAngle]);
 
   React.useEffect(() => {
     if (selectedImageIndex == null) return;
@@ -105,9 +121,28 @@ export function MoodboardCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.scale(dpr, dpr);
 
-    // White-ish paper surface.
-    ctx.fillStyle = 'rgba(253, 245, 230, 0.96)';
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    const bg = current.background;
+    if (!bg || bg.kind === 'paper') {
+      // White-ish paper surface.
+      ctx.fillStyle = 'rgba(253, 245, 230, 0.96)';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+    } else if (bg.kind === 'solid') {
+      ctx.fillStyle = bg.color || 'rgba(253, 245, 230, 0.96)';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+    } else if (bg.kind === 'gradient') {
+      const angle = Number(bg.angle) || 0;
+      const rad = (angle * Math.PI) / 180;
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const len = Math.sqrt(rect.width * rect.width + rect.height * rect.height) / 2;
+      const dx = Math.cos(rad) * len;
+      const dy = Math.sin(rad) * len;
+      const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+      g.addColorStop(0, bg.from || '#000000');
+      g.addColorStop(1, bg.to || '#ffffff');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, rect.width, rect.height);
+    }
 
     for (const img of images) {
       if (!img?.imageId) continue;
@@ -140,8 +175,8 @@ export function MoodboardCanvas({
       }
       const dx = cx - dw / 2;
       const dy = cy - dh / 2;
-       ctx.drawImage(el, dx, dy, dw, dh);
-     }
+      ctx.drawImage(el, dx, dy, dw, dh);
+    }
 
     if (selectedIndex != null) {
       const sel = images[selectedIndex];
@@ -164,9 +199,12 @@ export function MoodboardCanvas({
     const drawStroke = (s: MoodboardStroke) => {
       if (!s.points.length) return;
       ctx.save();
+
+      const size = Math.max(1, s.size);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = Math.max(1, s.size);
+      ctx.lineWidth = size;
+
       if (s.tool === 'eraser') {
         ctx.globalCompositeOperation = 'destination-out';
         ctx.strokeStyle = 'rgba(0,0,0,1)';
@@ -174,11 +212,73 @@ export function MoodboardCanvas({
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = s.color || '#111111';
       }
-      ctx.beginPath();
+
       const first = s.points[0];
-      ctx.moveTo(first.x * rect.width, first.y * rect.height);
-      for (const p of s.points.slice(1)) ctx.lineTo(p.x * rect.width, p.y * rect.height);
-      ctx.stroke();
+      const last = s.points[s.points.length - 1] ?? first;
+
+      if (s.tool === 'pen' || s.tool === 'eraser') {
+        ctx.beginPath();
+        ctx.moveTo(first.x * rect.width, first.y * rect.height);
+        for (const p of s.points.slice(1)) ctx.lineTo(p.x * rect.width, p.y * rect.height);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      if (s.points.length < 2) {
+        ctx.restore();
+        return;
+      }
+
+      const x0 = first.x * rect.width;
+      const y0 = first.y * rect.height;
+      const x1 = last.x * rect.width;
+      const y1 = last.y * rect.height;
+
+      if (s.tool === 'line' || s.tool === 'arrow') {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+
+        if (s.tool === 'arrow') {
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          const angle = Math.atan2(dy, dx);
+          const headLen = Math.max(10, size * 4);
+          const a1 = angle + Math.PI * 0.82;
+          const a2 = angle - Math.PI * 0.82;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x1 + Math.cos(a1) * headLen, y1 + Math.sin(a1) * headLen);
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x1 + Math.cos(a2) * headLen, y1 + Math.sin(a2) * headLen);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+        return;
+      }
+
+      const left = Math.min(x0, x1);
+      const top = Math.min(y0, y1);
+      const w = Math.abs(x1 - x0);
+      const h = Math.abs(y1 - y0);
+
+      if (s.tool === 'rect') {
+        ctx.strokeRect(left, top, w, h);
+        ctx.restore();
+        return;
+      }
+
+      if (s.tool === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(left + w / 2, top + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
       ctx.restore();
     };
 
@@ -244,7 +344,31 @@ export function MoodboardCanvas({
         return;
       }
 
-      if (currentTool !== 'pen' && currentTool !== 'eraser') return;
+      if (currentTool === 'bucket') {
+        const cur = valueRef.current;
+        const next = { ...cur, background: { kind: 'solid' as const, color: colorRef.current } };
+        valueRef.current = next;
+        onChange(next);
+        redraw();
+        return;
+      }
+
+      if (currentTool === 'gradient') {
+        const cur = valueRef.current;
+        const next = {
+          ...cur,
+          background: {
+            kind: 'gradient' as const,
+            from: colorRef.current,
+            to: gradientToRef.current,
+            angle: Number(gradientAngleRef.current) || 0,
+          },
+        };
+        valueRef.current = next;
+        onChange(next);
+        redraw();
+        return;
+      }
 
       drawingRef.current = true;
       canvas.setPointerCapture(evt.pointerId);
@@ -252,7 +376,7 @@ export function MoodboardCanvas({
         tool: currentTool,
         size: sizeRef.current,
         color: colorRef.current,
-        points: [pt],
+        points: currentTool === 'pen' || currentTool === 'eraser' ? [pt] : [pt, pt],
       };
       redraw();
     };
@@ -276,7 +400,14 @@ export function MoodboardCanvas({
 
       if (!drawingRef.current) return;
       if (!strokeRef.current) return;
-      strokeRef.current.points.push(pointFromEvent(evt, canvas));
+      const pt = pointFromEvent(evt, canvas);
+      if (strokeRef.current.tool === 'pen' || strokeRef.current.tool === 'eraser') {
+        strokeRef.current.points.push(pt);
+      } else {
+        if (strokeRef.current.points.length === 0) strokeRef.current.points = [pt, pt];
+        else if (strokeRef.current.points.length === 1) strokeRef.current.points = [strokeRef.current.points[0], pt];
+        else strokeRef.current.points[strokeRef.current.points.length - 1] = pt;
+      }
       redraw();
     };
 
@@ -314,14 +445,41 @@ export function MoodboardCanvas({
   return (
     <div className={styles.root}>
       <div className={styles.toolbar}>
+        <button className={styles.toolBtn} data-active={tool === 'move' ? '1' : '0'} onClick={() => setTool('move')}>
+          Move
+        </button>
         <button className={styles.toolBtn} data-active={tool === 'pen' ? '1' : '0'} onClick={() => setTool('pen')}>
           Pen
+        </button>
+        <button className={styles.toolBtn} data-active={tool === 'line' ? '1' : '0'} onClick={() => setTool('line')}>
+          Line
+        </button>
+        <button className={styles.toolBtn} data-active={tool === 'arrow' ? '1' : '0'} onClick={() => setTool('arrow')}>
+          Arrow
+        </button>
+        <button className={styles.toolBtn} data-active={tool === 'rect' ? '1' : '0'} onClick={() => setTool('rect')}>
+          Rect
+        </button>
+        <button className={styles.toolBtn} data-active={tool === 'ellipse' ? '1' : '0'} onClick={() => setTool('ellipse')}>
+          Ellipse
         </button>
         <button className={styles.toolBtn} data-active={tool === 'eraser' ? '1' : '0'} onClick={() => setTool('eraser')}>
           Eraser
         </button>
-        <button className={styles.toolBtn} data-active={tool === 'move' ? '1' : '0'} onClick={() => setTool('move')}>
-          Move
+        <button className={styles.toolBtn} data-active={tool === 'bucket' ? '1' : '0'} onClick={() => setTool('bucket')}>
+          Bucket
+        </button>
+        <button className={styles.toolBtn} data-active={tool === 'gradient' ? '1' : '0'} onClick={() => setTool('gradient')}>
+          Gradient
+        </button>
+        <button
+          className={styles.toolBtn}
+          onClick={() => {
+            onChange({ ...value, background: undefined });
+          }}
+          title="Reset background to paper"
+        >
+          Paper
         </button>
 
         {onRequestAddImage ? (
@@ -379,7 +537,7 @@ export function MoodboardCanvas({
             max={18}
             value={String(size)}
             onChange={(e) => setSize(Number(e.target.value) || 3)}
-            disabled={tool === 'move'}
+            disabled={tool === 'move' || tool === 'bucket' || tool === 'gradient'}
           />
         </label>
 
@@ -393,8 +551,28 @@ export function MoodboardCanvas({
           />
         </label>
 
+        {tool === 'gradient' ? (
+          <label className={styles.toolLabel}>
+            To{' '}
+            <input type="color" value={gradientTo} onChange={(e) => setGradientTo(e.target.value)} />
+          </label>
+        ) : null}
+
+        {tool === 'gradient' ? (
+          <label className={styles.toolLabel}>
+            Angle{' '}
+            <input
+              type="range"
+              min={0}
+              max={360}
+              value={String(gradientAngle)}
+              onChange={(e) => setGradientAngle(Number(e.target.value) || 0)}
+            />
+          </label>
+        ) : null}
+
         <button className={styles.toolBtn} onClick={() => onChange({ ...value, strokes: [] })}>
-          Clear
+          Clear strokes
         </button>
       </div>
 

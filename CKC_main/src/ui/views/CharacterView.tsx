@@ -32,6 +32,18 @@ function fileNameFromRelativePath(rel: string): string {
   return parts[parts.length - 1] || raw;
 }
 
+function joinPath(a: string, b: string): string {
+  const left = String(a || '').replace(/[\\/]+$/, '');
+  if (!left) return String(b || '');
+  return `${left}\\${String(b || '').replace(/^[\\/]+/, '')}`;
+}
+
+function dirName(p: string): string {
+  const s = String(p || '');
+  const idx = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
+  return idx >= 0 ? s.slice(0, idx) : s;
+}
+
 export function CharacterView({
   characterId,
   onBack,
@@ -65,9 +77,12 @@ export function CharacterView({
   const [isTagSaving, setIsTagSaving] = React.useState<boolean>(false);
   const [allTags, setAllTags] = React.useState<string[]>([]);
   const tagsDatalistId = React.useId();
+  const docsTagsDatalistId = React.useId();
 
   const [docType, setDocType] = React.useState<CKCDocType>('notes');
   const [docQueryText, setDocQueryText] = React.useState<string>('');
+  const [docTagDraftText, setDocTagDraftText] = React.useState<string>('');
+  const [docTagFilters, setDocTagFilters] = React.useState<string[]>([]);
   const [docs, setDocs] = React.useState<CKCDocListItem[] | null>(null);
   const [selectedDocId, setSelectedDocId] = React.useState<string | null>(null);
   const [loadedDoc, setLoadedDoc] = React.useState<CKCDocDetail | null>(null);
@@ -81,6 +96,23 @@ export function CharacterView({
   const [isImagePickerOpen, setIsImagePickerOpen] = React.useState<boolean>(false);
   const [imagePickerSource, setImagePickerSource] = React.useState<'character' | 'global'>('character');
   const [globalPickerImages, setGlobalPickerImages] = React.useState<CKCGlobalImage[]>([]);
+
+  const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
+  const [exportDir, setExportDir] = React.useState<string | null>(null);
+  const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
+  const [selectedSpinOffId, setSelectedSpinOffId] = React.useState<string | null>(null);
+  const [packIncludeValues, setPackIncludeValues] = React.useState<boolean>(true);
+  const [packEmptyOnly, setPackEmptyOnly] = React.useState<boolean>(false);
+  const [packSections, setPackSections] = React.useState<string[] | null>(null);
+  const [exportError, setExportError] = React.useState<string | null>(null);
+  const [lastExportPath, setLastExportPath] = React.useState<string | null>(null);
+  const [isExporting, setIsExporting] = React.useState<boolean>(false);
+
+  const [isImportingImages, setIsImportingImages] = React.useState<boolean>(false);
+
+  const defaultExportsDir = React.useMemo(() => {
+    return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
+  }, [libraryRoot]);
 
   React.useEffect(() => {
     if (!characterId) return;
@@ -107,6 +139,30 @@ export function CharacterView({
   }, [character?.id, character?.templateId]);
 
   React.useEffect(() => {
+    setPackSections(null);
+  }, [characterId, templateAst]);
+
+  React.useEffect(() => {
+    window.ckc
+      .getConfig()
+      .then((cfg: any) => {
+        if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+      })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    window.ckc
+      .listSpinOffs({})
+      .then((rows) => {
+        setSpinOffs(rows);
+        const safe = (rows || []).find((r: any) => String(r.name || '').toLowerCase().includes('safe subset'));
+        setSelectedSpinOffId((safe?.id ?? rows?.[0]?.id ?? null) as any);
+      })
+      .catch((err: unknown) => setExportError(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  React.useEffect(() => {
     window.ckc
       .listAllTags()
       .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
@@ -124,10 +180,10 @@ export function CharacterView({
 
   const reloadDocs = React.useCallback(() => {
     window.ckc
-      .listDocs({ docType, queryText: docQueryText })
+      .listDocs({ docType, queryText: docQueryText, tagFilters: docTagFilters })
       .then((rows) => setDocs(rows))
       .catch((err: unknown) => setDocError(err instanceof Error ? err.message : String(err)));
-  }, [docType, docQueryText]);
+  }, [docType, docQueryText, docTagFilters]);
 
   React.useEffect(() => {
     if (tab !== 'notes' && !isLibraryDrawerOpen) return;
@@ -195,6 +251,25 @@ export function CharacterView({
     const carousel = all.filter((i) => (i.tags || []).includes('carousel'));
     return carousel.length > 0 ? carousel : all;
   }, [character, mediaMode]);
+
+  const docSmartTags = React.useMemo(() => {
+    if (!docs) return [];
+    const seen = new Set<string>();
+    for (const d of docs) {
+      for (const t of d.tags || []) seen.add(String(t));
+    }
+    return Array.from(seen)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [docs]);
+
+  const addDocTagFiltersFromText = (text: string) => {
+    const toAdd = tagsTextToArray(text);
+    if (toAdd.length === 0) return;
+    setDocTagFilters((prev) => Array.from(new Set([...(prev || []), ...toAdd])));
+    setDocTagDraftText('');
+  };
 
   const isDirty = React.useMemo(() => {
     if (!character) return false;
@@ -410,6 +485,70 @@ export function CharacterView({
     }
   };
 
+  const importImagesForCharacter = async () => {
+    if (!characterId) return;
+    setIsImportingImages(true);
+    setError(null);
+    try {
+      await window.ckc.importImages({ characterId });
+      const c = await window.ckc.getCharacter(characterId);
+      setCharacter(c);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImportingImages(false);
+    }
+  };
+
+  const chooseCharacterExportDir = async () => {
+    setExportError(null);
+    try {
+      const dir = await window.ckc.selectFolderDialog({ title: 'Select export folder' });
+      if (!dir) return;
+      setExportDir(dir);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const exportCharacterBundle = async () => {
+    if (!characterId) return;
+    setExportError(null);
+    setIsExporting(true);
+    try {
+      const outDir = exportDir || defaultExportsDir;
+      const res = await window.ckc.exportBundle({ characterId, outDir });
+      setLastExportPath(res.txtPath);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportCharacterFieldPack = async () => {
+    if (!characterId) return;
+    if (!selectedSpinOffId) return;
+    setExportError(null);
+    setIsExporting(true);
+    try {
+      const outDir = exportDir || defaultExportsDir;
+      const res = await window.ckc.exportFieldPack({
+        characterId,
+        spinoffId: selectedSpinOffId,
+        includeEmptyOnly: packEmptyOnly,
+        includeValues: packIncludeValues,
+        includeSections: packSections,
+        outDir,
+      });
+      setLastExportPath(res.path);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const addMoodboardImage = (imageId: string) => {
     setMoodboard((prev) => ({
       ...prev,
@@ -456,6 +595,71 @@ export function CharacterView({
           <label className={styles.docsSearch}>
             Search <input value={docQueryText} onChange={(e) => setDocQueryText(e.target.value)} placeholder="Title…" />
           </label>
+
+          <label className={styles.docsSearch}>
+            Tags
+            <div className={styles.docsTagRow}>
+              <input
+                value={docTagDraftText}
+                onChange={(e) => setDocTagDraftText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addDocTagFiltersFromText(docTagDraftText);
+                  }
+                }}
+                placeholder="tag"
+                list={docsTagsDatalistId}
+              />
+              <button
+                className={styles.btnSecondary}
+                onClick={() => addDocTagFiltersFromText(docTagDraftText)}
+                disabled={tagsTextToArray(docTagDraftText).length === 0}
+                title="Add tag filter"
+              >
+                Add
+              </button>
+              {docTagFilters.length ? (
+                <button className={styles.btnSecondary} onClick={() => setDocTagFilters([])} title="Clear all tag filters">
+                  Clear
+                </button>
+              ) : null}
+              <datalist id={docsTagsDatalistId}>
+                {allTags.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </div>
+          </label>
+
+          {docTagFilters.length ? (
+            <div className={styles.tagChips}>
+              {docTagFilters.map((t) => (
+                <button
+                  key={t}
+                  className={styles.tagChip}
+                  onClick={() => setDocTagFilters((cur) => (cur || []).filter((x) => x !== t))}
+                  title="Remove tag filter"
+                >
+                  x {t}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {docSmartTags.length ? (
+            <details className={styles.smartTagsBox}>
+              <summary>Smart tags</summary>
+              <div className={styles.smartTags}>
+                {docSmartTags.slice(0, 200).map((t) => (
+                  <button key={t} className={styles.tagChip} onClick={() => addDocTagFiltersFromText(t)} title="Add tag filter">
+                    {t}
+                  </button>
+                ))}
+                {docSmartTags.length > 200 ? <span className={styles.muted}>...</span> : null}
+              </div>
+            </details>
+          ) : null}
 
           {docError ? <div className={styles.error}>{docError}</div> : null}
           {docs === null ? (
@@ -658,6 +862,14 @@ export function CharacterView({
                   {isSaving ? 'Saving…' : isDirty ? 'Save' : 'Saved'}
                 </button>
               ) : null}
+              <button
+                className={styles.btnSecondary}
+                onClick={() => void importImagesForCharacter()}
+                disabled={!characterId || isImportingImages}
+                title="Import images into this character"
+              >
+                {isImportingImages ? 'Importing...' : 'Import images...'}
+              </button>
               <button className={styles.btnSecondary} onClick={onBack}>
                 Library
               </button>
@@ -903,6 +1115,152 @@ export function CharacterView({
                         </div>
                       ) : null}
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div className={styles.sectionTitle}>Exports</div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
+                      <code style={{ fontSize: '0.85rem' }}>{exportDir || defaultExportsDir || '(character exports folder)'}</code>
+                      <button className={styles.btnSecondary} onClick={() => void chooseCharacterExportDir()} disabled={isExporting}>
+                        Choose folder...
+                      </button>
+                      {exportDir ? (
+                        <button className={styles.btnSecondary} onClick={() => setExportDir(null)} disabled={isExporting}>
+                          Default
+                        </button>
+                      ) : null}
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={!defaultExportsDir && !exportDir}
+                        onClick={() => {
+                          const target = exportDir || defaultExportsDir;
+                          if (!target) return;
+                          void window.ckc.openPath(target);
+                        }}
+                      >
+                        Open folder
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={isExporting || !characterId}
+                        onClick={() => void exportCharacterBundle()}
+                      >
+                        Export bundle (txt/md/pdf)
+                      </button>
+
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        Preset{' '}
+                        <select
+                          value={selectedSpinOffId ?? ''}
+                          onChange={(e) => setSelectedSpinOffId(e.target.value || null)}
+                          disabled={!spinOffs || spinOffs.length === 0 || isExporting}
+                        >
+                          {(spinOffs || []).map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                              {s.outOfDate ? ' (out of date)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={isExporting || !characterId || !selectedSpinOffId}
+                        onClick={() => void exportCharacterFieldPack()}
+                      >
+                        Export LLM pack
+                      </button>
+
+                      {lastExportPath ? (
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            void window.ckc.openPath(dirName(lastExportPath));
+                          }}
+                        >
+                          Open last
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <details style={{ marginTop: 10 }}>
+                      <summary>LLM pack options</summary>
+                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={packIncludeValues}
+                            onChange={(e) => setPackIncludeValues(e.target.checked)}
+                            disabled={isExporting}
+                          />{' '}
+                          Include values
+                        </label>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={packEmptyOnly}
+                            onChange={(e) => setPackEmptyOnly(e.target.checked)}
+                            disabled={isExporting}
+                          />{' '}
+                          Empty only
+                        </label>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => setPackSections(null)}
+                          disabled={isExporting}
+                          title="Reset to all sections"
+                        >
+                          All sections
+                        </button>
+                      </div>
+
+                      {templateAst ? (
+                        <div style={{ marginTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {(templateAst.sections || []).map((s) => {
+                            const all = (templateAst.sections || []).map((x) => x.title);
+                            const checked = packSections === null ? true : (packSections || []).includes(s.title);
+                            return (
+                              <label key={s.title} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const wantOn = e.target.checked;
+                                    setPackSections((prev) => {
+                                      const cur = prev === null ? all : prev || [];
+                                      const next = wantOn
+                                        ? Array.from(new Set([...cur, s.title]))
+                                        : cur.filter((t) => t !== s.title);
+                                      if (next.length === 0 || next.length === all.length) return null;
+                                      return next;
+                                    });
+                                  }}
+                                  disabled={isExporting}
+                                />{' '}
+                                <span title={s.title}>{s.title}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </details>
+
+                    {exportError ? (
+                      <div className={styles.error} style={{ margin: '10px 0' }}>
+                        {exportError}
+                      </div>
+                    ) : null}
+                    {lastExportPath ? (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 6 }}>
+                        Last export: <code>{lastExportPath}</code>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : (
