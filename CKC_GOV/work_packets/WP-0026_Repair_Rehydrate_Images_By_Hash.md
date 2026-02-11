@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Provide a repair tool that scans a user-chosen folder (e.g. recovery/backup dump) for image files, matches them to DB records by stored hash, and copies them into the expected `libraryRoot/characters/<id>/images/original/` locations, regenerating thumbnails.
@@ -35,7 +35,7 @@ Provide a repair tool that scans a user-chosen folder (e.g. recovery/backup dump
 - [ ] Manual: run on a small subset folder and confirm recovered images show in the UI.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
 - [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
 - [ ] Session dump alignment (document any representation differences).
 
@@ -50,4 +50,3 @@ Provide a repair tool that scans a user-chosen folder (e.g. recovery/backup dump
 
 ## Rollback
 Revert commits associated with WP-0026.
-

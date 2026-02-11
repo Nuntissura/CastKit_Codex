@@ -170,6 +170,10 @@ function createWindow() {
 function registerIpcHandlers() {
     ipcMain.handle('ckc:getConfig', async () => appConfig);
 
+    ipcMain.handle('ckc:getConfigInfo', async () => {
+        return { configPath: appConfigPath, config: appConfig };
+    });
+
     ipcMain.handle('ckc:setConfig', async (_evt, nextConfig) => {
         appConfig = { ...appConfig, ...nextConfig };
         saveConfig(appConfigPath, appConfig);
@@ -180,6 +184,12 @@ function registerIpcHandlers() {
         }
         await ensureLibrary();
         return appConfig;
+    });
+
+    ipcMain.handle('ckc:getLibraryDiagnostics', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const diag = await lib.getMediaDiagnostics(params || {});
+        return { ...diag, configPath: appConfigPath, generatedAt: new Date().toISOString() };
     });
 
     ipcMain.handle('ckc:selectLibraryRoot', async () => {

@@ -152,12 +152,37 @@ type CKCSavedSearch = {
   isBuiltin: boolean;
 };
 
+type CKCConfigInfo = {
+  configPath: string;
+  config: unknown;
+};
+
+type CKCLibraryDiagnostics = {
+  configPath: string;
+  generatedAt: string;
+  libraryRoot: string;
+  characterCount: number;
+  imageCount: number;
+  originals: { present: number; missing: number };
+  thumbs: { present: number; missing: number };
+  missingCharacterFolders: string[];
+  topMissingByCharacter: Array<{
+    characterId: string;
+    totalImages: number;
+    missingOriginal: number;
+    missingThumb: number;
+    hasCharacterFolder: boolean;
+  }>;
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
     getConfig: () => Promise<unknown>;
+    getConfigInfo: () => Promise<CKCConfigInfo>;
     setConfig: (cfg: unknown) => Promise<unknown>;
     selectLibraryRoot: () => Promise<string | null>;
+    getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
     listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
     listAllTags: () => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;

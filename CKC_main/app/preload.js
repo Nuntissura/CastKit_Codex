@@ -3,8 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('ckc', {
     initialize: () => ipcRenderer.invoke('ckc:initialize'),
     getConfig: () => ipcRenderer.invoke('ckc:getConfig'),
+    getConfigInfo: () => ipcRenderer.invoke('ckc:getConfigInfo'),
     setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
     selectLibraryRoot: () => ipcRenderer.invoke('ckc:selectLibraryRoot'),
+    getLibraryDiagnostics: (params) => ipcRenderer.invoke('ckc:getLibraryDiagnostics', params),
 
     getTemplate: () => ipcRenderer.invoke('ckc:getTemplate'),
     listTemplates: () => ipcRenderer.invoke('ckc:listTemplates'),

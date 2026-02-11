@@ -854,6 +854,83 @@ class CKCLibrary {
     return parsed.filter((img) => img.tags.includes(chosenTag));
   }
 
+  async getMediaDiagnostics({ topN = 10 } = {}) {
+    const paths = this.getPaths();
+
+    const characterRows = await all(this.db, 'SELECT character_id FROM Character', []);
+    const characterIds = characterRows.map((r) => String(r.character_id || '')).filter(Boolean);
+
+    const imageRows = await all(
+      this.db,
+      `SELECT image_id, character_id, relative_path, storage_mode, source_path
+       FROM ImageAsset`,
+      []
+    );
+
+    let originalPresent = 0;
+    let originalMissing = 0;
+    let thumbPresent = 0;
+    let thumbMissing = 0;
+
+    const byCharacter = new Map();
+
+    for (const r of imageRows) {
+      const characterId = String(r.character_id || '');
+      const rel = String(r.relative_path || '');
+      const mode = String(r.storage_mode || 'copy');
+
+      const cPaths = this.getCharacterPaths(characterId);
+      const origAbs =
+        mode === 'reference' && r.source_path
+          ? String(r.source_path)
+          : path.join(cPaths.base, rel.replaceAll('/', path.sep));
+      const hasOriginal = !!origAbs && fs.existsSync(origAbs);
+      if (hasOriginal) originalPresent += 1;
+      else originalMissing += 1;
+
+      const fileName = path.basename(rel.replaceAll('/', path.sep));
+      const stem = fileName.replace(path.extname(fileName), '');
+      const thumbAbs = stem ? path.join(cPaths.imagesThumbDir, `${stem}.png`) : null;
+      const hasThumb = !!thumbAbs && fs.existsSync(thumbAbs);
+      if (hasThumb) thumbPresent += 1;
+      else thumbMissing += 1;
+
+      const existing = byCharacter.get(characterId) ?? {
+        characterId,
+        totalImages: 0,
+        missingOriginal: 0,
+        missingThumb: 0,
+        hasCharacterFolder: fs.existsSync(cPaths.base),
+      };
+      existing.totalImages += 1;
+      if (!hasOriginal) existing.missingOriginal += 1;
+      if (!hasThumb) existing.missingThumb += 1;
+      existing.hasCharacterFolder = existing.hasCharacterFolder || fs.existsSync(cPaths.base);
+      byCharacter.set(characterId, existing);
+    }
+
+    const missingCharacterFolders = [];
+    for (const characterId of characterIds) {
+      const base = path.join(paths.charactersDir, characterId);
+      if (!fs.existsSync(base)) missingCharacterFolders.push(characterId);
+    }
+
+    const topMissingByCharacter = Array.from(byCharacter.values())
+      .filter((c) => (Number(c.missingOriginal) || 0) > 0)
+      .sort((a, b) => (b.missingOriginal || 0) - (a.missingOriginal || 0))
+      .slice(0, Math.max(0, Number(topN) || 0));
+
+    return {
+      libraryRoot: this.libraryRoot,
+      characterCount: characterIds.length,
+      imageCount: imageRows.length,
+      originals: { present: originalPresent, missing: originalMissing },
+      thumbs: { present: thumbPresent, missing: thumbMissing },
+      missingCharacterFolders,
+      topMissingByCharacter,
+    };
+  }
+
   _cleanTags(tags) {
     const cleaned = [];
     const seen = new Set();

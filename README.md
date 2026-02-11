@@ -11,7 +11,7 @@ Notes:
 ## Start here (order matters)
 1. `CKC_GOV/PROJECT_CODEX.md`
 2. `CKC_GOV/taskboard/TASK_BOARD.md`
-3. `CKC_GOV/spec/CastKit_Codex_Spec_v00.024.md`
+3. `CKC_GOV/spec/CastKit_Codex_Spec_v00.025.md`
 4. `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md`
 
 ## Dev (Windows)
@@ -42,3 +42,6 @@ Push a SemVer tag (`vX.Y.Z`) on `main` to trigger `.github/workflows/release-win
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File CKC_GOV\\scripts\\backup_to_mir.ps1
 ```
+Notes:
+- Uses the active CKC `libraryRoot` from `%APPDATA%\\castkit-codex\\ckc-config.json` when available; warns if it cannot resolve it.
+- Scheduled task runs hidden (no focus-stealing window).

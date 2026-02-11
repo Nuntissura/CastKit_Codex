@@ -33,6 +33,36 @@
   text-align: center;
 }
 
+.missing {
+  padding: 24px;
+  max-width: 720px;
+}
+
+.missingTitle {
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.missingHint {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.missingActions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.missingBtn {
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.88);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 .overlay {
   position: absolute;
   top: 10px;

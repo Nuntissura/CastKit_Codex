@@ -16,7 +16,7 @@ This file is mirrored for convenience:
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.024.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.025.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 
 If you are reading these in PowerShell and you see garbage like `â€”`, open with UTF-8:
@@ -55,7 +55,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.024.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.025.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -65,7 +65,7 @@ Path: `<CKC_ROOT>\\CKC_GOV`
 - `work_packets/`
   - `WP-*.md` — scoped work packets (what/why/how/acceptance)
 - `scripts/`
-  - `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`)
+  - `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 - `targets/`
   - `CKC/artifacts/` — build outputs (**not** stored in git)
@@ -179,8 +179,9 @@ git push origin main
 ## Backup to NAS (mirror)
 
 Scripts live in `CKC_GOV/scripts/`:
-- `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`)
+- `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
 - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
+Note: the backup script prefers the active CKC `libraryRoot` from `%APPDATA%\\castkit-codex\\ckc-config.json` when available and warns clearly if it cannot resolve it.
 
 Run a backup now:
 ```powershell
@@ -192,6 +193,7 @@ Automate backups (recommended):
 powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\register_backup_task.ps1"
 ```
 This creates a Scheduled Task that runs the mirror backup every 30 minutes while logged in.
+The task runs with a hidden PowerShell window to avoid focus-stealing.
 
 Backup status/logs:
 - `<CKC_ROOT>\\CKC_GOV\\targets\\backup_logs\\LAST_RUN.txt`

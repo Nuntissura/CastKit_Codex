@@ -3,6 +3,9 @@
 # Recovery data (never commit)
 CKC_recovery/
 
+# Local ingest scratch (never commit)
+CKC ingest/
+
 # Governance build artifacts / caches / logs (never commit)
 CKC_GOV/targets/
 

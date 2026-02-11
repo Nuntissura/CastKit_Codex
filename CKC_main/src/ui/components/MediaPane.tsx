@@ -68,12 +68,14 @@ export function MediaPane({
   defaultShowThumbnails = false,
   defaultShowControls = false,
   emptyLabel = 'No images.',
+  onOpenDiagnostics,
   onPatchImageMeta,
 }: {
   images: MediaImage[];
   defaultShowThumbnails?: boolean;
   defaultShowControls?: boolean;
   emptyLabel?: string;
+  onOpenDiagnostics?: () => void;
   onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => void;
 }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(images[0]?.id ?? null);
@@ -86,6 +88,8 @@ export function MediaPane({
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState<boolean>(false);
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
   const [draftNotes, setDraftNotes] = React.useState<string>('');
+  const [viewerError, setViewerError] = React.useState<boolean>(false);
+  const [reloadToken, setReloadToken] = React.useState<number>(0);
 
   React.useEffect(() => {
     // Keep selection valid when the underlying image list changes.
@@ -114,9 +118,11 @@ export function MediaPane({
   React.useEffect(() => {
     if (!selected) {
       setDraftNotes('');
+      setViewerError(false);
       return;
     }
     setDraftNotes(String(selected.notes ?? ''));
+    setViewerError(false);
   }, [selected?.id, selected?.notes]);
 
   const patchMeta = async (
@@ -197,8 +203,48 @@ export function MediaPane({
   return (
     <div className={styles.root}>
       <div className={styles.viewer}>
-        {selected ? (
-          <img className={styles.viewerImg} src={`ckc://image/${encodeURIComponent(selected.id)}`} alt="" />
+        {selected && !viewerError ? (
+          <img
+            className={styles.viewerImg}
+            src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
+            alt=""
+            onError={() => setViewerError(true)}
+          />
+        ) : selected && viewerError ? (
+          <div className={styles.missing}>
+            <div className={styles.missingTitle}>Missing image file</div>
+            <div className={styles.missingHint}>
+              This image exists in the database, but the file is missing on disk (or the Library Root points at the wrong folder).
+            </div>
+            <div className={styles.missingActions}>
+              <button
+                className={styles.missingBtn}
+                onClick={() => {
+                  setViewerError(false);
+                  setReloadToken((n) => n + 1);
+                }}
+              >
+                Retry
+              </button>
+              <button
+                className={styles.missingBtn}
+                onClick={async () => {
+                  const next = await window.ckc.selectLibraryRoot();
+                  if (!next) return;
+                  setViewerError(false);
+                  setReloadToken((n) => n + 1);
+                }}
+                title="Pick the folder that contains db/, characters/, exports/"
+              >
+                Change library folderâ€¦
+              </button>
+              {onOpenDiagnostics ? (
+                <button className={styles.missingBtn} onClick={onOpenDiagnostics}>
+                  Open diagnostics
+                </button>
+              ) : null}
+            </div>
+          </div>
         ) : (
           <div className={styles.empty}>{emptyLabel}</div>
         )}
@@ -348,7 +394,7 @@ export function MediaPane({
               onClick={() => setSelectedId(img.id)}
               title={img.tags?.length ? img.tags.join(', ') : undefined}
             >
-              <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
+              <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`} alt="" />
             </button>
           ))}
         </div>
@@ -374,7 +420,7 @@ export function MediaPane({
             {selected ? (
               <img
                 className={styles.fullscreenImg}
-                src={`ckc://image/${encodeURIComponent(selected.id)}`}
+                src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
                 alt=""
                 onClick={(e) => e.stopPropagation()}
               />

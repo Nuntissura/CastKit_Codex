@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a small diagnostics/settings surface that makes the active `libraryRoot` obvious, allows switching it, and clearly reports missing media/paths so “photos not loading” is explainable and fixable without guesswork.
@@ -28,17 +28,19 @@ Add a small diagnostics/settings surface that makes the active `libraryRoot` obv
 - Any changes to the session dump requirements.
 
 ## Acceptance criteria
-- [ ] Users can see and change `libraryRoot` from the UI.
-- [ ] App reports missing-image counts and top offenders.
-- [ ] Media panes show an actionable message when files are missing.
+- [x] Users can see and change `libraryRoot` from the UI.
+- [x] App reports missing-image counts and top offenders.
+- [x] Media panes show an actionable message when files are missing.
 
 ## Test plan
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 - [ ] Manual: point to a library with missing files; confirm diagnostics numbers match; switch root; confirm photos appear.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
-- [ ] Session dump alignment (document any representation differences).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored.
+- [x] Session dump alignment (no conflicts; this WP adds diagnostics/UX only).
 
 ## Implementation notes
 - Key files to touch (likely):
@@ -51,4 +53,3 @@ Add a small diagnostics/settings surface that makes the active `libraryRoot` obv
 
 ## Rollback
 Revert commits associated with WP-0025.
-

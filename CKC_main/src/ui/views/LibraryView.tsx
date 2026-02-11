@@ -28,8 +28,10 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     Array<{ id: string; favorite: boolean; rating: number; notes: string; tags: string[] }>
   >([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = React.useState<number>(0);
   const [showCommandBar, setShowCommandBar] = React.useState<boolean>(false);
   const [showExportsBar, setShowExportsBar] = React.useState<boolean>(false);
+  const [showLibraryBar, setShowLibraryBar] = React.useState<boolean>(false);
 
   const [queryText, setQueryText] = React.useState<string>('');
   const [favoriteOnly, setFavoriteOnly] = React.useState<boolean>(false);
@@ -58,6 +60,10 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [savedSearchError, setSavedSearchError] = React.useState<string | null>(null);
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
+  const [configPath, setConfigPath] = React.useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = React.useState<CKCLibraryDiagnostics | null>(null);
+  const [diagnosticsError, setDiagnosticsError] = React.useState<string | null>(null);
+  const [diagnosticsBusy, setDiagnosticsBusy] = React.useState<boolean>(false);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
   const [exportSections, setExportSections] = React.useState<string[] | null>(null);
@@ -73,11 +79,20 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   React.useEffect(() => {
     window.ckc
-      .getConfig()
-      .then((cfg: any) => {
+      .getConfigInfo()
+      .then((info) => {
+        setConfigPath(typeof info?.configPath === 'string' ? info.configPath : null);
+        const cfg: any = info?.config ?? null;
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
       })
-      .catch(() => {});
+      .catch(() => {
+        window.ckc
+          .getConfig()
+          .then((cfg: any) => {
+            if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+          })
+          .catch(() => {});
+      });
   }, []);
 
   React.useEffect(() => {
@@ -85,14 +100,14 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       .getTemplate()
       .then((ast) => setTemplateAst(ast))
       .catch(() => setTemplateAst(null));
-  }, []);
+  }, [refreshNonce]);
 
   React.useEffect(() => {
     window.ckc
       .listAllTags()
       .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
       .catch(() => setAllTags([]));
-  }, []);
+  }, [refreshNonce]);
 
   const reloadSavedSearches = React.useCallback(() => {
     setSavedSearchError(null);
@@ -107,7 +122,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   React.useEffect(() => {
     reloadSavedSearches();
-  }, [reloadSavedSearches]);
+  }, [reloadSavedSearches, refreshNonce]);
 
   React.useEffect(() => {
     window.ckc
@@ -118,7 +133,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
         setSelectedSpinOffId((safe?.id ?? rows[0]?.id ?? null) as any);
       })
       .catch((err: unknown) => setExportError(err instanceof Error ? err.message : String(err)));
-  }, []);
+  }, [refreshNonce]);
 
   const selectedSavedSearch = React.useMemo(() => {
     if (!savedSearches) return null;
@@ -192,11 +207,32 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     return () => {
       cancelled = true;
     };
-  }, [queryText, cleanedTagFilters, scopeFlags, favoriteOnly, ratingOp, ratingValue]);
+  }, [queryText, cleanedTagFilters, scopeFlags, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
 
   React.useEffect(() => {
     reloadCarousel();
-  }, [reloadCarousel]);
+  }, [reloadCarousel, refreshNonce]);
+
+  const reloadDiagnostics = React.useCallback(async () => {
+    setDiagnosticsError(null);
+    setDiagnosticsBusy(true);
+    try {
+      const res = await window.ckc.getLibraryDiagnostics({ topN: 10 });
+      setDiagnostics(res);
+    } catch (err: unknown) {
+      setDiagnosticsError(err instanceof Error ? err.message : String(err));
+      setDiagnostics(null);
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!showLibraryBar) return;
+    if (diagnosticsBusy) return;
+    if (diagnostics) return;
+    void reloadDiagnostics();
+  }, [showLibraryBar, diagnostics, diagnosticsBusy, reloadDiagnostics]);
 
   const filteredCarouselImages = React.useMemo(() => {
     const op = ratingOp;
@@ -269,6 +305,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
         <MediaPane
           images={filteredCarouselImages}
           emptyLabel="No global carousel images yet (tag an image with: carousel)."
+          onOpenDiagnostics={() => setShowLibraryBar(true)}
           onPatchImageMeta={(imageId, patch) => {
             // Re-fetch to respect the global selection rule (prefer frontpage when present).
             void reloadCarousel();
@@ -277,6 +314,119 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       </section>
 
       <aside className={styles.right}>
+        <CommandBar isOpen={showLibraryBar} onToggle={() => setShowLibraryBar((v) => !v)} label="Library">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Config:</span>
+            <code style={{ fontSize: '0.85rem' }}>{configPath ?? '(unknown)'}</code>
+            <button
+              disabled={!configPath}
+              onClick={() => {
+                if (!configPath) return;
+                void window.ckc.openPath(configPath);
+              }}
+            >
+              Open
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Library root:</span>
+            <code style={{ fontSize: '0.85rem' }}>{libraryRoot ?? '(unknown)'}</code>
+            <button
+              disabled={!libraryRoot}
+              onClick={() => {
+                if (!libraryRoot) return;
+                void window.ckc.openPath(libraryRoot);
+              }}
+            >
+              Open folder
+            </button>
+            <button
+              onClick={async () => {
+                setError(null);
+                const next = await window.ckc.selectLibraryRoot();
+                if (!next) return;
+                setLibraryRoot(next);
+                setExportDir(null);
+                setDiagnostics(null);
+                setRefreshNonce((n) => n + 1);
+                void reloadDiagnostics();
+              }}
+              title="Change the library root folder (db, characters, exports)"
+            >
+              Changeâ€¦
+            </button>
+            <button
+              disabled={diagnosticsBusy}
+              onClick={() => {
+                setDiagnostics(null);
+                void reloadDiagnostics();
+                setRefreshNonce((n) => n + 1);
+              }}
+              title="Rescan missing media and refresh the view"
+            >
+              {diagnosticsBusy ? 'Scanningâ€¦' : 'Rescan'}
+            </button>
+          </div>
+
+          {diagnosticsError ? <div className={styles.error}>{diagnosticsError}</div> : null}
+
+          {diagnostics ? (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontWeight: 800 }}>Media diagnostics</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
+                Images in DB: <b>{diagnostics.imageCount}</b> â€¢ Originals missing:{' '}
+                <b>{diagnostics.originals?.missing ?? 0}</b> â€¢ Thumbs missing: <b>{diagnostics.thumbs?.missing ?? 0}</b>
+              </div>
+
+              {Array.isArray(diagnostics.missingCharacterFolders) && diagnostics.missingCharacterFolders.length > 0 ? (
+                <details style={{ marginTop: 10 }}>
+                  <summary>
+                    Missing character folders: <b>{diagnostics.missingCharacterFolders.length}</b>
+                  </summary>
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {diagnostics.missingCharacterFolders.slice(0, 40).map((id) => (
+                      <code key={id} style={{ fontSize: '0.85rem' }}>
+                        {id}
+                      </code>
+                    ))}
+                    {diagnostics.missingCharacterFolders.length > 40 ? (
+                      <span style={{ color: 'var(--text-secondary)' }}>â€¦</span>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+
+              {Array.isArray(diagnostics.topMissingByCharacter) && diagnostics.topMissingByCharacter.length > 0 ? (
+                <details style={{ marginTop: 10 }} open>
+                  <summary>Top missing images (by character)</summary>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {diagnostics.topMissingByCharacter.map((c) => (
+                      <div key={c.characterId} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <code style={{ fontSize: '0.85rem' }}>{c.characterId}</code>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          missing originals: <b>{c.missingOriginal}</b> / {c.totalImages}
+                        </span>
+                        {!c.hasCharacterFolder ? (
+                          <span style={{ color: 'rgba(255,0,0,0.75)' }}>(folder missing)</span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+                  No missing originals detected.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+              {diagnosticsBusy ? 'Scanning libraryâ€¦' : 'Open this bar to scan for missing media.'}
+            </div>
+          )}
+        </CommandBar>
+
         <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)} label="Search / Filters">
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

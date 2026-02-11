@@ -11,7 +11,7 @@ Governance lives in `CKC_GOV/` (source of truth). Key files are mirrored into `C
 - `docs/PROJECT_CODEX.md` (workflow, build targets, backup)
 - `docs/WORKFLOW.md` (WP -> Spec -> Git)
 - `docs/TASK_BOARD.md` (status)
-- `docs/CastKit_Codex_Spec_v00.024.md` (current spec)
+- `docs/CastKit_Codex_Spec_v00.025.md` (current spec)
 - `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
 
 Workflow (MUST):
