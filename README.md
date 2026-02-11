@@ -44,7 +44,7 @@ npm run build
 ```
 
 ## Package (Windows)
-Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\` (local builds).
+Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\v<localVersion>\\` (local builds; version auto-includes timestamp+git SHA).
 ```powershell
 npm run package:win
 ```

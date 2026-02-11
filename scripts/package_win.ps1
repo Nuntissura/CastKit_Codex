@@ -39,6 +39,10 @@ $env:ELECTRON_BUILDER_CACHE = Join-Path $cacheRoot 'electron-builder'
 $pkgPath = Join-Path $repoRoot 'package.json'
 $pkg = Get-Content -LiteralPath $pkgPath -Raw | ConvertFrom-Json
 $version = [string]$pkg.version
+$baseVersion = $version
+if ($version -match '^(\d+\.\d+\.\d+)') {
+  $baseVersion = $matches[1]
+}
 
 $gitSha = 'nogit'
 try {
@@ -85,10 +89,16 @@ if ($Kind -eq 'release') {
     throw "Release build requested but current commit is not tagged like vX.Y.Z (got: '$exactTag')."
   }
   $effectiveVersion = $releaseVersion
+} else {
+  $stampDate = Get-Date -Format 'yyyyMMdd'
+  $stampTime = Get-Date -Format 'HHmmss'
+  # Dev builds auto-generate a monotonically increasing SemVer prerelease version so builds are easy to tell apart.
+  # Example: 0.2.0-dev.20260211.120940.ee3bc03
+  $effectiveVersion = "${baseVersion}-dev.${stampDate}.${stampTime}.${gitSha}"
 }
 
-$stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-$buildId = "${stamp}__${gitSha}"
+$stampFolder = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+$buildId = if ($Kind -eq 'dev') { "v$effectiveVersion" } else { "v${effectiveVersion}__${stampFolder}__${gitSha}" }
 
 $artifactsRelParts = @()
 if ($Kind -eq 'dev') {
@@ -207,31 +217,6 @@ $buildInfoText = @(
   ''
 ) | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Out-String
 [System.IO.File]::WriteAllText((Join-Path $artifactsRoot 'BUILD_INFO.txt'), $buildInfoText, $utf8NoBom)
-
-if ($Kind -eq 'dev') {
-  $stampForFile = $stamp -replace '_', '-'
-  $suffix = "dev $gitSha $stampForFile"
-
-  $exeFiles = Get-ChildItem -LiteralPath $artifactsRoot -Filter '*.exe' -File | Sort-Object Name
-  $installer = $exeFiles | Where-Object { $_.Name -like '*Setup*' } | Select-Object -First 1
-  $portable = $exeFiles | Where-Object { $_.Name -notlike '*Setup*' } | Select-Object -First 1
-
-  if ($portable) {
-    $newPortableName = "CastKit Codex $effectiveVersion ($suffix).exe"
-    Rename-Item -LiteralPath $portable.FullName -NewName $newPortableName -Force
-  }
-
-  if ($installer) {
-    $installerOldName = $installer.Name
-    $newInstallerName = "CastKit Codex Setup $effectiveVersion ($suffix).exe"
-    Rename-Item -LiteralPath $installer.FullName -NewName $newInstallerName -Force
-
-    $oldBlockmapPath = Join-Path $artifactsRoot ($installerOldName + '.blockmap')
-    if (Test-Path -LiteralPath $oldBlockmapPath) {
-      Rename-Item -LiteralPath $oldBlockmapPath -NewName ($newInstallerName + '.blockmap') -Force
-    }
-  }
-}
 
 $topFiles = Get-ChildItem -LiteralPath $artifactsRoot -File | Sort-Object Name
 $manifest = [ordered]@{

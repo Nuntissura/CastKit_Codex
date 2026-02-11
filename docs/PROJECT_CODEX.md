@@ -67,7 +67,7 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 - `targets/`
   - `CKC/artifacts/` — build outputs (**not** stored in git)
-    - `CKC/artifacts/dev/` — local builds (unique `buildId` folders; `.exe` names include `buildId`)
+    - `CKC/artifacts/dev/` — local builds (version auto-includes timestamp+git SHA, so builds are easy to tell apart)
     - `CKC/artifacts/releases/` — release builds (tagged `vX.Y.Z` on `main`)
   - `CKC/logs/` — build logs
   - `cache/` — npm/electron caches (keep C: clean)
@@ -93,9 +93,9 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
 
 ### Versioning + release policy (MUST)
-- **Product version** = SemVer (`vX.Y.Z`) for official releases (release builds take the version from the git tag). Do **not** bump versions for everyday local builds.
-- **Build ID** = auto-generated per build: `<YYYY-MM-DD_HHMMSS>__<gitSha>`.
-- Local builds go to `CKC_GOV/targets/CKC/artifacts/dev/<buildId>/` and `.exe` filenames include the build ID (so repeated builds don’t overwrite each other).
+- **Release version** = SemVer (`vX.Y.Z`) for official releases (release builds take the version from the git tag).
+- **Local builds** must NOT require manual version bumps: `npm run package:win` auto-generates a SemVer prerelease version like `0.2.0-dev.20260211.120940.ee3bc03` so you can always tell which build is newer.
+- Local builds go to `CKC_GOV/targets/CKC/artifacts/dev/v<localVersion>/`.
 - Official release builds are tied to a git tag (`vX.Y.Z`) on `main` and published as GitHub Release assets (immutable, off-machine backup). Local release builds go under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/<buildId>/`.
 - Keep per-build checksums/manifest (`manifest.json` + `SHA256SUMS.txt`), and keep `LATEST_BUILD.txt` updated.
 
@@ -107,7 +107,7 @@ npm run package:win
 ```
 
 This writes versioned outputs under:
-- Local: `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\`
+- Local: `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\v<localVersion>\\`
 - Release (tagged): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\releases\\vX.Y.Z\\<buildId>\\`
 
 ### Publishing a GitHub Release (recommended)
