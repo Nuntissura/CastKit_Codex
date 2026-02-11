@@ -88,6 +88,11 @@ Set these env vars before running npm/electron builds:
 - Build logs MUST go to:
   - `K:\CastKit Codex\CKC_GOV\targets\CKC\logs`
 
+### Versioning + release policy (MUST)
+- Every distributable build must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so code → build is traceable.
+- Publish official builds as GitHub Release assets (immutable, off-machine backup). Local builds can still land in `CKC_GOV/targets/CKC/artifacts/<buildId>/` for convenience.
+- Keep per-build checksums/manifest (`manifest.json` + `SHA256SUMS.txt`), and keep `LATEST_BUILD.txt` updated.
+
 ### Packaging (Windows)
 Build a portable `.exe` and NSIS installer `.exe` using:
 ```powershell
