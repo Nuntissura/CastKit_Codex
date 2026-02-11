@@ -41,8 +41,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0023 | Session dump gaps: docs smart tags, character exports, moodboard tools | DONE | Codex | Implemented + unit-tested; manual smoke check recommended (export/import/moodboard). |
 | WP-0024 | Spec v00.024: implementation mapping (no governance) | DONE | Codex | Clarify `isCarousel/isFrontpage` representation, document library layout, keep governance out of spec. |
 | WP-0025 | LibraryRoot diagnostics + missing media visibility | DONE | Codex | Make active library obvious; report missing images; help users fix “photos don’t load”. |
-| WP-0026 | Repair tool: rehydrate missing images by hash | IN_PROGRESS | Codex | Scan recovery folder, match by hash, copy into library layout, regen thumbs, write report. |
-| WP-0027 | Backup task: silent + covers libraryRoot | BACKLOG | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
+| WP-0026 | Repair tool: rehydrate missing images by hash | DONE | Codex | Scan recovery folder, match by hash, copy into library layout, regen thumbs, write report. |
+| WP-0027 | Backup task: silent + covers libraryRoot | IN_PROGRESS | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
 
 ## Current focus
-- Current: WP-0026 — repair / rehydrate missing images.
+- Current: WP-0027 — backup runs hidden + covers active libraryRoot.

@@ -608,6 +608,11 @@ function registerIpcHandlers() {
         return { imported, duplicates };
     });
 
+    ipcMain.handle('ckc:repairMissingImagesByHash', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.repairMissingImagesByHash(params || {});
+    });
+
     ipcMain.handle('ckc:repairThumbnails', async (_evt, characterId) => {
         const lib = await ensureLibrary();
         return lib.repairThumbnails({ characterId });

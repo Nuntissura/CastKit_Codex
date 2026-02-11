@@ -175,6 +175,36 @@ type CKCLibraryDiagnostics = {
   }>;
 };
 
+type CKCRepairMissingImagesByHashResult = {
+  ok: true;
+  reportPath: string;
+  startedAt: string;
+  finishedAt: string;
+  libraryRoot: string;
+  scanDir: string;
+  includeSubdirs: boolean;
+  dryRun: boolean;
+  scannedFiles: number;
+  hashedFiles: number;
+  hashErrors: number;
+  dbImages: number;
+  missingImages: number;
+  plannedActions: number;
+  copied: number;
+  skippedExisting: number;
+  copyErrors: number;
+  thumbsCreated: number;
+  thumbErrors: number;
+  sampleActions: Array<{
+    imageId: string;
+    characterId: string;
+    fileHash: string;
+    srcPath: string;
+    destPath: string;
+    relativePath: string;
+  }>;
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -220,6 +250,7 @@ interface Window {
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
+    repairMissingImagesByHash: (params: { scanDir: string; includeSubdirs?: boolean; dryRun?: boolean }) => Promise<CKCRepairMissingImagesByHashResult>;
     setImageMeta: (params: unknown) => Promise<unknown>;
     addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;

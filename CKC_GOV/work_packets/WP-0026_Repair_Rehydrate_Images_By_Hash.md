@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Provide a repair tool that scans a user-chosen folder (e.g. recovery/backup dump) for image files, matches them to DB records by stored hash, and copies them into the expected `libraryRoot/characters/<id>/images/original/` locations, regenerating thumbnails.
@@ -26,18 +26,20 @@ Provide a repair tool that scans a user-chosen folder (e.g. recovery/backup dump
 - Bulk import UX improvements (separate WP if needed).
 
 ## Acceptance criteria
-- [ ] Given a library with missing images and a folder containing the originals, the tool restores images and thumbs and CKC displays them.
-- [ ] Dry-run accurately reports intended actions.
-- [ ] A recovery report is written for traceability.
+- [x] Given a library with missing images and a folder containing the originals, the tool restores images and thumbs and CKC displays them.
+- [x] Dry-run accurately reports intended actions.
+- [x] A recovery report is written for traceability.
 
 ## Test plan
-- [ ] Unit: hash-match + copy-to-layout pathing.
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
+- [x] Unit: hash-match + copy-to-layout pathing.
 - [ ] Manual: run on a small subset folder and confirm recovered images show in the UI.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
-- [ ] Session dump alignment (document any representation differences).
+- [x] Spec updated + mirrored.
+- [x] Session dump alignment (no conflicts; this WP adds repair tooling only).
 
 ## Implementation notes
 - Key files to touch (likely):

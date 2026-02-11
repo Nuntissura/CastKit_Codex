@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('ckc', {
     exportFieldPack: (params) => ipcRenderer.invoke('ckc:exportFieldPack', params),
 
     importImages: (params) => ipcRenderer.invoke('ckc:importImages', params),
+    repairMissingImagesByHash: (params) => ipcRenderer.invoke('ckc:repairMissingImagesByHash', params),
     repairThumbnails: (characterId) => ipcRenderer.invoke('ckc:repairThumbnails', characterId),
     setImageMeta: (params) => ipcRenderer.invoke('ckc:setImageMeta', params),
 

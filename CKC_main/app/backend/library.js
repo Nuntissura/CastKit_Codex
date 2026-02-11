@@ -2503,6 +2503,203 @@ class CKCLibrary {
     return { ok: true, created, skipped, total: rows.length };
   }
 
+  async repairMissingImagesByHash({
+    scanDir,
+    includeSubdirs = true,
+    dryRun = true,
+    topN = 200,
+    maxScanFiles = 50_000,
+  } = {}) {
+    const startedAt = new Date().toISOString();
+    const root = String(scanDir || '').trim();
+    if (!root) throw new Error('scanDir is required');
+    if (!fs.existsSync(root)) throw new Error(`scanDir not found: ${root}`);
+
+    const lim = Math.max(1, Math.min(5000, Number(topN) || 200));
+    const maxFiles = Math.max(1, Math.min(500_000, Number(maxScanFiles) || 50_000));
+
+    const allowedExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+
+    const filePaths = [];
+    const dirQueue = [root];
+    while (dirQueue.length > 0 && filePaths.length < maxFiles) {
+      const dir = dirQueue.pop();
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const ent of entries) {
+        if (filePaths.length >= maxFiles) break;
+        const abs = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          if (includeSubdirs) dirQueue.push(abs);
+          continue;
+        }
+        if (!ent.isFile()) continue;
+        const ext = path.extname(ent.name).toLowerCase();
+        if (!allowedExts.has(ext)) continue;
+        filePaths.push(abs);
+      }
+    }
+
+    const hashToPaths = new Map();
+    let hashedFiles = 0;
+    let hashErrors = 0;
+    for (const p of filePaths) {
+      try {
+        const bytes = fs.readFileSync(p);
+        const h = sha256Hex(bytes);
+        hashedFiles += 1;
+        const list = hashToPaths.get(h) ?? [];
+        if (list.length < 8) list.push(p);
+        hashToPaths.set(h, list);
+      } catch {
+        hashErrors += 1;
+      }
+    }
+
+    const imageRows = await all(
+      this.db,
+      `SELECT image_id, character_id, relative_path, file_hash, storage_mode, source_path
+       FROM ImageAsset`,
+      []
+    );
+
+    const missing = [];
+    for (const r of imageRows) {
+      const imageId = String(r.image_id || '');
+      const characterId = String(r.character_id || '');
+      const rel = String(r.relative_path || '');
+      const fileHash = String(r.file_hash || '');
+      const mode = String(r.storage_mode || 'copy');
+
+      if (!imageId || !characterId || !rel || !fileHash) continue;
+
+      const cPaths = this.getCharacterPaths(characterId);
+      const expectedAbs = path.join(cPaths.base, rel.replaceAll('/', path.sep));
+      const origAbs =
+        mode === 'reference' && r.source_path
+          ? String(r.source_path)
+          : expectedAbs;
+
+      if (origAbs && fs.existsSync(origAbs)) continue;
+
+      missing.push({
+        imageId,
+        characterId,
+        relativePath: rel,
+        fileHash,
+        storageMode: mode,
+        expectedAbs,
+      });
+    }
+
+    const planned = [];
+    for (const m of missing) {
+      if (m.storageMode !== 'copy') continue;
+      const candidates = hashToPaths.get(m.fileHash);
+      if (!candidates || candidates.length === 0) continue;
+      planned.push({
+        imageId: m.imageId,
+        characterId: m.characterId,
+        fileHash: m.fileHash,
+        srcPath: candidates[0],
+        destPath: m.expectedAbs,
+        relativePath: m.relativePath,
+      });
+    }
+
+    let copied = 0;
+    let skippedExisting = 0;
+    let copyErrors = 0;
+    let thumbsCreated = 0;
+    let thumbErrors = 0;
+
+    if (!dryRun) {
+      for (const a of planned) {
+        try {
+          if (fs.existsSync(a.destPath)) {
+            skippedExisting += 1;
+            continue;
+          }
+          ensureDir(path.dirname(a.destPath));
+          fs.copyFileSync(a.srcPath, a.destPath);
+          copied += 1;
+
+          const fileName = path.basename(a.destPath);
+          const stem = fileName.replace(path.extname(fileName), '');
+          if (!stem || !this.electronNativeImage) continue;
+
+          const cPaths = this.getCharacterPaths(a.characterId);
+          ensureDir(cPaths.imagesThumbDir);
+          const thumbAbs = path.join(cPaths.imagesThumbDir, `${stem}.png`);
+          if (fs.existsSync(thumbAbs)) continue;
+
+          try {
+            const img = this.electronNativeImage.createFromPath(a.destPath);
+            const thumb = img.resize({ width: 320 });
+            fs.writeFileSync(thumbAbs, thumb.toPNG());
+            thumbsCreated += 1;
+          } catch {
+            thumbErrors += 1;
+          }
+        } catch {
+          copyErrors += 1;
+        }
+      }
+    }
+
+    const paths = this.getPaths();
+    const reportsDir = path.join(paths.exportsDir, 'repair_reports');
+    ensureDir(reportsDir);
+
+    const report = {
+      kind: 'repairMissingImagesByHash',
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      libraryRoot: this.libraryRoot,
+      scanDir: root,
+      includeSubdirs: !!includeSubdirs,
+      dryRun: !!dryRun,
+      maxScanFiles: maxFiles,
+      scannedFiles: filePaths.length,
+      hashedFiles,
+      hashErrors,
+      dbImages: imageRows.length,
+      missingImages: missing.length,
+      plannedActions: planned.length,
+      copied,
+      skippedExisting,
+      copyErrors,
+      thumbsCreated,
+      thumbErrors,
+      sampleActions: planned.slice(0, lim),
+    };
+
+    const reportName = `rehydrate_images__${toIsoSafeTimestamp()}${dryRun ? '__dryrun' : ''}.json`;
+    const reportPath = path.join(reportsDir, reportName);
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
+
+    await this._audit('repair.rehydrateMissingImagesByHash', null, {
+      dryRun: !!dryRun,
+      scanDir: root,
+      scannedFiles: filePaths.length,
+      hashedFiles,
+      hashErrors,
+      missingImages: missing.length,
+      plannedActions: planned.length,
+      copied,
+      copyErrors,
+      thumbsCreated,
+      reportPath,
+    });
+
+    return { ok: true, reportPath, ...report };
+  }
+
   async setImageMeta({ imageId, favorite, rating, notes, tags }) {
     const row = await get(this.db, 'SELECT character_id FROM ImageAsset WHERE image_id = ?', [imageId]);
 

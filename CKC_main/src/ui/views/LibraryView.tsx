@@ -64,6 +64,11 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [diagnostics, setDiagnostics] = React.useState<CKCLibraryDiagnostics | null>(null);
   const [diagnosticsError, setDiagnosticsError] = React.useState<string | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = React.useState<boolean>(false);
+  const [repairScanDir, setRepairScanDir] = React.useState<string>('');
+  const [repairIncludeSubdirs, setRepairIncludeSubdirs] = React.useState<boolean>(true);
+  const [repairBusy, setRepairBusy] = React.useState<boolean>(false);
+  const [repairError, setRepairError] = React.useState<string | null>(null);
+  const [repairResult, setRepairResult] = React.useState<CKCRepairMissingImagesByHashResult | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
   const [exportSections, setExportSections] = React.useState<string[] | null>(null);
@@ -226,6 +231,32 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       setDiagnosticsBusy(false);
     }
   }, []);
+
+  const runRepair = React.useCallback(
+    async (dryRun: boolean) => {
+      const scanDir = String(repairScanDir || '').trim();
+      if (!scanDir) {
+        setRepairError('Pick a scan folder first.');
+        return;
+      }
+      setRepairError(null);
+      setRepairBusy(true);
+      try {
+        const res = await window.ckc.repairMissingImagesByHash({ scanDir, includeSubdirs: repairIncludeSubdirs, dryRun });
+        setRepairResult(res);
+        setDiagnostics(null);
+        setRefreshNonce((n) => n + 1);
+        void reloadDiagnostics();
+        void reloadCarousel();
+      } catch (err: unknown) {
+        setRepairError(err instanceof Error ? err.message : String(err));
+        setRepairResult(null);
+      } finally {
+        setRepairBusy(false);
+      }
+    },
+    [repairScanDir, repairIncludeSubdirs, reloadDiagnostics, reloadCarousel]
+  );
 
   React.useEffect(() => {
     if (!showLibraryBar) return;
@@ -425,6 +456,57 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
               {diagnosticsBusy ? 'Scanning libraryâ€¦' : 'Open this bar to scan for missing media.'}
             </div>
           )}
+
+          <details style={{ marginTop: 12 }}>
+            <summary>Repair missing images (by hash)</summary>
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Scan folder:</span>
+              <code style={{ fontSize: '0.85rem' }}>{repairScanDir ? repairScanDir : '(not selected)'}</code>
+              <button
+                disabled={repairBusy}
+                onClick={async () => {
+                  setRepairError(null);
+                  const dir = await window.ckc.selectFolderDialog({ title: 'Select scan folder (recovery dump)' });
+                  if (!dir) return;
+                  setRepairScanDir(dir);
+                }}
+              >
+                Choose folderâ€¦
+              </button>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={repairIncludeSubdirs}
+                  onChange={(e) => setRepairIncludeSubdirs(e.target.checked)}
+                  disabled={repairBusy}
+                />{' '}
+                Include subfolders
+              </label>
+            </div>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={repairBusy} onClick={() => void runRepair(true)}>
+                {repairBusy ? 'Workingâ€¦' : 'Dry-run'}
+              </button>
+              <button disabled={repairBusy} onClick={() => void runRepair(false)} title="Copies matched files into the libraryRoot character folders">
+                {repairBusy ? 'Workingâ€¦' : 'Run repair'}
+              </button>
+              {repairResult?.reportPath ? (
+                <button onClick={() => void window.ckc.openPath(repairResult.reportPath)} disabled={repairBusy}>
+                  Open report
+                </button>
+              ) : null}
+            </div>
+
+            {repairError ? <div className={styles.error}>{repairError}</div> : null}
+
+            {repairResult ? (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+                Planned: <b>{repairResult.plannedActions}</b> â€¢ Copied: <b>{repairResult.copied}</b> â€¢ Thumbs created:{' '}
+                <b>{repairResult.thumbsCreated}</b> â€¢ Copy errors: <b>{repairResult.copyErrors}</b>
+              </div>
+            ) : null}
+          </details>
         </CommandBar>
 
         <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)} label="Search / Filters">
