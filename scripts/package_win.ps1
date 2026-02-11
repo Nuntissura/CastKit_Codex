@@ -60,6 +60,7 @@ $buildId = "v$version+$gitSha-$stamp"
 
 $stageRoot = Path-Combine @($ckcTargets, 'stage', $buildId)
 $artifactsRoot = Path-Combine @($ckcTargets, 'artifacts', $buildId)
+$artifactsRootRelFromArtifactsBase = ".\\$buildId"
 
 New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
@@ -105,7 +106,8 @@ $stagePkg = [ordered]@{
     productName = 'CastKit Codex'
     electronVersion = $electronVersion
     directories = [ordered]@{
-      output = $artifactsRoot
+      # Keep build metadata drive-letter agnostic: a relative output is resolved from --projectDir ($stageRoot).
+      output = (Path-Combine @('..', '..', 'artifacts', $buildId))
     }
     files = @(
       'app/**/*',
@@ -160,7 +162,7 @@ $manifest = [ordered]@{
   version = $version
   gitSha = $gitSha
   createdAt = $createdAt
-  artifacts = $artifactsRoot
+  artifacts = (Path-Combine @('CKC_GOV', 'targets', 'CKC', 'artifacts', $buildId))
   files = @(
     foreach ($f in $topFiles) {
       $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $f.FullName).Hash.ToLowerInvariant()
@@ -185,9 +187,9 @@ $latestInfo = @(
   "version: $version"
   "gitSha: $gitSha"
   "createdAt: $createdAt"
-  "artifacts: $artifactsRoot"
-  "manifest: $manifestPath"
-  "sha256: $shaPath"
+  "artifacts: $artifactsRootRelFromArtifactsBase"
+  "manifest: $artifactsRootRelFromArtifactsBase\\manifest.json"
+  "sha256: $artifactsRootRelFromArtifactsBase\\SHA256SUMS.txt"
   ''
 ) -join "`n"
 [System.IO.File]::WriteAllText($latestInfoPath, $latestInfo, $utf8NoBom)

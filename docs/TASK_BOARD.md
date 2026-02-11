@@ -34,7 +34,7 @@ This file is mirrored into the git repo for visibility:
 | WP-0016 | Smart tags + saved searches UX | DONE | Codex | Saved searches + scope toggles + tag filters in command bar; manual tag editing; tag list/suggestions. |
 | WP-0017 | Packaging: fix white window in built .exe | DONE | Codex | Set Vite build base to `./` for `file://`; add packaging guardrail to reject `/assets/...` output. |
 | WP-0018 | Theme port from old build (palette + typography) | DONE | Codex | Ported CSS vars + font stacks; added accent glow; sheet Field ID/optional styling aligned to recovered build. |
-| WP-0019 | Drive-letter agnostic paths (docs + backup scripts) | DONE | Codex | Removed hard-coded drive-letter paths from onboarding docs; backup scripts derive roots from env/script location. |
+| WP-0019 | Drive-letter agnostic paths (docs + scripts) | DONE | Codex | Removed hard-coded drive-letter paths from onboarding docs; backup + packaging scripts avoid drive-letter paths in metadata. |
 
 ## Current focus
 - Current: (none) — all listed work packets are DONE.
