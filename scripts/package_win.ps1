@@ -45,6 +45,16 @@ try {
   $gitSha = 'nogit'
 }
 
+$dirty = ''
+try {
+  $dirty = (git -C $repoRoot status --porcelain) -join "`n"
+} catch {
+  $dirty = ''
+}
+if ($dirty -and $dirty.Trim().Length -gt 0) {
+  throw "Working tree not clean. Commit/stash changes before packaging.`n$dirty"
+}
+
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $buildId = "v$version+$gitSha-$stamp"
 
@@ -65,6 +75,15 @@ Push-Location $repoRoot
 try {
   npx --no-install vite build --outDir "$stageRoot\\dist" --emptyOutDir
   Assert-LastExitOk 'vite build (stage)'
+
+  # Guardrail: Electron packaged app loads `dist/index.html` via `file://` (loadFile),
+  # so Vite output must NOT reference `/assets/...` (absolute paths) or the window will be white.
+  $indexPath = Path-Combine @($stageRoot, 'dist', 'index.html')
+  if (-not (Test-Path -LiteralPath $indexPath)) { throw "Missing renderer entry: $indexPath" }
+  $indexHtml = Get-Content -LiteralPath $indexPath -Raw
+  if ($indexHtml -match 'src=\"/assets/' -or $indexHtml -match 'href=\"/assets/') {
+    throw "Renderer build emitted absolute /assets paths. Set Vite base to './' for build to avoid a white window in packaged Electron."
+  }
 } finally {
   Pop-Location
 }
