@@ -18,7 +18,7 @@ Recover files **to a different drive** (for example your NAS or `K:`).
 
 ## 1) Prepare a safe recovery destination
 Create a folder on a different drive with lots of free space, e.g.:
-- `K:\Recovered_D\`
+- `<RECOVERY_ROOT>\Recovered_D\`
 
 You must have enough free space to hold the recovered files (often multiple TB).
 
@@ -94,7 +94,7 @@ Select the folders/files you want → “Recover”.
 
 Important:
 - Recovery destination must be **NOT** the affected drive.
-- Recover to `K:\Recovered_D\...` or the NAS.
+- Recover to `<RECOVERY_ROOT>\Recovered_D\...` or the NAS.
 
 ## 10) Demo limitations
 The free demo typically:
@@ -114,4 +114,3 @@ If you want help interpreting results, write down:
 - Don’t run `chkdsk /f` or any “repair filesystem” tools on the affected drive.
 - Don’t format the drive (even “quick format”) — that overwrites metadata.
 - Don’t keep using the drive normally “until later”.
-

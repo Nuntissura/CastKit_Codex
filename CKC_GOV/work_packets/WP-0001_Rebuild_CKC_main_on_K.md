@@ -5,23 +5,23 @@ Owner: Codex
 Status: DONE
 
 ## Summary
-Recreate the CKC source repository under `K:\CastKit Codex\CKC_main` using the old packaged app as a baseline for branding/colors and the session dump as truth for latest behavior.
+Recreate the CKC source repository under `<CKC_ROOT>\CKC_main` using the old packaged app as a baseline for branding/colors and the session dump as truth for latest behavior.
 
 ## Why
-The original `D:` repo was lost. GitHub repo was empty. We need a clean, rebuildable codebase on `K:` with governance assets in `CKC_GOV`.
+The original `D:` repo was lost. GitHub repo was empty. We need a clean, rebuildable codebase under `<CKC_ROOT>` with governance assets in `CKC_GOV`.
 
 ## Inputs
 - Old packaged app (baseline branding/colors + backend reference):
-  - `K:\CastKit Codex\CKC_recovery\CKC_old_install\resources\app.asar`
-  - extracted copy: `K:\CastKit Codex\CKC_recovery\asar_extracted_old_20260210\`
+  - `<CKC_ROOT>\CKC_recovery\CKC_old_install\resources\app.asar`
+  - extracted copy: `<CKC_ROOT>\CKC_recovery\asar_extracted_old_20260210\`
 - Canonical template bytes:
-  - `K:\CastKit Codex\CKC_GOV\templates\character sheet templates\CHARACTER_SHEET__v2.00.txt`
+  - `<CKC_ROOT>\CKC_GOV\templates\character sheet templates\CHARACTER_SHEET__v2.00.txt`
 - Latest requirements:
-  - `K:\CastKit Codex\CKC_GOV\spec\SESSION_DUMP_2026-02-10.md`
+  - `<CKC_ROOT>\CKC_GOV\spec\SESSION_DUMP_2026-02-10.md`
 
 ## Scope
 ### In
-- Create a new git repo at `K:\CastKit Codex\CKC_main`.
+- Create a new git repo at `<CKC_ROOT>\CKC_main`.
 - Restore minimal Electron + React/Vite project structure.
 - Copy `icon.ico` and base CSS variables/colors from old app.
 - Ensure build artifacts go to `CKC_GOV/targets/CKC/artifacts`.
@@ -30,12 +30,12 @@ The original `D:` repo was lost. GitHub repo was empty. We need a clean, rebuild
 - Full feature parity (that is handled in later WPs).
 
 ## Acceptance criteria
-- [x] `K:\CastKit Codex\CKC_main` exists and is a valid git repo.
+- [x] `<CKC_ROOT>\CKC_main` exists and is a valid git repo.
 - [x] `npm install` works with caches redirected to `CKC_GOV/targets/cache`.
 - [x] `npm test` passes.
 - [x] `npm run dev` launches renderer.
 - [x] `npm run electron:dev` launches app.
-- [x] `npm run electron:build` outputs installer/portable to `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts`.
+- [x] `npm run electron:build` outputs installer/portable to `<CKC_ROOT>\CKC_GOV\targets\CKC\artifacts`.
 - [x] Repo contains no `dist/`, `release/`, `win-unpacked/`, or build output folders.
 
 ## Test plan
@@ -52,5 +52,5 @@ The original `D:` repo was lost. GitHub repo was empty. We need a clean, rebuild
 - Risk: old app is bundled (no TS/React source). Mitigation: rebuild from scratch using modern tooling; use old as reference.
 
 ## Rollback
-- Delete `K:\CastKit Codex\CKC_main` and recreate.
+- Delete `<CKC_ROOT>\CKC_main` and recreate.
 

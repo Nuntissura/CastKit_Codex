@@ -24,7 +24,7 @@ Build artifacts must never be committed into the source repo. Packaging should a
 - CI build pipeline (GitHub Actions) and signing.
 
 ## Acceptance criteria
-- [x] `npm run electron:build` outputs installer/portable to `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts`.
+- [x] `npm run electron:build` outputs installer/portable to `<CKC_ROOT>\CKC_GOV\targets\CKC\artifacts`.
 - [x] Repo contains no build output folders (`dist/`, `release/`, `win-unpacked/`) after packaging.
 - [x] Packaging stages live under `CKC_GOV/targets/CKC/stage/`.
 

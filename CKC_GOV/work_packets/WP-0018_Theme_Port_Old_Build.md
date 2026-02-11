@@ -8,7 +8,7 @@ Status: DONE
 Port the visual theme (CSS variables + typography) from the recovered old build into the current app so the look/feel matches: palette, accent glow, font stacks, and key field styling (Field ID + optional marker).
 
 ## Inputs
-- Old install: `K:\CastKit Codex\CKC_recovery\CKC_old_install`
+- Old install: `<CKC_ROOT>\CKC_recovery\CKC_old_install`
   - Renderer CSS source: `...\resources\app.asar\dist\assets\index-C1dBN_6i.css`
 
 ## Changes
@@ -22,4 +22,3 @@ Port the visual theme (CSS variables + typography) from the recovered old build 
 ## Test plan
 - [x] `npm test`
 - [x] `npx tsc --noEmit`
-

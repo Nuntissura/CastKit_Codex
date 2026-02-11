@@ -2,7 +2,7 @@
 
 This log exists so future work can avoid repeating mistakes.
 
-## 2026-02-10 — Destructive delete executed against drive root (D:\)
+## 2026-02-10 — Destructive delete executed against drive root (at the time: D:)
 **What happened**
 - A cleanup attempt intended to delete only build artifact folders (`release_build*`, `dist`, etc.) accidentally executed a `cmd` `rmdir` call that included `\` (drive root).
 - Result: deletion was attempted broadly on `D:`. Many paths failed with access/in-use errors, but significant data was removed.

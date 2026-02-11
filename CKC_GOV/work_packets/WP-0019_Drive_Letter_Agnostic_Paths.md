@@ -8,11 +8,11 @@ Status: DONE
 Remove hard-coded drive-letter paths from onboarding docs and operational scripts so CKC can run from any disk letter (for example when moving from `K:` to `P:`).
 
 ## Inputs
-- Existing docs/scripts that referenced `K:\\CastKit Codex\\...` directly.
+- Existing docs/scripts that referenced drive-letter absolute paths directly.
 - Planned external-disk drive-letter changes.
 
 ## Changes
-- Docs: replaced `K:\\CastKit Codex\\...` with `<CKC_ROOT>\\...` and/or relative paths in onboarding/workflow docs.
+- Docs: replaced drive-letter absolute paths with `<CKC_ROOT>\\...` and/or relative paths in onboarding/workflow docs.
 - Backup scripts:
   - `CKC_GOV/scripts/backup_to_mir.ps1` now defaults `SourceRoot` from `$env:CKC_ROOT` or from the script location (`$PSScriptRoot\\..\\..`).
   - `CKC_GOV/scripts/register_backup_task.ps1` no longer hard-codes the backup script path.
