@@ -271,8 +271,8 @@ $latestInfo = @(
   if ($exactTag) { "gitTag: $exactTag" } else { $null }
   "createdAt: $createdAt"
   "artifacts: $artifactsRootRelFromArtifactsBase"
-  "manifest: $artifactsRootRelFromArtifactsBase\\manifest.json"
-  "sha256: $artifactsRootRelFromArtifactsBase\\SHA256SUMS.txt"
+  "manifest: ${artifactsRootRelFromArtifactsBase}\manifest.json"
+  "sha256: ${artifactsRootRelFromArtifactsBase}\SHA256SUMS.txt"
   ''
 ) | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Out-String
 [System.IO.File]::WriteAllText($latestInfoPath, $latestInfo, $utf8NoBom)
