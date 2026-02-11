@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Fix a startup race that can throw on first launch (concurrent IPC calls hit the library before SQLite is initialized), and improve portability by choosing sensible defaults when running the portable `.exe` (library lives next to the executable).
@@ -24,17 +24,16 @@ Fix a startup race that can throw on first launch (concurrent IPC calls hit the 
 - Any changes to template parsing/validation rules.
 
 ## Acceptance criteria
-- [ ] App launches without the `ckc:listGlobalCarouselImages` null-DB error.
-- [ ] Concurrent startup IPC calls do not observe a partially-initialized library.
-- [ ] Portable build defaults `libraryRoot` to a sibling folder next to the portable `.exe` (no drive-letter assumptions).
-- [ ] If configured `libraryRoot` is missing on disk, the app prompts to locate/select/create a library root.
+- [x] App launches without the `ckc:listGlobalCarouselImages` null-DB error.
+- [x] Concurrent startup IPC calls do not observe a partially-initialized library.
+- [x] Portable build defaults `libraryRoot` to a sibling folder next to the portable `.exe` (no drive-letter assumptions).
+- [x] If configured `libraryRoot` is missing on disk, the app prompts to locate/select/create a library root.
 
 ## Test plan
 - [ ] Manual: launch freshly built portable `.exe`; confirm no startup error and Library loads.
 - [ ] Manual: set `libraryRoot` to a non-existent folder; restart; confirm prompt and successful recovery.
-- [ ] Automated: run `npm test` (should stay green).
+- [x] Automated: run `npm test` (should stay green).
 
 ## Governance checklist (MUST)
 - [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec impact: yes (portable default + startup libraryRoot behavior). Bump spec and mirror into `CKC_main/docs/`.
-
+- [x] Spec impact: yes (portable default + startup libraryRoot behavior). Bump spec and mirror into `CKC_main/docs/`.

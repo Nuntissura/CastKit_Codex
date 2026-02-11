@@ -43,12 +43,12 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0025 | LibraryRoot diagnostics + missing media visibility | DONE | Codex | Make active library obvious; report missing images; help users fix “photos don’t load”. |
 | WP-0026 | Repair tool: rehydrate missing images by hash | DONE | Codex | Scan recovery folder, match by hash, copy into library layout, regen thumbs, write report. |
 | WP-0027 | Backup task: silent + covers libraryRoot | DONE | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
-| WP-0028 | Startup: library init concurrency + portable defaults | IN_PROGRESS | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
+| WP-0028 | Startup: library init concurrency + portable defaults | DONE | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
 | WP-0029 | Resizable panels + persisted layouts (2/3 panel) | BACKLOG | Codex | Splitters; remember 2-panel vs 3-panel widths; persist on restart. |
-| WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | BACKLOG | Codex | Arrow nav; bigger thumbs; filters never trap user; move controls out of image; fix hamburger overlap. |
+| WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | IN_PROGRESS | Codex | Arrow nav; bigger thumbs; filters never trap user; move controls out of image; fix hamburger overlap. |
 | WP-0031 | Docs mode: autosave + drawer search + layout restoration | BACKLOG | Codex | Notes always visible; below show stories/moodboard; autosave; full docs library view + filters. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | BACKLOG | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |
 | WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | BACKLOG | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
 
 ## Current focus
-- Current: WP-0028 — startup stability + portable library defaults.
+- Current: WP-0030 — media panel chrome (filters/thumbs/hotkeys/overlap).
