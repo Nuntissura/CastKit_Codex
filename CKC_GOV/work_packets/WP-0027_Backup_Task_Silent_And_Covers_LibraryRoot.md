@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Make the scheduled NAS mirror backup run without stealing focus (no popups), improve backup logs/health visibility, and ensure the backup includes the active `libraryRoot` (or warns loudly if it’s outside `<CKC_ROOT>`).
@@ -23,9 +23,9 @@ Make the scheduled NAS mirror backup run without stealing focus (no popups), imp
 - Building a full backup UI inside the app.
 
 ## Acceptance criteria
-- [ ] Scheduled backup does not interrupt foreground work (no visible console).
-- [ ] Backup logs clearly show what paths were mirrored and the result.
-- [ ] If `libraryRoot` is outside `<CKC_ROOT>`, backup behavior is safe and explicit (mirror it or warn).
+- [x] Scheduled backup does not interrupt foreground work (no visible console).
+- [x] Backup logs clearly show what paths were mirrored and the result.
+- [x] If `libraryRoot` is outside `<CKC_ROOT>`, backup behavior is safe and explicit (mirror it or warn).
 
 ## Test plan
 - [ ] Manual: register task, observe no popups during runs.
@@ -33,7 +33,7 @@ Make the scheduled NAS mirror backup run without stealing focus (no popups), imp
 
 ## Governance checklist (MUST)
 - [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec impact: none expected (backup/workflow only). If anything touches product behavior, update spec.
+- [x] Spec impact: none (backup/workflow only).
 
 ## Implementation notes
 - Key files to touch:

@@ -177,8 +177,9 @@ git push origin main
 ## Backup to NAS (mirror)
 
 Scripts live in `CKC_GOV/scripts/`:
-- `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`)
+- `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`) and also mirror the active CKC `libraryRoot` when it is outside `<CKC_ROOT>`
 - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
+Note: the backup script reads the active CKC `libraryRoot` from `%APPDATA%\\castkit-codex\\ckc-config.json` and mirrors it to a separate destination folder (default: `<CKC_BACKUP_DEST>__libraryRoot`, override via `CKC_BACKUP_DEST_LIBRARY`). If `libraryRoot` is configured but missing on disk, the backup exits non-zero to make the risk explicit.
 
 Run a backup now:
 ```powershell
@@ -190,6 +191,7 @@ Automate backups (recommended):
 powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\register_backup_task.ps1"
 ```
 This creates a Scheduled Task that runs the mirror backup every 30 minutes while logged in.
+The task runs with a hidden PowerShell window to avoid focus-stealing.
 
 Backup status/logs:
 - `<CKC_ROOT>\\CKC_GOV\\targets\\backup_logs\\LAST_RUN.txt`
