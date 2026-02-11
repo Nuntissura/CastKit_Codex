@@ -33,6 +33,7 @@ This file is mirrored into the git repo for visibility:
 | WP-0015 | Moodboard: move/delete images + undo | DONE | Codex | Move tool + selection outline; drag reposition; delete selected; undo stroke/image add. |
 | WP-0016 | Smart tags + saved searches UX | DONE | Codex | Saved searches + scope toggles + tag filters in command bar; manual tag editing; tag list/suggestions. |
 | WP-0017 | Packaging: fix white window in built .exe | DONE | Codex | Set Vite build base to `./` for `file://`; add packaging guardrail to reject `/assets/...` output. |
+| WP-0018 | Theme port from old build (palette + typography) | DONE | Codex | Ported CSS vars + font stacks; added accent glow; sheet Field ID/optional styling aligned to recovered build. |
 
 ## Current focus
 - Current: (none) — all listed work packets are DONE.
