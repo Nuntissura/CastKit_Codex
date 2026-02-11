@@ -6,9 +6,6 @@ CKC_recovery/
 # Governance build artifacts / caches / logs (never commit)
 CKC_GOV/targets/
 
-# Personal workspace (local only)
-CKC_GOV/user_ilja/
-
 # App repo generated content (local only)
 CKC_main/node_modules/
 CKC_main/dist/

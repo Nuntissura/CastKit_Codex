@@ -37,6 +37,7 @@ This is a mirror of the canonical Task Board:
 | WP-0019 | Drive-letter agnostic paths (docs + scripts) | DONE | Codex | Removed hard-coded drive-letter paths from onboarding docs; backup + packaging scripts avoid drive-letter paths in metadata. |
 | WP-0020 | Build artifacts naming (no version bumps for local builds) | DONE | Codex | Local builds go under `artifacts/dev/v<localVersion>` and `.exe` filenames include the local version; release builds go under `artifacts/releases/vX.Y.Z/<buildId>`. |
 | WP-0021 | Monorepo root: track governance with product | DONE | Codex | Git repo root moved to `<CKC_ROOT>` so `CKC_GOV/` is committed alongside `CKC_main/` (while `CKC_GOV/targets/` stays ignored); release workflow runs from `CKC_main/`. |
+| WP-0022 | Track `CKC_GOV/user_ilja` in git | DONE | Codex | Removed ignore for `CKC_GOV/user_ilja/` so personal scripts/notes can be versioned with the repo. |
 
 ## Current focus
 - Current: (none) — all listed work packets are DONE.
