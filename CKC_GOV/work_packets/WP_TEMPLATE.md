@@ -24,6 +24,13 @@ What problem this solves; link to spec/session dump sections.
 - [ ] Unit tests (if applicable)
 - [ ] Manual verification steps
 
+## Governance checklist (MUST)
+- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+  - update `CKC_GOV/spec/CastKit_Codex_Spec_v*.md` (version bump + changelog entry)
+  - mirror into `CKC_main/docs/`
+- [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
+
 ## Implementation notes
 - Key files to touch:
   - 

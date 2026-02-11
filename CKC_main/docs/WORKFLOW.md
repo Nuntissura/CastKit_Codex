@@ -32,6 +32,10 @@ Start here:
    - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.023.md`
    - Session dump (verbatim requirements): `docs/SESSION_DUMP_2026-02-10.md`
    - When bumping spec version, move the previous version into `CKC_GOV/spec/archive_spec/`
+   - If the spec summary/decisions ever contradict the session dump, the **session dump wins**.
+     - Do **not** rewrite the session dump to “make it fit the code”.
+     - Instead: update the spec summary/decisions to be consistent and, if needed, document how a requirement is represented in code (example: a boolean concept implemented as tags).
+   - If a WP changes behavior/UX/data model, the WP is not “DONE” until the spec is updated and mirrored (or the WP explicitly states “No spec impact” with rationale).
 
 4. **After a WP is done**
    - Update Task Board + Spec first
