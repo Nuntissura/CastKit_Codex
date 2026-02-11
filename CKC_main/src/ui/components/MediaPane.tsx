@@ -13,6 +13,9 @@ type RatingOp = 'any' | '=' | '<' | '<=' | '>' | '>=';
 
 function ratingFromKeyCode(code: string): number | null {
   switch (code) {
+    case 'Digit0':
+    case 'Numpad0':
+      return 0;
     case 'Digit1':
     case 'Numpad1':
       return 1;
@@ -68,6 +71,8 @@ export function MediaPane({
   defaultShowThumbnails = false,
   defaultShowControls = false,
   emptyLabel = 'No images.',
+  headerLeft = null,
+  showCarouselToggleOnThumbs = false,
   onOpenDiagnostics,
   onPatchImageMeta,
 }: {
@@ -75,6 +80,8 @@ export function MediaPane({
   defaultShowThumbnails?: boolean;
   defaultShowControls?: boolean;
   emptyLabel?: string;
+  headerLeft?: React.ReactNode;
+  showCarouselToggleOnThumbs?: boolean;
   onOpenDiagnostics?: () => void;
   onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => void;
 }) {
@@ -90,6 +97,28 @@ export function MediaPane({
   const [draftNotes, setDraftNotes] = React.useState<string>('');
   const [viewerError, setViewerError] = React.useState<boolean>(false);
   const [reloadToken, setReloadToken] = React.useState<number>(0);
+  const altLeftDownRef = React.useRef<boolean>(false);
+
+  React.useEffect(() => {
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.code === 'AltLeft') altLeftDownRef.current = true;
+    };
+    const onKeyUp = (evt: KeyboardEvent) => {
+      if (evt.code === 'AltLeft') altLeftDownRef.current = false;
+    };
+    const onBlur = () => {
+      altLeftDownRef.current = false;
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
 
   React.useEffect(() => {
     // Keep selection valid when the underlying image list changes.
@@ -104,6 +133,10 @@ export function MediaPane({
     });
   }, [images, filterFavoriteOnly, filterRatingOp, filterRatingValue]);
 
+  const filtersActive = filterFavoriteOnly || filterRatingOp !== 'any';
+  const hasAnyImages = images.length > 0;
+  const noMatches = hasAnyImages && filteredImages.length === 0;
+
   React.useEffect(() => {
     // Keep selection valid when filters change.
     if (!filteredImages.some((i) => i.id === selectedId)) {
@@ -114,6 +147,12 @@ export function MediaPane({
   const selected = selectedId ? filteredImages.find((i) => i.id === selectedId) ?? null : null;
   const isBusy = !!busyImageId && busyImageId === selected?.id;
   const notesIsDirty = !!selected && String(draftNotes ?? '') !== String(selected.notes ?? '');
+
+  const clearFilters = React.useCallback(() => {
+    setFilterFavoriteOnly(false);
+    setFilterRatingOp('any');
+    setFilterRatingValue(0);
+  }, []);
 
   React.useEffect(() => {
     if (!selected) {
@@ -144,11 +183,12 @@ export function MediaPane({
       if (evt.repeat) return;
       if (isEditableActiveElement()) return;
 
-      const isAltGraph = evt.getModifierState?.('AltGraph') || (evt.ctrlKey && evt.altKey && !evt.metaKey);
-      if (!isAltGraph) return;
+      if (!altLeftDownRef.current) return;
+      if (evt.ctrlKey || evt.metaKey || evt.shiftKey) return;
+      if (evt.getModifierState?.('AltGraph')) return;
 
       const rating = ratingFromKeyCode(evt.code);
-      if (!rating) return;
+      if (rating === null) return;
 
       evt.preventDefault();
       void patchMeta(selected.id, { rating });
@@ -157,6 +197,31 @@ export function MediaPane({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selected, isBusy, patchMeta]);
+
+  React.useEffect(() => {
+    if (isFullscreenOpen) return;
+
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.repeat) return;
+      if (isEditableActiveElement()) return;
+
+      if (evt.key === 'ArrowLeft') {
+        evt.preventDefault();
+        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
+        if (idx > 0) setSelectedId(filteredImages[idx - 1].id);
+        return;
+      }
+      if (evt.key === 'ArrowRight') {
+        evt.preventDefault();
+        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
+        if (idx >= 0 && idx < filteredImages.length - 1) setSelectedId(filteredImages[idx + 1].id);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isFullscreenOpen, filteredImages, selected]);
 
   React.useEffect(() => {
     if (!isFullscreenOpen) return;
@@ -200,10 +265,120 @@ export function MediaPane({
     return () => window.clearInterval(id);
   }, [isFullscreenOpen, slideshowOn, filteredImages]);
 
+  const toggleCarouselTag = React.useCallback(
+    (img: MediaImage) => {
+      const base = Array.isArray(img.tags) ? img.tags : [];
+      const active = base.includes('carousel');
+      const next = active ? base.filter((t) => t !== 'carousel') : Array.from(new Set([...base, 'carousel']));
+      void patchMeta(img.id, { tags: next });
+    },
+    [patchMeta]
+  );
+
   return (
     <div className={styles.root}>
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>{headerLeft}</div>
+        <div className={styles.topBarRight}>
+          <button
+            className={styles.topBtn}
+            data-active={showControls ? '1' : '0'}
+            onClick={() => setShowControls((v) => !v)}
+          >
+            Controls
+          </button>
+          <button
+            className={styles.topBtn}
+            data-active={showThumbnails ? '1' : '0'}
+            onClick={() => setShowThumbnails((v) => !v)}
+          >
+            Thumbs
+          </button>
+          <button className={styles.topBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!selected}>
+            Fullscreen
+          </button>
+        </div>
+      </div>
+
+      {showControls ? (
+        <div className={styles.controlsPanel}>
+          {selected ? (
+            <>
+              <button
+                className={styles.controlBtn}
+                disabled={isBusy}
+                onClick={() => patchMeta(selected.id, { favorite: !selected.favorite })}
+                title="Favorite"
+              >
+                {selected.favorite ? '★ Favorite' : '☆ Favorite'}
+              </button>
+
+              <div className={styles.stars} aria-label="Rating">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    className={styles.starBtn}
+                    disabled={isBusy}
+                    onClick={() => patchMeta(selected.id, { rating: n })}
+                    title={`${n} star`}
+                  >
+                    {selected.rating >= n ? '★' : '☆'}
+                  </button>
+                ))}
+                <button
+                  className={styles.clearBtn}
+                  disabled={isBusy}
+                  onClick={() => patchMeta(selected.id, { rating: 0 })}
+                  title="Clear rating"
+                >
+                  Clear
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          <div className={styles.filterRow}>
+            <div className={styles.filterTitle}>Filters</div>
+            <label className={styles.filterItem}>
+              <input type="checkbox" checked={filterFavoriteOnly} onChange={(e) => setFilterFavoriteOnly(e.target.checked)} /> Favorites only
+            </label>
+            <label className={styles.filterItem}>
+              Rating{' '}
+              <select value={filterRatingOp} onChange={(e) => setFilterRatingOp(e.target.value as RatingOp)}>
+                <option value="any">Any</option>
+                <option value="=">=</option>
+                <option value=">=">&gt;=</option>
+                <option value="<=">&lt;=</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+              </select>{' '}
+              <select value={String(filterRatingValue)} onChange={(e) => setFilterRatingValue(Number(e.target.value) || 0)}>
+                {[0, 1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {filtersActive ? (
+              <button className={styles.clearFiltersBtn} onClick={clearFilters}>
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className={styles.viewer}>
-        {selected && !viewerError ? (
+        {noMatches ? (
+          <div className={styles.noMatches}>
+            <div className={styles.noMatchesTitle}>No images match filters.</div>
+            <button className={styles.noMatchesBtn} onClick={clearFilters} disabled={!filtersActive}>
+              Clear filters
+            </button>
+          </div>
+        ) : selected && !viewerError ? (
           <img
             className={styles.viewerImg}
             src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
@@ -236,7 +411,7 @@ export function MediaPane({
                 }}
                 title="Pick the folder that contains db/, characters/, exports/"
               >
-                Change library folderâ€¦
+                Change library folder...
               </button>
               {onOpenDiagnostics ? (
                 <button className={styles.missingBtn} onClick={onOpenDiagnostics}>
@@ -248,83 +423,6 @@ export function MediaPane({
         ) : (
           <div className={styles.empty}>{emptyLabel}</div>
         )}
-
-        <div className={styles.overlay}>
-          <button className={styles.overlayBtn} onClick={() => setShowControls((v) => !v)}>
-            {showControls ? 'Hide controls' : 'Controls'}
-          </button>
-          <button className={styles.overlayBtn} onClick={() => setShowThumbnails((v) => !v)}>
-            {showThumbnails ? 'Hide thumbs' : 'Thumbs'}
-          </button>
-          <button className={styles.overlayBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!selected}>
-            Fullscreen
-          </button>
-        </div>
-
-        {selected && showControls ? (
-          <div className={styles.controls}>
-            <button
-              className={styles.controlBtn}
-              disabled={isBusy}
-              onClick={() => patchMeta(selected.id, { favorite: !selected.favorite })}
-              title="Favorite"
-            >
-              {selected.favorite ? '★ Favorite' : '☆ Favorite'}
-            </button>
-
-            <div className={styles.stars} aria-label="Rating">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  className={styles.starBtn}
-                  disabled={isBusy}
-                  onClick={() => patchMeta(selected.id, { rating: n })}
-                  title={`${n} star`}
-                >
-                  {selected.rating >= n ? '★' : '☆'}
-                </button>
-              ))}
-              <button
-                className={styles.clearBtn}
-                disabled={isBusy}
-                onClick={() => patchMeta(selected.id, { rating: 0 })}
-                title="Clear rating"
-              >
-                Clear
-              </button>
-            </div>
-
-            <div className={styles.filterRow}>
-              <div className={styles.filterTitle}>Filters</div>
-              <label className={styles.filterItem}>
-                <input
-                  type="checkbox"
-                  checked={filterFavoriteOnly}
-                  onChange={(e) => setFilterFavoriteOnly(e.target.checked)}
-                />{' '}
-                Favorites only
-              </label>
-              <label className={styles.filterItem}>
-                Rating{' '}
-                <select value={filterRatingOp} onChange={(e) => setFilterRatingOp(e.target.value as RatingOp)}>
-                  <option value="any">Any</option>
-                  <option value="=">=</option>
-                  <option value=">=">≥</option>
-                  <option value="<=">≤</option>
-                  <option value=">">&gt;</option>
-                  <option value="<">&lt;</option>
-                </select>{' '}
-                <select value={String(filterRatingValue)} onChange={(e) => setFilterRatingValue(Number(e.target.value) || 0)}>
-                  {[0, 1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={String(n)}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-        ) : null}
 
         {selected && showControls ? (
           <div className={styles.bottomBar} aria-label="Image metadata">
@@ -386,17 +484,37 @@ export function MediaPane({
             evt.currentTarget.scrollLeft += evt.deltaY;
           }}
         >
-          {filteredImages.map((img) => (
-            <button
-              key={img.id}
-              className={styles.thumbBtn}
-              data-selected={img.id === selectedId ? '1' : '0'}
-              onClick={() => setSelectedId(img.id)}
-              title={img.tags?.length ? img.tags.join(', ') : undefined}
-            >
-              <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`} alt="" />
-            </button>
-          ))}
+          {filteredImages.map((img) => {
+            const carouselActive = (img.tags || []).includes('carousel');
+            const thumbBusy = busyImageId === img.id;
+            return (
+              <div key={img.id} className={styles.thumbItem}>
+                {showCarouselToggleOnThumbs ? (
+                  <button
+                    className={styles.thumbCarouselBtn}
+                    data-active={carouselActive ? '1' : '0'}
+                    disabled={thumbBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCarouselTag(img);
+                    }}
+                    title={carouselActive ? 'Remove from carousel' : 'Add to carousel'}
+                  >
+                    {carouselActive ? '✓' : '+'}
+                  </button>
+                ) : null}
+
+                <button
+                  className={styles.thumbBtn}
+                  data-selected={img.id === selectedId ? '1' : '0'}
+                  onClick={() => setSelectedId(img.id)}
+                  title={img.tags?.length ? img.tags.join(', ') : undefined}
+                >
+                  <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`} alt="" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 

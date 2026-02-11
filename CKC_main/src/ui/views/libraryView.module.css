@@ -107,8 +107,8 @@
 }
 
 .characterIcon {
-  width: 56px;
-  height: 56px;
+  width: 84px;
+  height: 84px;
   border: 1px solid var(--glass-border);
   background: rgba(0, 0, 0, 0.03);
   overflow: hidden;

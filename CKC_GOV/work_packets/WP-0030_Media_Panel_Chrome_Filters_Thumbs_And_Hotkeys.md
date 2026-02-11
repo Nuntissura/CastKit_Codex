@@ -2,7 +2,9 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
+
+NOTE: Some items in the manual test plan are pending user smoke verification in the packaged build.
 
 ## Summary
 Improve the media panel UX to match “portfolio book” expectations: navigation with arrow keys, larger thumbnails, stable filters that never trap the user, and move media controls out of the image area (plus fix the hamburger overlap with the Carousel/Photos toggle).
@@ -16,6 +18,8 @@ Improve the media panel UX to match “portfolio book” expectations: navigatio
 ## Scope
 - Media navigation:
   - Arrow Left/Right to navigate images (respect “ignore while typing”).
+- Rating assignment:
+  - LAlt+0-5 sets rating 0-5 (0 clears) and ignores keybinds while typing.
 - Filters:
   - Filters remain accessible even when there is no selected image / zero matches.
   - Add a clear “No images match filters” message + “Clear filters” action.
@@ -33,19 +37,21 @@ Improve the media panel UX to match “portfolio book” expectations: navigatio
 - Reworking the slideshow/fullscreen design beyond control placement.
 
 ## Acceptance criteria
-- [ ] Arrow keys navigate media outside fullscreen.
-- [ ] Filters never trap the user (controls still visible at zero results).
-- [ ] Media controls are not drawn on top of the image.
-- [ ] Thumbnails are ~2× larger.
-- [ ] Photos mode exposes a quick “carousel” toggle per image.
-- [ ] Menu button no longer overlaps Carousel/Photos toggle.
+- [x] Arrow keys navigate media outside fullscreen.
+- [x] LAlt+0-5 assigns rating (0 clears).
+- [x] Filters never trap the user (controls still visible at zero results).
+- [x] Media controls are not drawn on top of the image.
+- [x] Thumbnails are ~2× larger.
+- [x] Photos mode exposes a quick “carousel” toggle per image.
+- [x] Menu button no longer overlaps Carousel/Photos toggle.
 
 ## Test plan
 - [ ] Manual: filter down to 0 results; confirm you can clear filters without restarting.
 - [ ] Manual: arrow nav works while not typing; does nothing while typing in inputs.
+- [ ] Manual: LAlt+0 clears rating; LAlt+1..5 assigns rating; does nothing while typing in inputs.
 - [ ] Manual: toggle carousel per thumbnail; confirm carousel mode updates.
-- [ ] Automated: `npm test`.
+- [x] Automated: `npm test`.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (media UX). Bump spec + mirror into `CKC_main/docs/`.
+- [x] Spec impact: yes (media UX). Bump spec + mirror into `CKC_main/docs/`.

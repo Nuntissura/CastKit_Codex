@@ -690,24 +690,27 @@ export function CharacterView({
 
       <div className={styles.layout} data-mode={tab === 'notes' ? 'docs' : 'default'}>
         <section className={styles.left}>
-          <div className={styles.leftHeader}>
-            <button
-              className={styles.leftToggle}
-              data-active={mediaMode === 'carousel' ? '1' : '0'}
-              onClick={() => setMediaMode('carousel')}
-            >
-              Carousel
-            </button>
-            <button
-              className={styles.leftToggle}
-              data-active={mediaMode === 'photos' ? '1' : '0'}
-              onClick={() => setMediaMode('photos')}
-            >
-              Photos
-            </button>
-          </div>
           <div className={styles.leftBody}>
             <MediaPane
+              headerLeft={
+                <div className={styles.leftHeader}>
+                  <button
+                    className={styles.leftToggle}
+                    data-active={mediaMode === 'carousel' ? '1' : '0'}
+                    onClick={() => setMediaMode('carousel')}
+                  >
+                    Carousel
+                  </button>
+                  <button
+                    className={styles.leftToggle}
+                    data-active={mediaMode === 'photos' ? '1' : '0'}
+                    onClick={() => setMediaMode('photos')}
+                  >
+                    Photos
+                  </button>
+                </div>
+              }
+              showCarouselToggleOnThumbs={mediaMode === 'photos'}
               images={images}
               emptyLabel="No images for this character yet."
               onPatchImageMeta={(imageId, patch) => {

@@ -25,8 +25,8 @@ This is a mirror of the canonical Task Board:
 | WP-0007 | Thumbnails: full image (no crop), horizontal scroll, sizing | DONE | Codex | MediaPane thumbs: `object-fit: contain`, horizontal + mousewheel scroll, hide/show toggle. |
 | WP-0008 | Build pipeline: external targets + clean repo | DONE | Codex | electron-builder outputs to `CKC_GOV/targets/CKC/artifacts`; stages in `CKC_GOV/targets/CKC/stage`; repo stays clean. |
 | WP-0009 | Workflow gates + spec archiving + backup docs | DONE | Codex | WP-first, spec updates + archive, commit/push gates, backup scripts documented. |
-| WP-0010 | Record open-question decisions | DONE | Codex | Captured rating hotkeys (RAlt+1..5), DB-first docs storage, and tentative `isFrontpage` rule in spec v00.020. |
-| WP-0011 | Rating hotkeys (RAlt+1..5) | DONE | Codex | Added global keybind in MediaPane to set rating on the selected image; ignores keybinds while typing in inputs. |
+| WP-0010 | Record open-question decisions | DONE | Codex | Captured rating hotkeys decision, DB-first docs storage, and tentative `isFrontpage` rule in spec v00.020. |
+| WP-0011 | Rating hotkeys (LAlt+0..5) | DONE | Codex | Added global keybind in MediaPane to set rating (0–5) on the selected image; ignores keybinds while typing in inputs. |
 | WP-0012 | Character icons + focus framing | DONE | Codex | Pick icon from character images; store focusX/focusY; show icons in Library list/grid. |
 | WP-0013 | New dev onboarding + governance mirrors + NAS backup usage | DONE | Codex | Added `CKC_main/docs/PROJECT_CODEX.md` + `TASK_BOARD.md` mirrors; updated README/workflow with commit/push + backup commands. |
 | WP-0014 | Photo notes + bottom metadata bar | DONE | Codex | Per-image notes UI; tags/notes moved to bottom metadata bar; hotkeys ignore typing. |
@@ -45,10 +45,10 @@ This is a mirror of the canonical Task Board:
 | WP-0027 | Backup task: silent + covers libraryRoot | DONE | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
 | WP-0028 | Startup: library init concurrency + portable defaults | DONE | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
 | WP-0029 | Resizable panels + persisted layouts (2/3 panel) | BACKLOG | Codex | Splitters; remember 2-panel vs 3-panel widths; persist on restart. |
-| WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | IN_PROGRESS | Codex | Arrow nav; bigger thumbs; filters never trap user; move controls out of image; fix hamburger overlap. |
+| WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | DONE | Codex | Header controls (no overlay), arrow nav, bigger thumbs, no-match clear filters, per-thumb carousel toggle, hamburger-safe header inset, rating hotkeys LAlt+0..5. |
 | WP-0031 | Docs mode: autosave + drawer search + layout restoration | BACKLOG | Codex | Notes always visible; below show stories/moodboard; autosave; full docs library view + filters. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | BACKLOG | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |
 | WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | BACKLOG | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
 
 ## Current focus
-- Current: WP-0030 — media panel chrome (filters/thumbs/hotkeys/overlap).
+- Current: WP-0029 — resizable panels + persisted layouts (2/3 panel).
