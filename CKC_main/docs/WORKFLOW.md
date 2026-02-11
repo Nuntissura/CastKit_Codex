@@ -23,6 +23,7 @@ Start here:
    - Add/update the WP row in `CKC_GOV/taskboard/TASK_BOARD.md`
 
 2. **Commit + push before starting new coding**
+   - This includes committing/pushing the WP + Task Board update (the plan) so the intended work is on GitHub before you write any code.
    - `git status` must be clean
    - push to origin so GitHub stays current
 

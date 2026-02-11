@@ -26,11 +26,11 @@ Get-Content -Encoding utf8 "<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md"
 
 Daily workflow (MUST):
 1. Pick/create a Work Packet in `CKC_GOV/work_packets/` and add/update its row in `CKC_GOV/taskboard/TASK_BOARD.md`.
-2. Keep `CKC_main` clean before starting new coding (`git status` clean).
+2. **Commit + push immediately** so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
 3. Implement the WP (keep scope tight).
 4. Verify locally (`npm test`, `npx tsc --noEmit`, and build/package as relevant).
 5. Update Task Board + Spec (spec version bump + archive) and mirror spec into `CKC_main/docs/`.
-6. Commit + push (`origin/main`). Commit messages include the WP id (`WP-xxxx: ...`).
+6. Commit + push (`origin/main`) again. Commit messages include the WP id (`WP-xxxx: ...`).
 7. Run the NAS mirror backup script.
 
 ## Golden rules
@@ -39,7 +39,7 @@ Daily workflow (MUST):
 - Template integrity: never drop Field IDs; preserve template order.
 - UI: minimal by default; sharp corners.
 - Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
-- Workflow: create a Work Packet **before** coding; update Task Board + Spec; then commit + push.
+- Workflow: create a Work Packet + update Task Board, then **commit + push BEFORE coding starts** (planning checkpoint). After implementation, update Task Board + Spec, then commit + push again (shipping checkpoint).
 
 ## Folder map
 ### 1) Source repo (code)
