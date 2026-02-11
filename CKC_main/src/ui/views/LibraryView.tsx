@@ -59,6 +59,8 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
+  const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
+  const [exportSections, setExportSections] = React.useState<string[] | null>(null);
   const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
   const [selectedSpinOffId, setSelectedSpinOffId] = React.useState<string | null>(null);
   const [exportError, setExportError] = React.useState<string | null>(null);
@@ -76,6 +78,13 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
       })
       .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    window.ckc
+      .getTemplate()
+      .then((ast) => setTemplateAst(ast))
+      .catch(() => setTemplateAst(null));
   }, []);
 
   React.useEffect(() => {
@@ -594,7 +603,11 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
                   setExportError(null);
                   setIsExporting(true);
                   try {
-                    const res = await window.ckc.exportTemplateFieldPack({ outDir: exportDir, spinoffId: selectedSpinOffId });
+                    const res = await window.ckc.exportTemplateFieldPack({
+                      outDir: exportDir,
+                      spinoffId: selectedSpinOffId,
+                      includeSections: exportSections,
+                    });
                     setLastExportPath(res.path);
                   } catch (err: unknown) {
                     setExportError(err instanceof Error ? err.message : String(err));
@@ -616,6 +629,46 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
                 </button>
               ) : null}
             </div>
+
+            {templateAst ? (
+              <details style={{ marginTop: 10 }}>
+                <summary>Sections (optional)</summary>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                  <button onClick={() => setExportSections(null)} disabled={isExporting} title="Reset to all sections">
+                    All sections
+                  </button>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Applies to: <code>Export LLM empty</code>
+                  </span>
+                </div>
+
+                <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {(templateAst.sections || []).map((s) => {
+                    const all = (templateAst.sections || []).map((x) => x.title);
+                    const checked = exportSections === null ? true : (exportSections || []).includes(s.title);
+                    return (
+                      <label key={s.title} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const wantOn = e.target.checked;
+                            setExportSections((prev) => {
+                              const cur = prev === null ? all : prev || [];
+                              const next = wantOn ? Array.from(new Set([...cur, s.title])) : cur.filter((t) => t !== s.title);
+                              if (next.length === 0 || next.length === all.length) return null;
+                              return next;
+                            });
+                          }}
+                          disabled={isExporting}
+                        />{' '}
+                        <span title={s.title}>{s.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </details>
+            ) : null}
 
             {exportError ? <div className={styles.error}>{exportError}</div> : null}
             {lastExportPath ? (
