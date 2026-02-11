@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Improve the media panel UX to match “portfolio book” expectations: navigation with arrow keys, larger thumbnails, stable filters that never trap the user, and move media controls out of the image area (plus fix the hamburger overlap with the Carousel/Photos toggle).
@@ -49,4 +49,3 @@ Improve the media panel UX to match “portfolio book” expectations: navigatio
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
 - [ ] Spec impact: yes (media UX). Bump spec + mirror into `CKC_main/docs/`.
-
