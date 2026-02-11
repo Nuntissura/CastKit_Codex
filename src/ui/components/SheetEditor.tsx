@@ -72,12 +72,14 @@ export function SheetEditor({
                   const value = valuesById[field.id] ?? '';
                   const isRule = field.type === 'rule';
                   const rows = inputRowsForField(field);
-                  const label = `${field.label}${field.optional ? ' (optional)' : ''}`;
 
                   return (
                     <div key={field.id} className={styles.field}>
                       <div className={styles.fieldHeader}>
-                        <div className={styles.fieldLabel}>{label}</div>
+                        <div className={styles.fieldLabel}>
+                          <span className={styles.labelText}>{field.label}</span>
+                          {field.optional ? <span className={styles.optionalTag}>optional</span> : null}
+                        </div>
                         <div className={styles.fieldId}>{field.id}</div>
                       </div>
 
@@ -123,4 +125,3 @@ export function SheetEditor({
     </div>
   );
 }
-

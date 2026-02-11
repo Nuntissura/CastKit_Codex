@@ -61,12 +61,33 @@
 
 .fieldLabel {
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.labelText {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optionalTag {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .fieldId {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
+  font-size: 0.7rem;
+  color: var(--accent-color);
+  background: var(--bg-accent);
+  padding: 2px 4px;
   white-space: nowrap;
 }
 
@@ -75,8 +96,11 @@
 .select {
   width: 100%;
   border: 1px solid var(--glass-border);
-  background: rgba(253, 245, 230, 0.88);
+  background: var(--bg-primary);
   padding: 8px 10px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
 }
 
 .textarea {
@@ -92,4 +116,3 @@
   font-size: 0.85rem;
   white-space: pre-wrap;
 }
-
