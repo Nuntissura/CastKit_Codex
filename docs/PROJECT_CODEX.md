@@ -98,6 +98,19 @@ npm run package:win
 This writes versioned outputs under:
 - `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts\`
 
+### Publishing a GitHub Release (recommended)
+Do **not** commit `.exe` artifacts into `CKC_main` git history. Instead, publish them as a GitHub Release.
+
+There is a workflow in the repo that builds Windows artifacts on tag push:
+- `CKC_main/.github/workflows/release-win.yml` (triggers on tags like `v1.2.3`)
+
+Recommended flow:
+```powershell
+cd "K:\CastKit Codex\CKC_main"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch
+```
+This bumps `package.json` version, commits, tags `vX.Y.Z`, runs packaging, then pushes commit + tag. The tag triggers GitHub Actions to attach the installer + portable `.exe` to the GitHub Release.
+
 ## Working process
 ### Taskboard
 - All work is tracked in `taskboard/TASK_BOARD.md`.
@@ -148,6 +161,12 @@ Run a backup now:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\backup_to_mir.ps1"
 ```
+
+Automate backups (recommended):
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\register_backup_task.ps1"
+```
+This creates a Scheduled Task that runs the mirror backup every 30 minutes while logged in.
 
 Backup status/logs:
 - `K:\CastKit Codex\CKC_GOV\targets\backup_logs\LAST_RUN.txt`
