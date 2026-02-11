@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Cut a new spec version (v00.024) that clarifies how the recovered “isCarousel/isFrontpage” concepts are represented in code, documents libraryRoot + on-disk layout, and removes workflow/repo-governance content from the spec.
@@ -32,22 +32,22 @@ Cut a new spec version (v00.024) that clarifies how the recovered “isCarousel/
 - Changing the session dump content.
 
 ## Acceptance criteria
-- [ ] `CastKit_Codex_Spec_v00.024.md` exists and is the current spec.
-- [ ] `CastKit_Codex_Spec_v00.023.md` is moved to `CKC_GOV/spec/archive_spec/`.
-- [ ] `CKC_main/docs/CastKit_Codex_Spec_v00.024.md` mirrors the new spec.
-- [ ] Onboarding docs reference v00.024 as the current spec.
-- [ ] Spec contains no workflow/repo-governance rules (those live outside the spec).
+- [x] `CastKit_Codex_Spec_v00.024.md` exists and is the current spec.
+- [x] `CastKit_Codex_Spec_v00.023.md` is moved to `CKC_GOV/spec/archive_spec/`.
+- [x] `CKC_main/docs/CastKit_Codex_Spec_v00.024.md` mirrors the new spec.
+- [x] Onboarding docs reference v00.024 as the current spec.
+- [x] Spec contains no workflow/repo-governance rules (those live outside the spec).
 
 ## Test plan
-- [ ] `rg "v00\\.023" CKC_GOV CKC_main` shows no “current spec” references remaining (historical WPs may still reference it).
-- [ ] Quick human check: spec mapping section correctly points to the implemented tags and rule.
+- [x] `rg "CastKit_Codex_Spec_v00\\.023\\.md" README.md CKC_main/README.md CKC_GOV/PROJECT_CODEX.md CKC_main/docs/PROJECT_CODEX.md CKC_main/docs/WORKFLOW.md` shows no onboarding docs still pointing at v00.023 (historical WPs may still reference it).
+- [x] Quick human check: spec mapping section correctly points to the implemented tags and rule.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
   - update `CKC_GOV/spec/CastKit_Codex_Spec_v*.md` (version bump + changelog entry)
   - mirror into `CKC_main/docs/`
-- [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
+- [x] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
 
 ## Implementation notes
 - Key files to touch:
@@ -67,4 +67,3 @@ Revert the commits associated with WP-0024.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

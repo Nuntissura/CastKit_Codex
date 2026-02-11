@@ -15,7 +15,7 @@ Recovered requirements call out a minimal UI with a hideable command bar that co
 
 ## Inputs
 - Latest requirements: `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md`
-- Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.023.md`
+- Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.024.md`
 
 ## Scope
 ### In

@@ -16,7 +16,7 @@ Exports are a core workflow feature: producing clean, deterministic templates fo
 - Canonical template bytes:
   - `CKC_GOV/templates/character sheet templates/CHARACTER_SHEET__v2.00.txt`
 - Latest requirements: `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md`
-- Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.023.md`
+- Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.024.md`
 
 ## Scope
 ### In
