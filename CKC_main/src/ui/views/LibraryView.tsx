@@ -1,6 +1,7 @@
 import React from 'react';
 import { MediaPane } from '../components/MediaPane';
 import { CommandBar } from '../components/CommandBar';
+import { useElementWidth } from '../hooks/useElementWidth';
 import styles from './libraryView.module.css';
 
 function joinPath(a: string, b: string): string {
@@ -23,6 +24,10 @@ function tagsTextToArray(text: string): string[] {
 }
 
 export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId: string) => void }) {
+  const splitterPx = 10;
+  const minLeftPx = 360;
+  const minRightPx = 420;
+
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
   const [carouselImages, setCarouselImages] = React.useState<
     Array<{ id: string; favorite: boolean; rating: number; notes: string; tags: string[] }>
@@ -61,6 +66,11 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
   const [configPath, setConfigPath] = React.useState<string | null>(null);
+
+  const [layoutRef, layoutWidth] = useElementWidth<HTMLDivElement>();
+  const [libraryLeftFrac, setLibraryLeftFrac] = React.useState<number>(0.55);
+  const libraryLeftFracRef = React.useRef<number>(libraryLeftFrac);
+  const libraryResizeRef = React.useRef<{ startX: number; startLeftPx: number } | null>(null);
   const [diagnostics, setDiagnostics] = React.useState<CKCLibraryDiagnostics | null>(null);
   const [diagnosticsError, setDiagnosticsError] = React.useState<string | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = React.useState<boolean>(false);
@@ -83,18 +93,26 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   }, [libraryRoot]);
 
   React.useEffect(() => {
+    libraryLeftFracRef.current = libraryLeftFrac;
+  }, [libraryLeftFrac]);
+
+  React.useEffect(() => {
     window.ckc
       .getConfigInfo()
       .then((info) => {
         setConfigPath(typeof info?.configPath === 'string' ? info.configPath : null);
         const cfg: any = info?.config ?? null;
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+        const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
+        if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
       })
       .catch(() => {
         window.ckc
           .getConfig()
           .then((cfg: any) => {
             if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+            const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
+            if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
           })
           .catch(() => {});
       });
@@ -330,8 +348,91 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     setTagDraft('');
   }, [tagDraft, addTagFiltersFromText]);
 
+  const effectiveLibraryLeftFrac = React.useMemo(() => {
+    const frac = clamp01(libraryLeftFrac);
+    const w = Number(layoutWidth) || 0;
+    if (w <= 0) return frac;
+    const available = w - splitterPx;
+    if (available <= 0) return frac;
+    const min = minLeftPx / available;
+    const max = 1 - minRightPx / available;
+    if (min > max) return 0.5;
+    return Math.max(min, Math.min(max, frac));
+  }, [libraryLeftFrac, layoutWidth, splitterPx, minLeftPx, minRightPx]);
+
+  const libraryGridTemplateColumns = React.useMemo(() => {
+    const frac = effectiveLibraryLeftFrac;
+    const pct = (frac * 100).toFixed(4);
+    const px = (frac * splitterPx).toFixed(2);
+    return `calc(${pct}% - ${px}px) ${splitterPx}px 1fr`;
+  }, [effectiveLibraryLeftFrac, splitterPx]);
+
+  const beginResizeLibrary = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const w = Number(layoutWidth) || 0;
+      const available = w - splitterPx;
+      if (available <= 0) return;
+
+      libraryResizeRef.current = {
+        startX: e.clientX,
+        startLeftPx: effectiveLibraryLeftFrac * available,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [layoutWidth, splitterPx, effectiveLibraryLeftFrac]
+  );
+
+  const onResizeLibraryMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const st = libraryResizeRef.current;
+      if (!st) return;
+
+      const w = Number(layoutWidth) || 0;
+      const available = w - splitterPx;
+      if (available <= 0) return;
+
+      const dx = e.clientX - st.startX;
+      let nextLeftPx = st.startLeftPx + dx;
+
+      const maxLeftPx = available - minRightPx;
+      if (maxLeftPx < minLeftPx) {
+        nextLeftPx = available / 2;
+      } else {
+        nextLeftPx = Math.max(minLeftPx, Math.min(maxLeftPx, nextLeftPx));
+      }
+
+      const nextFrac = clamp01(nextLeftPx / available);
+      libraryLeftFracRef.current = nextFrac;
+      setLibraryLeftFrac(nextFrac);
+    },
+    [layoutWidth, splitterPx, minLeftPx, minRightPx]
+  );
+
+  const endResizeLibrary = React.useCallback(() => {
+    if (!libraryResizeRef.current) return;
+    libraryResizeRef.current = null;
+
+    const w = Number(layoutWidth) || 0;
+    const available = w - splitterPx;
+    const raw = clamp01(libraryLeftFracRef.current);
+
+    let next = raw;
+    if (available > 0) {
+      const min = minLeftPx / available;
+      const max = 1 - minRightPx / available;
+      next = min > max ? 0.5 : Math.max(min, Math.min(max, raw));
+    }
+
+    setLibraryLeftFrac(next);
+    libraryLeftFracRef.current = next;
+    void window.ckc.setConfig({ layoutLibrary2: { leftFrac: next } });
+  }, [layoutWidth, splitterPx, minLeftPx, minRightPx]);
+
   return (
-    <div className={styles.layout}>
+    <div className={styles.layout} ref={layoutRef} style={{ gridTemplateColumns: libraryGridTemplateColumns }}>
       <section className={styles.left}>
         <MediaPane
           images={filteredCarouselImages}
@@ -343,6 +444,17 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
           }}
         />
       </section>
+
+      <div
+        className={styles.splitter}
+        role="separator"
+        aria-orientation="vertical"
+        title="Resize panels"
+        onPointerDown={beginResizeLibrary}
+        onPointerMove={onResizeLibraryMove}
+        onPointerUp={endResizeLibrary}
+        onPointerCancel={endResizeLibrary}
+      />
 
       <aside className={styles.right}>
         <CommandBar isOpen={showLibraryBar} onToggle={() => setShowLibraryBar((v) => !v)} label="Library">

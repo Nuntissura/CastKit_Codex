@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add draggable splitters so panel widths can be adjusted in 2-panel and 3-panel modes, persist the layouts per mode, and restore them on restart.
@@ -26,17 +26,17 @@ CKC is used as a “portfolio book” with a primary 2-panel layout (media left,
 - Per-monitor layouts.
 
 ## Acceptance criteria
-- [ ] Dragging splitter changes panel widths live.
-- [ ] 2-panel layout is remembered when switching away and back.
-- [ ] 3-panel layout is remembered when switching away and back.
-- [ ] Layouts persist after app restart.
-- [ ] Minimum widths prevent panels collapsing to unusable sizes.
+- [x] Dragging splitter changes panel widths live.
+- [x] 2-panel layout is remembered when switching away and back.
+- [x] 3-panel layout is remembered when switching away and back.
+- [x] Layouts persist after app restart.
+- [x] Minimum widths prevent panels collapsing to unusable sizes.
 
 ## Test plan
 - [ ] Manual: resize in Library, restart, confirm restored.
 - [ ] Manual: open docs mode, resize 3 panels, switch back to 2 panels, confirm both remembered.
-- [ ] Automated: `npm test`.
+- [x] Automated: `npm test`.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (layout persistence). Bump spec + mirror into `CKC_main/docs/`.
+- [x] Spec impact: yes (layout persistence). Bump spec + mirror into `CKC_main/docs/`.

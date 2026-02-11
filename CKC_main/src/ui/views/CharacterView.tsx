@@ -3,6 +3,7 @@ import { LibraryDrawer } from '../components/LibraryDrawer';
 import { MediaPane } from '../components/MediaPane';
 import { MoodboardCanvas, type MoodboardState } from '../components/MoodboardCanvas';
 import { SheetEditor } from '../components/SheetEditor';
+import { useElementWidth } from '../hooks/useElementWidth';
 import styles from './characterView.module.css';
 
 function tagsTextToArray(text: string): string[] {
@@ -24,6 +25,72 @@ function emptyMoodboard(): MoodboardState {
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0.5;
   return Math.max(0, Math.min(1, n));
+}
+
+function clampFrac2WithMin(
+  frac: number,
+  containerWidthPx: number,
+  splitterPx: number,
+  minLeftPx: number,
+  minRightPx: number
+): number {
+  const raw = clamp01(frac);
+  const w = Number(containerWidthPx) || 0;
+  if (w <= 0) return raw;
+  const available = w - splitterPx;
+  if (available <= 0) return raw;
+  const min = minLeftPx / available;
+  const max = 1 - minRightPx / available;
+  if (min > max) return 0.5;
+  return Math.max(min, Math.min(max, raw));
+}
+
+function clampFracs3WithMin(
+  leftFrac: number,
+  middleFrac: number,
+  containerWidthPx: number,
+  splitterPx: number,
+  minLeftPx: number,
+  minMiddlePx: number,
+  minRightPx: number
+): { leftFrac: number; middleFrac: number } {
+  let left = clamp01(leftFrac);
+  let middle = clamp01(middleFrac);
+
+  const w = Number(containerWidthPx) || 0;
+  if (w <= 0) {
+    const sum = left + middle;
+    if (sum > 0.95) {
+      const scale = 0.95 / sum;
+      left *= scale;
+      middle *= scale;
+    }
+    return { leftFrac: left, middleFrac: middle };
+  }
+
+  const available = w - splitterPx * 2;
+  if (available <= 0) return { leftFrac: left, middleFrac: middle };
+
+  const minLeft = minLeftPx / available;
+  const minMiddle = minMiddlePx / available;
+  const minRight = minRightPx / available;
+  const maxSum = 1 - minRight;
+
+  if (minLeft + minMiddle > maxSum) {
+    return { leftFrac: clamp01(minLeft), middleFrac: clamp01(minMiddle) };
+  }
+
+  left = Math.max(minLeft, left);
+  middle = Math.max(minMiddle, middle);
+
+  if (left + middle > maxSum) {
+    middle = Math.max(minMiddle, maxSum - left);
+    if (left + middle > maxSum) {
+      left = Math.max(minLeft, maxSum - middle);
+    }
+  }
+
+  return { leftFrac: clamp01(left), middleFrac: clamp01(middle) };
 }
 
 function fileNameFromRelativePath(rel: string): string {
@@ -61,6 +128,29 @@ export function CharacterView({
   const [error, setError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<'sheet' | 'photos' | 'notes' | 'tools'>('sheet');
   const [mediaMode, setMediaMode] = React.useState<'carousel' | 'photos'>('carousel');
+
+  const splitterPx = 10;
+  const minLeftPx2 = 360;
+  const minRightPx2 = 460;
+  const minLeftPx3 = 320;
+  const minMiddlePx3 = 360;
+  const minRightPx3 = 460;
+
+  const [layoutRef, layoutWidth] = useElementWidth<HTMLDivElement>();
+  const [characterLeftFrac2, setCharacterLeftFrac2] = React.useState<number>(0.55);
+  const characterLeftFrac2Ref = React.useRef<number>(characterLeftFrac2);
+
+  const [characterLeftFrac3, setCharacterLeftFrac3] = React.useState<number>(1 / 3);
+  const [characterMiddleFrac3, setCharacterMiddleFrac3] = React.useState<number>(1 / 3);
+  const characterLeftFrac3Ref = React.useRef<number>(characterLeftFrac3);
+  const characterMiddleFrac3Ref = React.useRef<number>(characterMiddleFrac3);
+
+  const characterResizeRef = React.useRef<
+    | { kind: '2'; startX: number; startLeftPx: number }
+    | { kind: '3-left'; startX: number; startLeftPx: number; sumLMPx: number }
+    | { kind: '3-middle'; startX: number; startMiddlePx: number; leftPx: number }
+    | null
+  >(null);
 
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
   const [draftValuesById, setDraftValuesById] = React.useState<Record<string, string>>({});
@@ -115,6 +205,18 @@ export function CharacterView({
   }, [libraryRoot]);
 
   React.useEffect(() => {
+    characterLeftFrac2Ref.current = characterLeftFrac2;
+  }, [characterLeftFrac2]);
+
+  React.useEffect(() => {
+    characterLeftFrac3Ref.current = characterLeftFrac3;
+  }, [characterLeftFrac3]);
+
+  React.useEffect(() => {
+    characterMiddleFrac3Ref.current = characterMiddleFrac3;
+  }, [characterMiddleFrac3]);
+
+  React.useEffect(() => {
     if (!characterId) return;
     setCharacter(null);
     setError(null);
@@ -147,9 +249,218 @@ export function CharacterView({
       .getConfig()
       .then((cfg: any) => {
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+        const l2 = (cfg?.layoutCharacter2 && typeof cfg.layoutCharacter2 === 'object' ? cfg.layoutCharacter2 : null) as any;
+        if (typeof l2?.leftFrac === 'number') setCharacterLeftFrac2(clamp01(l2.leftFrac));
+
+        const l3 = (cfg?.layoutCharacter3 && typeof cfg.layoutCharacter3 === 'object' ? cfg.layoutCharacter3 : null) as any;
+        if (typeof l3?.leftFrac === 'number') setCharacterLeftFrac3(clamp01(l3.leftFrac));
+        if (typeof l3?.middleFrac === 'number') setCharacterMiddleFrac3(clamp01(l3.middleFrac));
       })
       .catch(() => {});
   }, []);
+
+  const effectiveCharacterLeftFrac2 = React.useMemo(() => {
+    return clampFrac2WithMin(characterLeftFrac2, layoutWidth, splitterPx, minLeftPx2, minRightPx2);
+  }, [characterLeftFrac2, layoutWidth, splitterPx, minLeftPx2, minRightPx2]);
+
+  const effectiveCharacter3 = React.useMemo(() => {
+    return clampFracs3WithMin(
+      characterLeftFrac3,
+      characterMiddleFrac3,
+      layoutWidth,
+      splitterPx,
+      minLeftPx3,
+      minMiddlePx3,
+      minRightPx3
+    );
+  }, [characterLeftFrac3, characterMiddleFrac3, layoutWidth, splitterPx, minLeftPx3, minMiddlePx3, minRightPx3]);
+
+  const characterGridDefault = React.useMemo(() => {
+    const frac = effectiveCharacterLeftFrac2;
+    const pct = (frac * 100).toFixed(4);
+    const px = (frac * splitterPx).toFixed(2);
+    return `calc(${pct}% - ${px}px) ${splitterPx}px 1fr`;
+  }, [effectiveCharacterLeftFrac2, splitterPx]);
+
+  const characterGridDocs = React.useMemo(() => {
+    const left = effectiveCharacter3.leftFrac;
+    const middle = effectiveCharacter3.middleFrac;
+    const splittersTotalPx = splitterPx * 2;
+    const leftPct = (left * 100).toFixed(4);
+    const middlePct = (middle * 100).toFixed(4);
+    const leftPx = (left * splittersTotalPx).toFixed(2);
+    const middlePx = (middle * splittersTotalPx).toFixed(2);
+    return `calc(${leftPct}% - ${leftPx}px) ${splitterPx}px calc(${middlePct}% - ${middlePx}px) ${splitterPx}px 1fr`;
+  }, [effectiveCharacter3.leftFrac, effectiveCharacter3.middleFrac, splitterPx]);
+
+  const beginResizeCharacter2 = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const w = Number(layoutWidth) || 0;
+      const available = w - splitterPx;
+      if (available <= 0) return;
+
+      characterResizeRef.current = {
+        kind: '2',
+        startX: e.clientX,
+        startLeftPx: effectiveCharacterLeftFrac2 * available,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [layoutWidth, splitterPx, effectiveCharacterLeftFrac2]
+  );
+
+  const beginResizeCharacter3Left = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const w = Number(layoutWidth) || 0;
+      const available = w - splitterPx * 2;
+      if (available <= 0) return;
+
+      const leftPx = effectiveCharacter3.leftFrac * available;
+      const sumLMPx = (effectiveCharacter3.leftFrac + effectiveCharacter3.middleFrac) * available;
+
+      characterResizeRef.current = {
+        kind: '3-left',
+        startX: e.clientX,
+        startLeftPx: leftPx,
+        sumLMPx,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [layoutWidth, splitterPx, effectiveCharacter3.leftFrac, effectiveCharacter3.middleFrac]
+  );
+
+  const beginResizeCharacter3Middle = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const w = Number(layoutWidth) || 0;
+      const available = w - splitterPx * 2;
+      if (available <= 0) return;
+
+      const leftPx = effectiveCharacter3.leftFrac * available;
+      const middlePx = effectiveCharacter3.middleFrac * available;
+
+      characterResizeRef.current = {
+        kind: '3-middle',
+        startX: e.clientX,
+        startMiddlePx: middlePx,
+        leftPx,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [layoutWidth, splitterPx, effectiveCharacter3.leftFrac, effectiveCharacter3.middleFrac]
+  );
+
+  const onResizeCharacterMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const st = characterResizeRef.current;
+      if (!st) return;
+
+      if (st.kind === '2') {
+        const w = Number(layoutWidth) || 0;
+        const available = w - splitterPx;
+        if (available <= 0) return;
+
+        const dx = e.clientX - st.startX;
+        let nextLeftPx = st.startLeftPx + dx;
+
+        const maxLeftPx = available - minRightPx2;
+        if (maxLeftPx < minLeftPx2) {
+          nextLeftPx = available / 2;
+        } else {
+          nextLeftPx = Math.max(minLeftPx2, Math.min(maxLeftPx, nextLeftPx));
+        }
+
+        const nextFrac = clamp01(nextLeftPx / available);
+        characterLeftFrac2Ref.current = nextFrac;
+        setCharacterLeftFrac2(nextFrac);
+        return;
+      }
+
+      if (st.kind === '3-left') {
+        const w = Number(layoutWidth) || 0;
+        const available = w - splitterPx * 2;
+        if (available <= 0) return;
+
+        const dx = e.clientX - st.startX;
+        let nextLeftPx = st.startLeftPx + dx;
+
+        const maxLeftPx = st.sumLMPx - minMiddlePx3;
+        if (maxLeftPx < minLeftPx3) {
+          nextLeftPx = st.sumLMPx / 2;
+        } else {
+          nextLeftPx = Math.max(minLeftPx3, Math.min(maxLeftPx, nextLeftPx));
+        }
+
+        const nextMiddlePx = Math.max(0, st.sumLMPx - nextLeftPx);
+        const nextLeftFrac = clamp01(nextLeftPx / available);
+        const nextMiddleFrac = clamp01(nextMiddlePx / available);
+
+        characterLeftFrac3Ref.current = nextLeftFrac;
+        characterMiddleFrac3Ref.current = nextMiddleFrac;
+        setCharacterLeftFrac3(nextLeftFrac);
+        setCharacterMiddleFrac3(nextMiddleFrac);
+        return;
+      }
+
+      if (st.kind === '3-middle') {
+        const w = Number(layoutWidth) || 0;
+        const available = w - splitterPx * 2;
+        if (available <= 0) return;
+
+        const dx = e.clientX - st.startX;
+        let nextMiddlePx = st.startMiddlePx + dx;
+
+        const maxMiddlePx = available - st.leftPx - minRightPx3;
+        if (maxMiddlePx < minMiddlePx3) {
+          nextMiddlePx = Math.max(minMiddlePx3, available - st.leftPx);
+        } else {
+          nextMiddlePx = Math.max(minMiddlePx3, Math.min(maxMiddlePx, nextMiddlePx));
+        }
+
+        const nextMiddleFrac = clamp01(nextMiddlePx / available);
+        characterMiddleFrac3Ref.current = nextMiddleFrac;
+        setCharacterMiddleFrac3(nextMiddleFrac);
+      }
+    },
+    [layoutWidth, splitterPx, minLeftPx2, minRightPx2, minLeftPx3, minMiddlePx3, minRightPx3]
+  );
+
+  const endResizeCharacter = React.useCallback(() => {
+    const st = characterResizeRef.current;
+    if (!st) return;
+    characterResizeRef.current = null;
+
+    if (st.kind === '2') {
+      const next = clampFrac2WithMin(characterLeftFrac2Ref.current, layoutWidth, splitterPx, minLeftPx2, minRightPx2);
+      setCharacterLeftFrac2(next);
+      characterLeftFrac2Ref.current = next;
+      void window.ckc.setConfig({ layoutCharacter2: { leftFrac: next } });
+      return;
+    }
+
+    const next3 = clampFracs3WithMin(
+      characterLeftFrac3Ref.current,
+      characterMiddleFrac3Ref.current,
+      layoutWidth,
+      splitterPx,
+      minLeftPx3,
+      minMiddlePx3,
+      minRightPx3
+    );
+    setCharacterLeftFrac3(next3.leftFrac);
+    setCharacterMiddleFrac3(next3.middleFrac);
+    characterLeftFrac3Ref.current = next3.leftFrac;
+    characterMiddleFrac3Ref.current = next3.middleFrac;
+    void window.ckc.setConfig({ layoutCharacter3: { leftFrac: next3.leftFrac, middleFrac: next3.middleFrac } });
+  }, [layoutWidth, splitterPx, minLeftPx2, minRightPx2, minLeftPx3, minMiddlePx3, minRightPx3]);
 
   React.useEffect(() => {
     window.ckc
@@ -688,7 +999,12 @@ export function CharacterView({
         </div>
       </LibraryDrawer>
 
-      <div className={styles.layout} data-mode={tab === 'notes' ? 'docs' : 'default'}>
+      <div
+        className={styles.layout}
+        data-mode={tab === 'notes' ? 'docs' : 'default'}
+        ref={layoutRef}
+        style={{ gridTemplateColumns: tab === 'notes' ? characterGridDocs : characterGridDefault }}
+      >
         <section className={styles.left}>
           <div className={styles.leftBody}>
             <MediaPane
@@ -728,9 +1044,22 @@ export function CharacterView({
           </div>
         </section>
 
+        <div
+          className={styles.splitter}
+          role="separator"
+          aria-orientation="vertical"
+          title="Resize panels"
+          onPointerDown={tab === 'notes' ? beginResizeCharacter3Left : beginResizeCharacter2}
+          onPointerMove={onResizeCharacterMove}
+          onPointerUp={endResizeCharacter}
+          onPointerCancel={endResizeCharacter}
+          onLostPointerCapture={endResizeCharacter}
+        />
+
         {tab === 'notes' ? (
-          <section className={styles.middle}>
-            <div className={styles.middleHeader}>
+          <>
+            <section className={styles.middle}>
+              <div className={styles.middleHeader}>
               <div className={styles.docsTypeRow}>
                 {(['notes', 'stories', 'moodboard'] as const).map((t) => (
                   <button
@@ -765,92 +1094,106 @@ export function CharacterView({
                   Close
                 </button>
               </div>
-            </div>
-
-            <div className={styles.middleBody}>
-              {docError ? <div className={styles.error}>{docError}</div> : null}
-
-              <div className={styles.docForm}>
-                <label className={styles.docLabel}>
-                  Title <input value={draftDocTitle} onChange={(e) => setDraftDocTitle(e.target.value)} placeholder="Untitled" />
-                </label>
-                <label className={styles.docLabel}>
-                  Tags{' '}
-                  <input
-                    value={draftDocTagsText}
-                    onChange={(e) => setDraftDocTagsText(e.target.value)}
-                    placeholder="tag, tag2"
-                  />
-                </label>
               </div>
 
-              {docType === 'moodboard' ? (
-                <>
-                  <MoodboardCanvas
-                    value={moodboard}
-                    onChange={setMoodboard}
-                    onRequestAddImage={() => {
-                      setIsImagePickerOpen(true);
-                      setImagePickerSource('character');
-                    }}
-                  />
+              <div className={styles.middleBody}>
+                {docError ? <div className={styles.error}>{docError}</div> : null}
 
-                  {isImagePickerOpen ? (
-                    <div className={styles.modalBackdrop} onClick={() => setIsImagePickerOpen(false)}>
-                      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.modalHeader}>
-                          <div className={styles.modalTitle}>Add image</div>
-                          <button className={styles.btnSecondary} onClick={() => setIsImagePickerOpen(false)}>
-                            Close
-                          </button>
-                        </div>
+                <div className={styles.docForm}>
+                  <label className={styles.docLabel}>
+                    Title{' '}
+                    <input value={draftDocTitle} onChange={(e) => setDraftDocTitle(e.target.value)} placeholder="Untitled" />
+                  </label>
+                  <label className={styles.docLabel}>
+                    Tags{' '}
+                    <input
+                      value={draftDocTagsText}
+                      onChange={(e) => setDraftDocTagsText(e.target.value)}
+                      placeholder="tag, tag2"
+                    />
+                  </label>
+                </div>
 
-                        <div className={styles.modalTabs}>
-                          <button
-                            className={styles.tabBtn}
-                            data-active={imagePickerSource === 'character' ? '1' : '0'}
-                            onClick={() => setImagePickerSource('character')}
-                          >
-                            This character
-                          </button>
-                          <button
-                            className={styles.tabBtn}
-                            data-active={imagePickerSource === 'global' ? '1' : '0'}
-                            onClick={() => setImagePickerSource('global')}
-                          >
-                            Global carousel
-                          </button>
-                        </div>
+                {docType === 'moodboard' ? (
+                  <>
+                    <MoodboardCanvas
+                      value={moodboard}
+                      onChange={setMoodboard}
+                      onRequestAddImage={() => {
+                        setIsImagePickerOpen(true);
+                        setImagePickerSource('character');
+                      }}
+                    />
 
-                        <div className={styles.modalGrid}>
-                          {(imagePickerSource === 'character' ? (character?.images ?? []) : globalPickerImages).map((img: any) => (
-                            <button
-                              key={img.id}
-                              className={styles.modalImgBtn}
-                              onClick={() => {
-                                addMoodboardImage(img.id);
-                                setIsImagePickerOpen(false);
-                              }}
-                              title={img.tags?.length ? img.tags.join(', ') : undefined}
-                            >
-                              <img className={styles.modalImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
+                    {isImagePickerOpen ? (
+                      <div className={styles.modalBackdrop} onClick={() => setIsImagePickerOpen(false)}>
+                        <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+                          <div className={styles.modalHeader}>
+                            <div className={styles.modalTitle}>Add image</div>
+                            <button className={styles.btnSecondary} onClick={() => setIsImagePickerOpen(false)}>
+                              Close
                             </button>
-                          ))}
+                          </div>
+
+                          <div className={styles.modalTabs}>
+                            <button
+                              className={styles.tabBtn}
+                              data-active={imagePickerSource === 'character' ? '1' : '0'}
+                              onClick={() => setImagePickerSource('character')}
+                            >
+                              This character
+                            </button>
+                            <button
+                              className={styles.tabBtn}
+                              data-active={imagePickerSource === 'global' ? '1' : '0'}
+                              onClick={() => setImagePickerSource('global')}
+                            >
+                              Global carousel
+                            </button>
+                          </div>
+
+                          <div className={styles.modalGrid}>
+                            {(imagePickerSource === 'character' ? (character?.images ?? []) : globalPickerImages).map((img: any) => (
+                              <button
+                                key={img.id}
+                                className={styles.modalImgBtn}
+                                onClick={() => {
+                                  addMoodboardImage(img.id);
+                                  setIsImagePickerOpen(false);
+                                }}
+                                title={img.tags?.length ? img.tags.join(', ') : undefined}
+                              >
+                                <img className={styles.modalImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <textarea
-                  className={styles.docText}
-                  value={draftDocContent}
-                  onChange={(e) => setDraftDocContent(e.target.value)}
-                  placeholder={docType === 'notes' ? 'Write a note…' : 'Write a story…'}
-                />
-              )}
-            </div>
-          </section>
+                    ) : null}
+                  </>
+                ) : (
+                  <textarea
+                    className={styles.docText}
+                    value={draftDocContent}
+                    onChange={(e) => setDraftDocContent(e.target.value)}
+                    placeholder={docType === 'notes' ? 'Write a note…' : 'Write a story…'}
+                  />
+                )}
+              </div>
+            </section>
+
+            <div
+              className={styles.splitter}
+              role="separator"
+              aria-orientation="vertical"
+              title="Resize panels"
+              onPointerDown={beginResizeCharacter3Middle}
+              onPointerMove={onResizeCharacterMove}
+              onPointerUp={endResizeCharacter}
+              onPointerCancel={endResizeCharacter}
+              onLostPointerCapture={endResizeCharacter}
+            />
+          </>
         ) : null}
 
         <aside className={styles.right}>

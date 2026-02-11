@@ -1,12 +1,8 @@
 .layout {
   height: 100%;
   display: grid;
-  grid-template-columns: 1fr 560px;
+  grid-template-columns: 1fr;
   min-height: 0;
-}
-
-.layout[data-mode='docs'] {
-  grid-template-columns: 1fr 520px 560px;
 }
 
 .left {
@@ -18,11 +14,23 @@
 }
 
 .right {
-  border-left: 1px solid var(--glass-border);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+}
+
+.splitter {
+  cursor: col-resize;
+  background: rgba(0, 0, 0, 0.03);
+  border-left: 1px solid var(--glass-border);
+  border-right: 1px solid var(--glass-border);
+  touch-action: none;
+}
+
+.splitter:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .leftHeader {
@@ -159,10 +167,10 @@
 }
 
 .middle {
-  border-left: 1px solid var(--glass-border);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 

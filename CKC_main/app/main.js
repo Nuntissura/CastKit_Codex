@@ -297,11 +297,20 @@ function registerIpcHandlers() {
     });
 
     ipcMain.handle('ckc:setConfig', async (_evt, nextConfig) => {
-        appConfig = { ...appConfig, ...nextConfig };
+        const patch = nextConfig && typeof nextConfig === 'object' ? nextConfig : {};
+        const prevLibraryRoot = appConfig?.libraryRoot;
+        const merged = { ...appConfig, ...patch };
+        const nextLibraryRoot = merged?.libraryRoot;
+
+        appConfig = merged;
         saveConfig(appConfigPath, appConfig);
-        // Reinitialize library if libraryRoot changed.
-        resetLibrary();
-        await ensureLibrary();
+
+        // Only reinitialize the library when libraryRoot changes.
+        if (typeof nextLibraryRoot === 'string' && nextLibraryRoot !== prevLibraryRoot) {
+            resetLibrary();
+            await ensureLibrary();
+        }
+
         return appConfig;
     });
 
