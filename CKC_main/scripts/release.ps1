@@ -12,7 +12,7 @@ function Assert-LastExitOk([string]$Context) {
   }
 }
 
-function Git([string[]]$Args) {
+function Run-Git([string[]]$Args) {
   & git @Args | Out-Null
   Assert-LastExitOk ("git " + ($Args -join ' '))
 }
@@ -44,16 +44,16 @@ $ver = [string]$pkg.version
 if (-not $ver) { throw "Failed to read version from package.json" }
 $tag = "v$ver"
 
-Git @('add', '--', 'package.json', 'package-lock.json')
-Git @('commit', '-m', "release: $tag")
-Git @('tag', $tag)
+Run-Git @('add', '--', 'package.json', 'package-lock.json')
+Run-Git @('commit', '-m', "release: $tag")
+Run-Git @('tag', $tag)
 
 Write-Host "Packaging installer + portable..."
 & npm run package:win:raw | Out-Host
 Assert-LastExitOk "npm run package:win:raw"
 
 Write-Host "Pushing commit + tag..."
-Git @('push', 'origin', $branch)
-Git @('push', 'origin', $tag)
+Run-Git @('push', 'origin', $branch)
+Run-Git @('push', 'origin', $tag)
 
 Write-Host "Done. Tag pushed: $tag"
