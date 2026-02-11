@@ -44,10 +44,10 @@ npm run build
 ```
 
 ## Package (Windows)
-Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts`.
+Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\` (local builds).
 ```powershell
 npm run package:win
 ```
 
 Packaging creates a **versioned** output folder under:
-- `..\\CKC_GOV\\targets\\CKC\\artifacts\\`
+- `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\`

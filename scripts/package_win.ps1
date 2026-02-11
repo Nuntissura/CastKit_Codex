@@ -1,7 +1,9 @@
 param(
   [ValidateSet('x64')]
   [string]$Arch = 'x64',
-  [string]$GovRoot = $null
+  [string]$GovRoot = $null,
+  [ValidateSet('dev', 'release')]
+  [string]$Kind = $null
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,17 +57,49 @@ if ($dirty -and $dirty.Trim().Length -gt 0) {
   throw "Working tree not clean. Commit/stash changes before packaging.`n$dirty"
 }
 
-$stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$buildId = "v$version+$gitSha-$stamp"
+$exactTag = $null
+try {
+  $exactTag = (git -C $repoRoot describe --tags --exact-match 2>$null).Trim()
+} catch {
+  $exactTag = $null
+}
+
+$releaseVersion = $null
+if ($exactTag -and $exactTag -match '^v(\d+\.\d+\.\d+)$') {
+  $releaseVersion = $matches[1]
+}
+
+if (-not $Kind) {
+  $Kind = if ($releaseVersion) { 'release' } else { 'dev' }
+}
+
+$effectiveVersion = $version
+if ($Kind -eq 'release') {
+  if (-not $releaseVersion) {
+    throw "Release build requested but current commit is not tagged like vX.Y.Z (got: '$exactTag')."
+  }
+  $effectiveVersion = $releaseVersion
+}
+
+$stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+$buildId = "${stamp}__${gitSha}"
+
+$artifactsRelParts = @()
+if ($Kind -eq 'dev') {
+  $artifactsRelParts = @('dev', $buildId)
+} else {
+  $artifactsRelParts = @('releases', "v$effectiveVersion", $buildId)
+}
 
 $stageRoot = Path-Combine @($ckcTargets, 'stage', $buildId)
-$artifactsRoot = Path-Combine @($ckcTargets, 'artifacts', $buildId)
-$artifactsRootRelFromArtifactsBase = ".\\$buildId"
+$artifactsRoot = Path-Combine (@($ckcTargets, 'artifacts') + $artifactsRelParts)
+$artifactsRootRelFromArtifactsBase = (Path-Combine $artifactsRelParts)
 
 New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
 
-Write-Host "CKC packaging (Windows) - $buildId"
+Write-Host "CKC packaging (Windows) - $Kind - $buildId"
+Write-Host "Version:   $effectiveVersion"
 Write-Host "Stage:     $stageRoot"
 Write-Host "Artifacts: $artifactsRoot"
 
@@ -95,7 +129,7 @@ if (-not $electronVersion) { $electronVersion = '34.2.0' }
 
 $stagePkg = [ordered]@{
   name = [string]$pkg.name
-  version = $version
+  version = $effectiveVersion
   private = $true
   main = 'app/main.js'
   dependencies = [ordered]@{
@@ -107,7 +141,7 @@ $stagePkg = [ordered]@{
     electronVersion = $electronVersion
     directories = [ordered]@{
       # Keep build metadata drive-letter agnostic: a relative output is resolved from --projectDir ($stageRoot).
-      output = (Path-Combine @('..', '..', 'artifacts', $buildId))
+      output = (Path-Combine (@('..', '..', 'artifacts') + $artifactsRelParts))
     }
     files = @(
       'app/**/*',
@@ -156,13 +190,53 @@ Write-Host "Done. Artifacts in: $artifactsRoot"
 $latestInfoPath = Path-Combine @($ckcTargets, 'artifacts', 'LATEST_BUILD.txt')
 $createdAt = (Get-Date -Format o)
 
+$buildInfoText = @(
+  "buildId: $buildId"
+  "kind: $Kind"
+  "version: $effectiveVersion"
+  "sourceVersion: $version"
+  "gitSha: $gitSha"
+  if ($exactTag) { "gitTag: $exactTag" } else { $null }
+  "createdAt: $createdAt"
+  ''
+) | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Out-String
+[System.IO.File]::WriteAllText((Join-Path $artifactsRoot 'BUILD_INFO.txt'), $buildInfoText, $utf8NoBom)
+
+if ($Kind -eq 'dev') {
+  $stampForFile = $stamp -replace '_', '-'
+  $suffix = "dev $gitSha $stampForFile"
+
+  $exeFiles = Get-ChildItem -LiteralPath $artifactsRoot -Filter '*.exe' -File | Sort-Object Name
+  $installer = $exeFiles | Where-Object { $_.Name -like '*Setup*' } | Select-Object -First 1
+  $portable = $exeFiles | Where-Object { $_.Name -notlike '*Setup*' } | Select-Object -First 1
+
+  if ($portable) {
+    $newPortableName = "CastKit Codex $effectiveVersion ($suffix).exe"
+    Rename-Item -LiteralPath $portable.FullName -NewName $newPortableName -Force
+  }
+
+  if ($installer) {
+    $installerOldName = $installer.Name
+    $newInstallerName = "CastKit Codex Setup $effectiveVersion ($suffix).exe"
+    Rename-Item -LiteralPath $installer.FullName -NewName $newInstallerName -Force
+
+    $oldBlockmapPath = Join-Path $artifactsRoot ($installerOldName + '.blockmap')
+    if (Test-Path -LiteralPath $oldBlockmapPath) {
+      Rename-Item -LiteralPath $oldBlockmapPath -NewName ($newInstallerName + '.blockmap') -Force
+    }
+  }
+}
+
 $topFiles = Get-ChildItem -LiteralPath $artifactsRoot -File | Sort-Object Name
 $manifest = [ordered]@{
   buildId = $buildId
-  version = $version
+  kind = $Kind
+  version = $effectiveVersion
+  sourceVersion = $version
   gitSha = $gitSha
+  gitTag = $exactTag
   createdAt = $createdAt
-  artifacts = (Path-Combine @('CKC_GOV', 'targets', 'CKC', 'artifacts', $buildId))
+  artifacts = (Path-Combine (@('CKC_GOV', 'targets', 'CKC', 'artifacts') + $artifactsRelParts))
   files = @(
     foreach ($f in $topFiles) {
       $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $f.FullName).Hash.ToLowerInvariant()
@@ -184,13 +258,16 @@ $shaLines = foreach ($entry in $manifest.files) { "{0}  {1}" -f $entry.sha256, $
 
 $latestInfo = @(
   "buildId: $buildId"
-  "version: $version"
+  "kind: $Kind"
+  "version: $effectiveVersion"
+  "sourceVersion: $version"
   "gitSha: $gitSha"
+  if ($exactTag) { "gitTag: $exactTag" } else { $null }
   "createdAt: $createdAt"
   "artifacts: $artifactsRootRelFromArtifactsBase"
   "manifest: $artifactsRootRelFromArtifactsBase\\manifest.json"
   "sha256: $artifactsRootRelFromArtifactsBase\\SHA256SUMS.txt"
   ''
-) -join "`n"
+) | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Out-String
 [System.IO.File]::WriteAllText($latestInfoPath, $latestInfo, $utf8NoBom)
 Write-Host "Updated:  $latestInfoPath"
