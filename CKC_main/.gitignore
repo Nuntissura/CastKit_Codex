@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# builds / packaging
+dist/
+release/
+out/
+*.map
+
+# logs
+*.log
+CKC_GOV/targets/
+
+# env
+.env
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# scratch
+TEST_APPLY_PATCH.txt

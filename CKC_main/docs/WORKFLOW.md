@@ -2,6 +2,10 @@
 
 This repo is `https://github.com/Nuntissura/CastKit_Codex`.
 
+Repo layout:
+- `CKC_main/` — source code
+- `CKC_GOV/` — governance (**except** `CKC_GOV/targets/` which is ignored)
+
 On the workstation, governance lives under `<CKC_ROOT>\\CKC_GOV` (Task Board, Work Packets, spec archive, targets/artifacts).
 
 `<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.

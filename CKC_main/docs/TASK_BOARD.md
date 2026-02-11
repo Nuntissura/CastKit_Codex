@@ -4,8 +4,8 @@ Last updated: 2026-02-11
 
 This is the single source of truth for work status.
 
-This file is mirrored into the git repo for visibility:
-- Mirror: `CKC_main/docs/TASK_BOARD.md`
+This is a mirror of the canonical Task Board:
+- Canonical: `CKC_GOV/taskboard/TASK_BOARD.md`
 
 ## Status legend
 - `BACKLOG` — not started
@@ -36,6 +36,7 @@ This file is mirrored into the git repo for visibility:
 | WP-0018 | Theme port from old build (palette + typography) | DONE | Codex | Ported CSS vars + font stacks; added accent glow; sheet Field ID/optional styling aligned to recovered build. |
 | WP-0019 | Drive-letter agnostic paths (docs + scripts) | DONE | Codex | Removed hard-coded drive-letter paths from onboarding docs; backup + packaging scripts avoid drive-letter paths in metadata. |
 | WP-0020 | Build artifacts naming (no version bumps for local builds) | DONE | Codex | Local builds go under `artifacts/dev/v<localVersion>` and `.exe` filenames include the local version; release builds go under `artifacts/releases/vX.Y.Z/<buildId>`. |
+| WP-0021 | Monorepo root: track governance with product | DONE | Codex | Git repo root moved to `<CKC_ROOT>` so `CKC_GOV/` is committed alongside `CKC_main/` (while `CKC_GOV/targets/` stays ignored); release workflow runs from `CKC_main/`. |
 
 ## Current focus
 - Current: (none) — all listed work packets are DONE.

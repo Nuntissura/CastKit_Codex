@@ -20,17 +20,20 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: CKC_main/package-lock.json
 
       - name: Install dependencies
+        working-directory: CKC_main
         run: npm ci --legacy-peer-deps
 
       - name: Package (installer + portable)
+        working-directory: CKC_main
         run: npm run package:win
 
       - name: Collect release assets
         shell: pwsh
         run: |
-          $govRoot = Resolve-Path (Join-Path $PWD.Path '..' 'CKC_GOV')
+          $govRoot = Resolve-Path (Join-Path $PWD.Path 'CKC_GOV')
           $latest = Join-Path $govRoot 'targets' 'CKC' 'artifacts' 'LATEST_BUILD.txt'
           if (!(Test-Path -LiteralPath $latest)) { throw "Missing: $latest" }
 

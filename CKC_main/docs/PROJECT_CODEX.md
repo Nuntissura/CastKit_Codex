@@ -1,11 +1,11 @@
 ﻿# CastKit Codex (CKC) — Project Codex & Workflow
 
-This folder (`CKC_GOV`) is the **governance + tracking + build targets** home for CKC.
+This is a mirror of the canonical Project Codex:
+- Canonical: `CKC_GOV/PROJECT_CODEX.md`
 
-**Source code lives separately** in `<CKC_ROOT>\\CKC_main`.
-
-This file is mirrored into the git repo for visibility:
-- Mirror: `CKC_main/docs/PROJECT_CODEX.md`
+This GitHub repo tracks BOTH:
+- `CKC_main/` — source code
+- `CKC_GOV/` — governance (**except** `CKC_GOV/targets/` which is ignored)
 
 `<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
 
@@ -36,7 +36,7 @@ Daily workflow (MUST):
 - No censorship: never redact/rewrite user text.
 - Template integrity: never drop Field IDs; preserve template order.
 - UI: minimal by default; sharp corners.
-- Build artifacts must NOT be stored in the source repo.
+- Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
 - Workflow: create a Work Packet **before** coding; update Task Board + Spec; then commit + push.
 
 ## Folder map
@@ -114,7 +114,7 @@ This writes versioned outputs under:
 Do **not** commit `.exe` artifacts into `CKC_main` git history. Instead, publish them as a GitHub Release.
 
 There is a workflow in the repo that builds Windows artifacts on tag push:
-- `CKC_main/.github/workflows/release-win.yml` (triggers on tags like `v1.2.3`)
+- `.github/workflows/release-win.yml` (triggers on tags like `v1.2.3`)
 
 Recommended flow:
 ```powershell

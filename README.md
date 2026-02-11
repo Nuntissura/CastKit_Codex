@@ -1,53 +1,36 @@
 # CastKit Codex (CKC)
 
-Source repo: `<CKC_ROOT>\\CKC_main`  
-Governance / artifacts: `<CKC_ROOT>\\CKC_GOV`
+This repository contains:
+- `CKC_main/` — application source (Electron + React + SQLite)
+- `CKC_GOV/` — governance (spec, task board, work packets, templates, backup scripts)
 
-`<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
+Notes:
+- Build outputs/caches live under `CKC_GOV/targets/` and are ignored (never commit).
+- Local Windows packaging runs from `CKC_main/` and writes versioned artifacts under `CKC_GOV/targets/CKC/artifacts/`.
 
-## Start here (governance + workflow)
+## Start here (order matters)
+1. `CKC_GOV/PROJECT_CODEX.md`
+2. `CKC_GOV/taskboard/TASK_BOARD.md`
+3. `CKC_GOV/spec/CastKit_Codex_Spec_v00.023.md`
+4. `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md`
 
-On this workstation, the governance folder (`CKC_GOV`) is the source of truth. Key files are mirrored into this repo under `docs/` so new devs can read them from GitHub:
-- `docs/PROJECT_CODEX.md` (workflow, build targets, backup)
-- `docs/WORKFLOW.md` (WP -> Spec -> Git)
-- `docs/TASK_BOARD.md` (status)
-- `docs/CastKit_Codex_Spec_v00.023.md` (current spec)
-- `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
-
-Workflow (MUST):
-1. Create/choose a Work Packet (`CKC_GOV/work_packets/WP-xxxx_*.md`) and update `CKC_GOV/taskboard/TASK_BOARD.md`.
-2. Keep changes scoped to the active WP.
-3. Update spec (version bump + archive) and mirror into `CKC_main/docs/`.
-4. Run tests, then commit (`WP-xxxx: ...`) and push `origin/main`.
-5. Run the NAS mirror backup script.
-
-## Backup (NAS mirror)
+## Dev (Windows)
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "..\\CKC_GOV\\scripts\\backup_to_mir.ps1"
-```
-
-## Dev
-```powershell
+cd CKC_main
 npm install
-npm run dev
-```
-
-Run the full Electron app (renderer + main process):
-```powershell
 npm run electron:dev
 ```
 
-## Build (local)
-Build output goes to `..\\CKC_GOV\\targets\\scratch\\renderer-dist`.
-```powershell
-npm run build
-```
-
 ## Package (Windows)
-Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\v<localVersion>\\` (local builds; version auto-includes timestamp+git SHA).
 ```powershell
+cd CKC_main
 npm run package:win
 ```
 
-Packaging creates a **versioned** output folder under:
-- `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\`
+## Release (Windows)
+Push a SemVer tag (`vX.Y.Z`) on `main` to trigger `.github/workflows/release-win.yml`.
+
+## Backup (NAS mirror)
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File CKC_GOV\\scripts\\backup_to_mir.ps1
+```
