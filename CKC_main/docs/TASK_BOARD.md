@@ -16,7 +16,7 @@ This is a mirror of the canonical Task Board:
 ## Work packets
 | ID | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| WP-0001 | Rebuild `CKC_main` source repo on K: | DONE | Codex | `npm test` passes; `npm run dev` + `npm run electron:dev` smoke-verified; packaging outputs to `CKC_GOV/targets/CKC/artifacts`; repo stays clean (no `dist/`). |
+| WP-0001 | Rebuild `CKC_main` source repo under `<CKC_ROOT>` | DONE | Codex | `npm test` passes; `npm run dev` + `npm run electron:dev` smoke-verified; packaging outputs to `CKC_GOV/targets/CKC/artifacts`; repo stays clean (no `dist/`). |
 | WP-0002 | Bring spec up to date (v00.019+) | DONE | Codex | `v00.019` created + mirrored into `CKC_main/docs/`; `v00.004` archived in `spec/archive_spec/`. |
 | WP-0003 | Portfolio layout + drawers + minimal UI | DONE | Codex | Two-panel default, 3-panel docs mode, menu/library drawers, hidden command bars. |
 | WP-0004 | Ratings (0–5) assign + filter ops + slideshow | DONE | Codex | Hotkeys + star UI + clear; operator filters; fullscreen + slideshow. |
@@ -35,9 +35,10 @@ This is a mirror of the canonical Task Board:
 | WP-0017 | Packaging: fix white window in built .exe | DONE | Codex | Set Vite build base to `./` for `file://`; add packaging guardrail to reject `/assets/...` output. |
 | WP-0018 | Theme port from old build (palette + typography) | DONE | Codex | Ported CSS vars + font stacks; added accent glow; sheet Field ID/optional styling aligned to recovered build. |
 | WP-0019 | Drive-letter agnostic paths (docs + scripts) | DONE | Codex | Removed hard-coded drive-letter paths from onboarding docs; backup + packaging scripts avoid drive-letter paths in metadata. |
-| WP-0020 | Build artifacts naming (no version bumps for local builds) | DONE | Codex | Local builds go under `artifacts/dev/v<localVersion>` and `.exe` filenames include the local version; release builds go under `artifacts/releases/vX.Y.Z/<buildId>`. |
+| WP-0020 | Build artifacts naming (no version bumps for local builds) | DONE | Codex | Updated policy: distributable builds bump SemVer + tag. `package:win:raw` outputs dev/debug builds to `artifacts/dev/<buildId>`; tagged releases output to `artifacts/releases/vX.Y.Z/`; `package:win` bumps+tags+packages+pushes. |
 | WP-0021 | Monorepo root: track governance with product | DONE | Codex | Git repo root moved to `<CKC_ROOT>` so `CKC_GOV/` is committed alongside `CKC_main/` (while `CKC_GOV/targets/` stays ignored); release workflow runs from `CKC_main/`. |
 | WP-0022 | Track `CKC_GOV/user_ilja` in git | DONE | Codex | Removed ignore for `CKC_GOV/user_ilja/` so personal scripts/notes can be versioned with the repo. |
+| WP-0023 | Session dump gaps: docs smart tags, character exports, moodboard tools | DONE | Codex | Implemented + unit-tested; manual smoke check recommended (export/import/moodboard). |
 
 ## Current focus
 - Current: (none) — all listed work packets are DONE.

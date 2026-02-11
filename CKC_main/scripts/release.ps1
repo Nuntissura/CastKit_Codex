@@ -27,7 +27,7 @@ if ($dirty) {
 
 $branch = (git rev-parse --abbrev-ref HEAD).Trim()
 if ($branch -ne 'main') {
-  Write-Host "Warning: current branch is '$branch' (expected 'main'). Continuing..."
+  throw "Release builds must run from branch 'main' (current: '$branch')."
 }
 
 Write-Host "Bumping version..."
@@ -49,12 +49,11 @@ Git @('commit', '-m', "release: $tag")
 Git @('tag', $tag)
 
 Write-Host "Packaging installer + portable..."
-& npm run package:win | Out-Host
-Assert-LastExitOk "npm run package:win"
+& npm run package:win:raw | Out-Host
+Assert-LastExitOk "npm run package:win:raw"
 
 Write-Host "Pushing commit + tag..."
-Git @('push')
+Git @('push', 'origin', $branch)
 Git @('push', 'origin', $tag)
 
 Write-Host "Done. Tag pushed: $tag"
-

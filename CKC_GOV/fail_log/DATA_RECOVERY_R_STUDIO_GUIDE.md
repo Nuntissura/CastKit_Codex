@@ -14,7 +14,7 @@ That means:
 - Don’t run “repair” tools like `chkdsk`
 - Don’t “optimize/defrag” it
 
-Recover files **to a different drive** (for example your NAS or `K:`).
+Recover files **to a different drive** (for example your NAS or your CKC work drive, e.g. `<CKC_ROOT>`).
 
 ## 1) Prepare a safe recovery destination
 Create a folder on a different drive with lots of free space, e.g.:
@@ -41,7 +41,7 @@ If you have enough space on another drive, creating an image makes recovery safe
 In R‑Studio, look for something like:
 - “Create Image” / “Byte‑by‑byte image”
 
-Save the image to `K:` or the NAS, then run scans on the **image** instead of the real disk.
+Save the image to your NAS (preferred) or your CKC work drive (e.g. `<CKC_ROOT>`), then run scans on the **image** instead of the real disk.
 
 If you don’t have enough space for an image: continue without imaging, but be extra careful not to write to the disk.
 
@@ -68,7 +68,7 @@ If you stop and restart scanning:
 - It’s not “bad”, but you lose time because it scans again.
 - If you restarted, keep it running as long as the PC is stable.
 
-If R‑Studio offers to save scan information / session, do it to `K:` so you can resume later.
+If R‑Studio offers to save scan information / session, save it to your NAS or your CKC work drive (e.g. `<CKC_ROOT>`) so you can resume later.
 
 ## 7) After the scan: where to look
 When the scan finishes, you’ll see results like:

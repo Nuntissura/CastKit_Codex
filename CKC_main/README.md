@@ -16,10 +16,11 @@ Governance lives in `CKC_GOV/` (source of truth). Key files are mirrored into `C
 
 Workflow (MUST):
 1. Create/choose a Work Packet (`CKC_GOV/work_packets/WP-xxxx_*.md`) and update `CKC_GOV/taskboard/TASK_BOARD.md`.
-2. Keep changes scoped to the active WP.
-3. Update spec (version bump + archive) and mirror into `CKC_main/docs/`.
-4. Run tests, then commit (`WP-xxxx: ...`) and push `origin/main`.
-5. Run the NAS mirror backup script.
+2. **Commit + push immediately** (planning checkpoint) so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
+3. Keep changes scoped to the active WP.
+4. Update spec (version bump + archive) and mirror into `CKC_main/docs/`.
+5. Run tests, then commit (`WP-xxxx: ...`) and push `origin/main`.
+6. Run the NAS mirror backup script.
 
 ## Backup (NAS mirror)
 ```powershell
@@ -44,10 +45,18 @@ npm run build
 ```
 
 ## Package (Windows)
-Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\v<localVersion>\\` (local builds; version auto-includes timestamp+git SHA).
+Default (recommended) creates a traceable, versioned build:
 ```powershell
 npm run package:win
 ```
 
-Packaging creates a **versioned** output folder under:
-- `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\`
+Outputs to:
+- `..\\CKC_GOV\\targets\\CKC\\artifacts\\releases\\vX.Y.Z\\`
+
+Packaging-only (no version bump/tag/push) for quick debugging:
+```powershell
+npm run package:win:raw
+```
+
+Outputs to:
+- `..\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\`

@@ -25,5 +25,4 @@ The packaged app uses `BrowserWindow.loadFile(...)` to open `dist/index.html`. I
 ## Test plan
 - [x] `npm test`
 - [x] `npx tsc --noEmit`
-- [x] `npm run package:win` and verify `CKC_GOV/targets/CKC/artifacts/LATEST_BUILD.txt` updated.
-
+- [x] `npm run package:win:raw` and verify `CKC_GOV/targets/CKC/artifacts/LATEST_BUILD.txt` updated.

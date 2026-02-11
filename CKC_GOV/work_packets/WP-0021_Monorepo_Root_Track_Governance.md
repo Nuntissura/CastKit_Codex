@@ -25,7 +25,7 @@ Governance must be versioned together with the product so new developers always 
 ## Acceptance criteria
 - [ ] `CKC_GOV/` is present on GitHub after push (spec, taskboard, work packets, templates, scripts).
 - [ ] `CKC_GOV/targets/` is ignored and does not appear in `git status`.
-- [ ] `.github/workflows/release-win.yml` runs `npm ci` + `npm run package:win` from `CKC_main/`.
+- [ ] `.github/workflows/release-win.yml` runs `npm ci` + `npm run package:win:raw` from `CKC_main/`.
 - [ ] Root `README.md` explains repo layout and points to canonical governance docs.
 
 ## Test plan
@@ -49,4 +49,3 @@ Revert the WP-0021 commit on `main` and restore the previous single-folder repo 
 ## Notes
 - Do NOT commit build artifacts; publish official builds as GitHub Release assets.
 - Keep `CKC_GOV/targets/` ignored.
-

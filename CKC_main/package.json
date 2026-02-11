@@ -11,7 +11,9 @@
     "build": "vite build --emptyOutDir --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "preview": "vite preview --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "test": "node --test",
-    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
+    "package:win:raw": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
+    "release:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
     "electron:build": "npm run package:win"
   },
   "dependencies": {

@@ -18,7 +18,7 @@ This log exists so future work can avoid repeating mistakes.
 - Do not run destructive deletes via `cmd` loops.
 - Prefer PowerShell `Remove-Item -LiteralPath ... -WhatIf` first.
 - Always enumerate targets explicitly and print them before deletion.
-- Perform cleanup only in a dedicated workspace (here: `K:`), never on recovery drives.
+- Perform cleanup only in a dedicated workspace (the CKC work drive, e.g. `<CKC_ROOT>`), never on recovery drives.
 
 **Recovery help**
 - A beginner-friendly recovery walkthrough was written to: `CKC_GOV/fail_log/DATA_RECOVERY_R_STUDIO_GUIDE.md`.

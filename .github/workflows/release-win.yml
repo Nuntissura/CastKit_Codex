@@ -28,7 +28,7 @@ jobs:
 
       - name: Package (installer + portable)
         working-directory: CKC_main
-        run: npm run package:win
+        run: npm run package:win:raw
 
       - name: Collect release assets
         shell: pwsh

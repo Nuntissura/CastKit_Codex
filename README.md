@@ -27,8 +27,16 @@ cd CKC_main
 npm run package:win
 ```
 
+This is the default: it bumps patch version, commits, tags `vX.Y.Z`, packages, and pushes commit+tag.
+
+Packaging-only (no version bump/tag/push):
+```powershell
+cd CKC_main
+npm run package:win:raw
+```
+
 ## Release (Windows)
-Push a SemVer tag (`vX.Y.Z`) on `main` to trigger `.github/workflows/release-win.yml`.
+Push a SemVer tag (`vX.Y.Z`) on `main` to trigger `.github/workflows/release-win.yml` (GitHub Release assets).
 
 ## Backup (NAS mirror)
 ```powershell

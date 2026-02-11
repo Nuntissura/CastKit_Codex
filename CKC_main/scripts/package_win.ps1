@@ -90,21 +90,19 @@ if ($Kind -eq 'release') {
   }
   $effectiveVersion = $releaseVersion
 } else {
-  $stampDate = Get-Date -Format 'yyyyMMdd'
-  $stampTime = Get-Date -Format 'HHmmss'
-  # Dev builds auto-generate a monotonically increasing SemVer prerelease version so builds are easy to tell apart.
-  # Example: 0.2.0-dev.20260211.120940.ee3bc03
-  $effectiveVersion = "${baseVersion}-dev.${stampDate}.${stampTime}.${gitSha}"
+  # For dev builds, keep the app version stable and use a buildId folder for uniqueness.
+  $effectiveVersion = $baseVersion
 }
 
 $stampFolder = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-$buildId = if ($Kind -eq 'dev') { "v$effectiveVersion" } else { "v${effectiveVersion}__${stampFolder}__${gitSha}" }
+$buildId = if ($Kind -eq 'dev') { "dev__${stampFolder}__${gitSha}" } else { "v$effectiveVersion" }
 
 $artifactsRelParts = @()
 if ($Kind -eq 'dev') {
   $artifactsRelParts = @('dev', $buildId)
 } else {
-  $artifactsRelParts = @('releases', "v$effectiveVersion", $buildId)
+  # One folder per SemVer release (tagged vX.Y.Z on main).
+  $artifactsRelParts = @('releases', "v$effectiveVersion")
 }
 
 $stageRoot = Path-Combine @($ckcTargets, 'stage', $buildId)

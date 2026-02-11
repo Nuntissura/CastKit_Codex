@@ -67,7 +67,7 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 - `targets/`
   - `CKC/artifacts/` — build outputs (**not** stored in git)
-    - `CKC/artifacts/dev/` — local builds (version auto-includes timestamp+git SHA, so builds are easy to tell apart)
+    - `CKC/artifacts/dev/` — local/debug builds (folder `buildId` includes timestamp+git SHA)
     - `CKC/artifacts/releases/` — release builds (tagged `vX.Y.Z` on `main`)
   - `CKC/logs/` — build logs
   - `cache/` — npm/electron caches (keep C: clean)
@@ -93,11 +93,13 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
 
 ### Versioning + release policy (MUST)
-- **Release version** = SemVer (`vX.Y.Z`) for official releases (release builds take the version from the git tag).
-- **Local builds** must NOT require manual version bumps: `npm run package:win` auto-generates a SemVer prerelease version like `0.2.0-dev.20260211.120940.ee3bc03` so you can always tell which build is newer.
-- Local builds go to `CKC_GOV/targets/CKC/artifacts/dev/v<localVersion>/`.
-- Official release builds are tied to a git tag (`vX.Y.Z`) on `main` and published as GitHub Release assets (immutable, off-machine backup). Local release builds go under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/<buildId>/`.
-- Keep per-build checksums/manifest (`manifest.json` + `SHA256SUMS.txt`), and keep `LATEST_BUILD.txt` updated.
+- Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
+- Publish official builds as **GitHub Release assets** (immutable, off-machine backup).
+- Local artifacts still land under `CKC_GOV/targets/CKC/artifacts/` for convenience, with per-build checksums/manifest (`manifest.json` + `SHA256SUMS.txt`) and `LATEST_BUILD.txt` updated.
+
+Commands:
+- `npm run package:win` — **default**: bumps patch version, commits, tags `vX.Y.Z`, packages, and pushes commit+tag.
+- `npm run package:win:raw` — packaging only (no version bump/tag/push). Use for quick local debugging.
 
 ### Packaging (Windows)
 Build a portable `.exe` and NSIS installer `.exe` using:
@@ -107,8 +109,8 @@ npm run package:win
 ```
 
 This writes versioned outputs under:
-- Local: `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\v<localVersion>\\`
-- Release (tagged): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\releases\\vX.Y.Z\\<buildId>\\`
+- Release (tagged): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\releases\\vX.Y.Z\\`
+- Dev/debug (`package:win:raw`): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\`
 
 ### Publishing a GitHub Release (recommended)
 Do **not** commit `.exe` artifacts into `CKC_main` git history. Instead, publish them as a GitHub Release.
@@ -119,15 +121,17 @@ There is a workflow in the repo that builds Windows artifacts on tag push:
 Recommended flow:
 ```powershell
 cd "<CKC_ROOT>\\CKC_main"
-git tag vX.Y.Z
-git push origin vX.Y.Z
+npm run package:win
 ```
-The tag triggers GitHub Actions to attach the installer + portable `.exe` to the GitHub Release.
+This bumps patch version, commits, tags `vX.Y.Z`, packages locally, and pushes commit+tag.
+The pushed tag triggers GitHub Actions to attach the installer + portable `.exe` to the GitHub Release.
 
-Optional automation (does bump + commit + tag for you):
+Manual alternative (only if you really want to manage tags yourself):
 ```powershell
 cd "<CKC_ROOT>\\CKC_main"
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch
+git tag vX.Y.Z
+git push origin vX.Y.Z
+npm run package:win:raw
 ```
 
 ## Working process
