@@ -61,6 +61,11 @@ export function CharacterView({
   const [iconError, setIconError] = React.useState<string | null>(null);
   const [isIconSaving, setIsIconSaving] = React.useState<boolean>(false);
 
+  const [manualTagDraftText, setManualTagDraftText] = React.useState<string>('');
+  const [isTagSaving, setIsTagSaving] = React.useState<boolean>(false);
+  const [allTags, setAllTags] = React.useState<string[]>([]);
+  const tagsDatalistId = React.useId();
+
   const [docType, setDocType] = React.useState<CKCDocType>('notes');
   const [docQueryText, setDocQueryText] = React.useState<string>('');
   const [docs, setDocs] = React.useState<CKCDocListItem[] | null>(null);
@@ -99,7 +104,14 @@ export function CharacterView({
     if (!character) return;
     setDraftValuesById(character.valuesById || {});
     void window.ckc.getTemplateDetail(character.templateId).then((detail) => setTemplateAst(detail?.ast ?? null));
-  }, [character]);
+  }, [character?.id, character?.templateId]);
+
+  React.useEffect(() => {
+    window.ckc
+      .listAllTags()
+      .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
+      .catch(() => setAllTags([]));
+  }, []);
 
   React.useEffect(() => {
     if (!characterId) return;
@@ -256,6 +268,55 @@ export function CharacterView({
       setIsSaving(false);
     }
   };
+
+  const reloadCharacter = React.useCallback(async () => {
+    if (!characterId) return;
+    const refreshed = await window.ckc.getCharacter(characterId);
+    if (refreshed) setCharacter(refreshed);
+  }, [characterId]);
+
+  const addManualTags = React.useCallback(async () => {
+    if (!characterId) return;
+    const parts = tagsTextToArray(manualTagDraftText);
+    if (parts.length === 0) return;
+    setIsTagSaving(true);
+    setError(null);
+    try {
+      for (const raw of parts) {
+        const trimmed = String(raw).trim();
+        if (!trimmed) continue;
+        const canonical = allTags.find((t) => String(t).toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+        await window.ckc.addManualTag({ characterId, tagText: String(canonical) });
+      }
+      setManualTagDraftText('');
+      await reloadCharacter();
+      window.ckc
+        .listAllTags()
+        .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
+        .catch(() => {});
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsTagSaving(false);
+    }
+  }, [characterId, manualTagDraftText, allTags, reloadCharacter]);
+
+  const removeManualTag = React.useCallback(
+    async (tagText: string) => {
+      if (!characterId) return;
+      setIsTagSaving(true);
+      setError(null);
+      try {
+        await window.ckc.removeManualTag({ characterId, tagText });
+        await reloadCharacter();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIsTagSaving(false);
+      }
+    },
+    [characterId, reloadCharacter]
+  );
 
   const docTags = React.useMemo(() => tagsTextToArray(draftDocTagsText), [draftDocTagsText]);
 
@@ -628,6 +689,85 @@ export function CharacterView({
               {tab === 'sheet' ? (
                 <>
                   <div className={styles.sectionTitle}>Sheet</div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800 }}>Tags</span>
+                      {(character.tags || [])
+                        .filter((t) => t.type === 'manual')
+                        .map((t) => t.text)
+                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                        .map((t) => (
+                          <button
+                            key={`manual-${t}`}
+                            className={styles.btnSecondary}
+                            style={{ padding: '4px 8px' }}
+                            onClick={() => void removeManualTag(t)}
+                            disabled={isTagSaving}
+                            title="Remove manual tag"
+                          >
+                            {t} ×
+                          </button>
+                        ))}
+                      {(character.tags || [])
+                        .filter((t) => t.type === 'derived')
+                        .map((t) => t.text)
+                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                        .map((t) => (
+                          <span
+                            key={`derived-${t}`}
+                            style={{
+                              padding: '4px 8px',
+                              border: '1px dashed var(--glass-border)',
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.9rem',
+                            }}
+                            title="Derived tag (read-only)"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      {(!character.tags || character.tags.length === 0) ? (
+                        <span className={styles.muted}>(none)</span>
+                      ) : null}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                      <input
+                        value={manualTagDraftText}
+                        onChange={(e) => setManualTagDraftText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void addManualTags();
+                          }
+                        }}
+                        placeholder="tag"
+                        list={tagsDatalistId}
+                        style={{ width: 220 }}
+                        disabled={isTagSaving}
+                      />
+                      <button
+                        className={styles.btnSecondary}
+                        onClick={() => void addManualTags()}
+                        disabled={isTagSaving || tagsTextToArray(manualTagDraftText).length === 0}
+                      >
+                        Add
+                      </button>
+                      <button
+                        className={styles.btnSecondary}
+                        onClick={() => setManualTagDraftText('')}
+                        disabled={isTagSaving || !manualTagDraftText}
+                      >
+                        Clear
+                      </button>
+                      <datalist id={tagsDatalistId}>
+                        {allTags.map((t) => (
+                          <option key={t} value={t} />
+                        ))}
+                      </datalist>
+                    </div>
+                  </div>
 
                   {saveIssues?.length ? (
                     <div className={styles.issueBox}>

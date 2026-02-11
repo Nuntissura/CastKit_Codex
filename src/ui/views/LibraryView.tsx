@@ -14,6 +14,14 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+function tagsTextToArray(text: string): string[] {
+  const parts = String(text || '')
+    .split(/[,\n\r\t]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
 export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId: string) => void }) {
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
   const [carouselImages, setCarouselImages] = React.useState<
@@ -27,6 +35,27 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [favoriteOnly, setFavoriteOnly] = React.useState<boolean>(false);
   const [ratingOp, setRatingOp] = React.useState<'any' | '=' | '<' | '<=' | '>' | '>='>('any');
   const [ratingValue, setRatingValue] = React.useState<number>(0);
+  const [scopeFlags, setScopeFlags] = React.useState<{
+    ids: boolean;
+    labels: boolean;
+    values: boolean;
+    tags: boolean;
+    name: boolean;
+  }>({
+    ids: true,
+    labels: true,
+    values: true,
+    tags: true,
+    name: true,
+  });
+  const [tagFilters, setTagFilters] = React.useState<string[]>([]);
+  const [tagDraft, setTagDraft] = React.useState<string>('');
+  const [allTags, setAllTags] = React.useState<string[]>([]);
+
+  const [savedSearches, setSavedSearches] = React.useState<CKCSavedSearch[] | null>(null);
+  const [selectedSavedSearchId, setSelectedSavedSearchId] = React.useState<string>('');
+  const [savedSearchName, setSavedSearchName] = React.useState<string>('');
+  const [savedSearchError, setSavedSearchError] = React.useState<string | null>(null);
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
@@ -51,6 +80,28 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   React.useEffect(() => {
     window.ckc
+      .listAllTags()
+      .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
+      .catch(() => setAllTags([]));
+  }, []);
+
+  const reloadSavedSearches = React.useCallback(() => {
+    setSavedSearchError(null);
+    window.ckc
+      .listSavedSearches()
+      .then((rows) => setSavedSearches(rows))
+      .catch((err: unknown) => {
+        setSavedSearchError(err instanceof Error ? err.message : String(err));
+        setSavedSearches([]);
+      });
+  }, []);
+
+  React.useEffect(() => {
+    reloadSavedSearches();
+  }, [reloadSavedSearches]);
+
+  React.useEffect(() => {
+    window.ckc
       .listSpinOffs({})
       .then((rows) => {
         setSpinOffs(rows);
@@ -59,6 +110,33 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       })
       .catch((err: unknown) => setExportError(err instanceof Error ? err.message : String(err)));
   }, []);
+
+  const selectedSavedSearch = React.useMemo(() => {
+    if (!savedSearches) return null;
+    return savedSearches.find((s) => s.id === selectedSavedSearchId) ?? null;
+  }, [savedSearches, selectedSavedSearchId]);
+
+  const savedSearchNameKey = React.useMemo(() => savedSearchName.trim().toLowerCase(), [savedSearchName]);
+  const nameConflict = React.useMemo(() => {
+    if (!savedSearches) return false;
+    const match = savedSearches.find((s) => s.name.trim().toLowerCase() === savedSearchNameKey);
+    return !!match && match.id !== selectedSavedSearchId;
+  }, [savedSearches, savedSearchNameKey, selectedSavedSearchId]);
+
+  const cleanedTagFilters = React.useMemo(() => {
+    const cleaned = tagFilters.map((t) => String(t).trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const out = [];
+    for (const t of cleaned) {
+      const k = t.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(t);
+    }
+    return out;
+  }, [tagFilters]);
+
+  const tagsDatalistId = React.useId();
 
   const reloadCarousel = React.useCallback(() => {
     window.ckc
@@ -84,6 +162,8 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       try {
         const rows = await window.ckc.listCharacters({
           queryText,
+          tagFilters: cleanedTagFilters,
+          scopeFlags,
           galleryFilters: {
             favoriteOnly,
             ratingOp: ratingOp === 'any' ? null : ratingOp,
@@ -103,7 +183,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     return () => {
       cancelled = true;
     };
-  }, [queryText, favoriteOnly, ratingOp, ratingValue]);
+  }, [queryText, cleanedTagFilters, scopeFlags, favoriteOnly, ratingOp, ratingValue]);
 
   React.useEffect(() => {
     reloadCarousel();
@@ -126,6 +206,54 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     });
   }, [carouselImages, favoriteOnly, ratingOp, ratingValue]);
 
+  const applySavedSearch = React.useCallback((ss: CKCSavedSearch) => {
+    setQueryText(String(ss.queryText || ''));
+
+    const gf = (ss.galleryFilters && typeof ss.galleryFilters === 'object' ? ss.galleryFilters : {}) as any;
+    setFavoriteOnly(!!gf.favoriteOnly);
+    const rawOp = gf.ratingOp != null ? String(gf.ratingOp) : null;
+    const op = rawOp && ['=', '<', '<=', '>', '>='].includes(rawOp) ? (rawOp as any) : null;
+    setRatingOp(op ?? 'any');
+    setRatingValue(Number.isFinite(Number(gf.ratingValue)) ? Number(gf.ratingValue) : 0);
+
+    const tf = Array.isArray(ss.tagFilters) ? ss.tagFilters.map((t) => String(t).trim()).filter(Boolean) : [];
+    setTagFilters(tf);
+
+    const sf = (ss.scopeFlags && typeof ss.scopeFlags === 'object' ? ss.scopeFlags : {}) as any;
+    setScopeFlags({
+      ids: sf.ids !== false,
+      labels: sf.labels !== false,
+      values: sf.values !== false,
+      tags: sf.tags !== false,
+      name: sf.name !== false,
+    });
+  }, []);
+
+  const addTagFiltersFromText = React.useCallback(
+    (text: string) => {
+      const parts = tagsTextToArray(text);
+      if (parts.length === 0) return;
+      setTagFilters((prev) => {
+        const next = [...prev];
+        for (const p of parts) {
+          const raw = String(p).trim();
+          if (!raw) continue;
+          const canonical = allTags.find((t) => String(t).toLowerCase() === raw.toLowerCase()) ?? raw;
+          if (next.some((t) => String(t).toLowerCase() === String(canonical).toLowerCase())) continue;
+          next.push(String(canonical));
+        }
+        return next;
+      });
+    },
+    [allTags]
+  );
+
+  const addTagFilter = React.useCallback(() => {
+    const draft = tagDraft;
+    addTagFiltersFromText(draft);
+    setTagDraft('');
+  }, [tagDraft, addTagFiltersFromText]);
+
   return (
     <div className={styles.layout}>
       <section className={styles.left}>
@@ -141,6 +269,119 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
       <aside className={styles.right}>
         <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)} label="Search / Filters">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              Saved{' '}
+              <select
+                value={selectedSavedSearchId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedSavedSearchId(id);
+                  const ss = savedSearches?.find((s) => s.id === id) ?? null;
+                  if (ss) {
+                    setSavedSearchName(ss.name);
+                    applySavedSearch(ss);
+                  } else {
+                    setSavedSearchName('');
+                  }
+                }}
+                disabled={!savedSearches}
+              >
+                <option value="">(none)</option>
+                {(savedSearches || []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.isBuiltin ? ' (built-in)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              Name{' '}
+              <input
+                value={savedSearchName}
+                onChange={(e) => setSavedSearchName(e.target.value)}
+                placeholder="Saved search name"
+                style={{ width: 220 }}
+              />
+            </label>
+
+            <button
+              disabled={!savedSearchName.trim() || (savedSearches || []).some((s) => s.name.trim().toLowerCase() === savedSearchNameKey)}
+              onClick={async () => {
+                setSavedSearchError(null);
+                try {
+                  const id = await window.ckc.createSavedSearch({
+                    name: savedSearchName.trim(),
+                    queryText,
+                    scopeFlags,
+                    tagFilters: cleanedTagFilters,
+                    galleryFilters: {
+                      favoriteOnly,
+                      ratingOp: ratingOp === 'any' ? null : ratingOp,
+                      ratingValue,
+                    },
+                  });
+                  reloadSavedSearches();
+                  setSelectedSavedSearchId(id);
+                } catch (err: unknown) {
+                  setSavedSearchError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+              title="Save a new search with the current query + filters"
+            >
+              Save new
+            </button>
+
+            <button
+              disabled={!selectedSavedSearchId || !!selectedSavedSearch?.isBuiltin || !savedSearchName.trim() || nameConflict}
+              onClick={async () => {
+                setSavedSearchError(null);
+                try {
+                  await window.ckc.updateSavedSearch({
+                    searchId: selectedSavedSearchId,
+                    name: savedSearchName.trim(),
+                    queryText,
+                    scopeFlags,
+                    tagFilters: cleanedTagFilters,
+                    galleryFilters: {
+                      favoriteOnly,
+                      ratingOp: ratingOp === 'any' ? null : ratingOp,
+                      ratingValue,
+                    },
+                  });
+                  reloadSavedSearches();
+                } catch (err: unknown) {
+                  setSavedSearchError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+              title={selectedSavedSearch?.isBuiltin ? 'Built-in searches cannot be updated' : 'Update the selected saved search'}
+            >
+              Update
+            </button>
+
+            <button
+              disabled={!selectedSavedSearchId || !!selectedSavedSearch?.isBuiltin}
+              onClick={async () => {
+                setSavedSearchError(null);
+                try {
+                  await window.ckc.deleteSavedSearch(selectedSavedSearchId);
+                  setSelectedSavedSearchId('');
+                  setSavedSearchName('');
+                  reloadSavedSearches();
+                } catch (err: unknown) {
+                  setSavedSearchError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+              title={selectedSavedSearch?.isBuiltin ? 'Built-in searches cannot be deleted' : 'Delete the selected saved search'}
+            >
+              Delete
+            </button>
+          </div>
+
+          {savedSearchError ? <div className={styles.error}>{savedSearchError}</div> : null}
+
           <label>
             Search{' '}
             <input
@@ -150,6 +391,98 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
               style={{ width: 220 }}
             />
           </label>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Scope:</span>
+            {(
+              [
+                ['name', 'Name'],
+                ['tags', 'Tags'],
+                ['ids', 'IDs'],
+                ['labels', 'Labels'],
+                ['values', 'Values'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={scopeFlags[key]}
+                  onChange={(e) => setScopeFlags((prev) => ({ ...prev, [key]: e.target.checked }))}
+                />{' '}
+                {label}
+              </label>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Tag filter:</span>
+            {cleanedTagFilters.map((t) => (
+              <button
+                key={t}
+                className={styles.characterItem}
+                style={{ padding: '4px 8px', background: 'transparent' }}
+                onClick={() => setTagFilters((prev) => prev.filter((x) => String(x).toLowerCase() !== String(t).toLowerCase()))}
+                title="Remove tag filter"
+              >
+                {t} ×
+              </button>
+            ))}
+            <input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addTagFilter();
+                }
+              }}
+              placeholder="tag"
+              list={tagsDatalistId}
+              style={{ width: 160 }}
+            />
+            <button onClick={addTagFilter} disabled={!tagDraft.trim()}>
+              Add
+            </button>
+            <button onClick={() => setTagFilters([])} disabled={cleanedTagFilters.length === 0} title="Clear tag filters">
+              Clear tags
+            </button>
+            <datalist id={tagsDatalistId}>
+              {allTags.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </div>
+
+          <details>
+            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>All tags ({allTags.length})</summary>
+            <div
+              style={{
+                marginTop: 8,
+                maxHeight: 120,
+                overflow: 'auto',
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+                padding: 8,
+                border: '1px solid var(--glass-border)',
+                background: 'rgba(0,0,0,0.02)',
+              }}
+            >
+              {allTags.slice(0, 200).map((t) => (
+                <button
+                  key={t}
+                  className={styles.characterItem}
+                  style={{ padding: '4px 8px', background: 'transparent' }}
+                  onClick={() => addTagFiltersFromText(t)}
+                  title="Add tag filter"
+                >
+                  {t}
+                </button>
+              ))}
+              {allTags.length > 200 ? <span style={{ color: 'var(--text-secondary)' }}>…</span> : null}
+            </div>
+          </details>
+
           <label>
             <input type="checkbox" checked={favoriteOnly} onChange={(e) => setFavoriteOnly(e.target.checked)} /> Favorites only
           </label>
@@ -177,6 +510,11 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
               setFavoriteOnly(false);
               setRatingOp('any');
               setRatingValue(0);
+              setScopeFlags({ ids: true, labels: true, values: true, tags: true, name: true });
+              setTagFilters([]);
+              setTagDraft('');
+              setSelectedSavedSearchId('');
+              setSavedSearchName('');
             }}
           >
             Clear

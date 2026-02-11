@@ -131,6 +131,27 @@ type CKCSpinOffDetail = CKCSpinOffListItem & {
   fieldIds: string[];
 };
 
+type CKCSearchScopeFlags = {
+  ids?: boolean;
+  labels?: boolean;
+  values?: boolean;
+  tags?: boolean;
+  name?: boolean;
+  all?: boolean;
+};
+
+type CKCSavedSearch = {
+  id: string;
+  name: string;
+  queryText: string;
+  scopeFlags: CKCSearchScopeFlags;
+  tagFilters: string[];
+  galleryFilters: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  isBuiltin: boolean;
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -138,6 +159,7 @@ interface Window {
     setConfig: (cfg: unknown) => Promise<unknown>;
     selectLibraryRoot: () => Promise<string | null>;
     listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
+    listAllTags: () => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
     importCharacterFromSheetDialog: () => Promise<{ characterId: string } | null>;
     getCharacter: (characterId: string) => Promise<CKCCharacter | null>;
@@ -146,6 +168,10 @@ interface Window {
     getDoc: (params?: unknown) => Promise<CKCDocDetail | null>;
     upsertDoc: (params?: unknown) => Promise<{ ok: true; docId: string; docType: CKCDocType }>;
     deleteDoc: (params?: unknown) => Promise<{ ok: true }>;
+    listSavedSearches: () => Promise<CKCSavedSearch[]>;
+    createSavedSearch: (params?: unknown) => Promise<string>;
+    updateSavedSearch: (params?: unknown) => Promise<{ ok: true }>;
+    deleteSavedSearch: (searchId: string) => Promise<{ ok: true }>;
     getTemplate: () => Promise<CKCTemplateAst>;
     getTemplateDetail: (templateId?: string | null) => Promise<CKCTemplateDetail | null>;
     listSpinOffs: (params?: unknown) => Promise<CKCSpinOffListItem[]>;
@@ -168,5 +194,7 @@ interface Window {
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
     setImageMeta: (params: unknown) => Promise<unknown>;
+    addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
+    removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
   };
 }
