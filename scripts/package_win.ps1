@@ -65,7 +65,13 @@ try {
 }
 
 $releaseVersion = $null
-if ($exactTag -and $exactTag -match '^v(\d+\.\d+\.\d+)$') {
+if (-not $exactTag) {
+  if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME) {
+    $exactTag = [string]$env:GITHUB_REF_NAME
+  }
+}
+
+if ($exactTag -and $exactTag -match '^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$') {
   $releaseVersion = $matches[1]
 }
 
