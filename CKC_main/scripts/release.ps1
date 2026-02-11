@@ -12,9 +12,9 @@ function Assert-LastExitOk([string]$Context) {
   }
 }
 
-function Run-Git([string[]]$Args) {
-  & git @Args | Out-Null
-  Assert-LastExitOk ("git " + ($Args -join ' '))
+function Run-Git([string[]]$GitArgs) {
+  & git @GitArgs | Out-Null
+  Assert-LastExitOk ("git " + ($GitArgs -join ' '))
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
