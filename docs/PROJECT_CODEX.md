@@ -93,7 +93,7 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
 
 ### Versioning + release policy (MUST)
-- **Product version** = SemVer (`vX.Y.Z`) for official releases. Do **not** bump versions for everyday local builds.
+- **Product version** = SemVer (`vX.Y.Z`) for official releases (release builds take the version from the git tag). Do **not** bump versions for everyday local builds.
 - **Build ID** = auto-generated per build: `<YYYY-MM-DD_HHMMSS>__<gitSha>`.
 - Local builds go to `CKC_GOV/targets/CKC/artifacts/dev/<buildId>/` and `.exe` filenames include the build ID (so repeated builds don’t overwrite each other).
 - Official release builds are tied to a git tag (`vX.Y.Z`) on `main` and published as GitHub Release assets (immutable, off-machine backup). Local release builds go under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/<buildId>/`.
