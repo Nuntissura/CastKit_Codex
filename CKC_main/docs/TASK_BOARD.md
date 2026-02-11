@@ -43,7 +43,7 @@ This is a mirror of the canonical Task Board:
 | WP-0025 | LibraryRoot diagnostics + missing media visibility | DONE | Codex | Make active library obvious; report missing images; help users fix “photos don’t load”. |
 | WP-0026 | Repair tool: rehydrate missing images by hash | DONE | Codex | Scan recovery folder, match by hash, copy into library layout, regen thumbs, write report. |
 | WP-0027 | Backup task: silent + covers libraryRoot | DONE | Codex | No popups; better logs; mirror `libraryRoot` if outside `<CKC_ROOT>`. |
+| WP-0028 | Startup: library init concurrency + portable defaults | IN_PROGRESS | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
 
 ## Current focus
-- Current: (none) — all listed work packets are DONE.
-
+- Current: WP-0028 — startup stability + portable library defaults.
