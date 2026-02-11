@@ -2,7 +2,9 @@
 
 This repo is `https://github.com/Nuntissura/CastKit_Codex`.
 
-On the workstation, governance lives under `K:\CastKit Codex\CKC_GOV` (Task Board, Work Packets, spec archive, targets/artifacts).
+On the workstation, governance lives under `<CKC_ROOT>\\CKC_GOV` (Task Board, Work Packets, spec archive, targets/artifacts).
+
+`<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
 
 Start here:
 - `docs/PROJECT_CODEX.md` (mirrored from `CKC_GOV/PROJECT_CODEX.md`)
@@ -33,7 +35,7 @@ Start here:
 
 Typical commands:
 ```powershell
-cd "K:\CastKit Codex\CKC_main"
+cd "<CKC_ROOT>\\CKC_main"
 npm test
 npx tsc --noEmit
 git status
@@ -50,7 +52,7 @@ Scripts live in `CKC_GOV/scripts/`:
 
 Run a backup now:
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\backup_to_mir.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "..\\CKC_GOV\\scripts\\backup_to_mir.ps1"
 ```
 
 Note: if PowerShell shows `â€”`/`â€¦` garbage when viewing docs, use UTF-8:

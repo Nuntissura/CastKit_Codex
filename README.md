@@ -1,7 +1,9 @@
 # CastKit Codex (CKC)
 
-Source repo: `K:\CastKit Codex\CKC_main`  
-Governance / artifacts: `K:\CastKit Codex\CKC_GOV`
+Source repo: `<CKC_ROOT>\\CKC_main`  
+Governance / artifacts: `<CKC_ROOT>\\CKC_GOV`
+
+`<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
 
 ## Start here (governance + workflow)
 
@@ -21,12 +23,11 @@ Workflow (MUST):
 
 ## Backup (NAS mirror)
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\backup_to_mir.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "..\\CKC_GOV\\scripts\\backup_to_mir.ps1"
 ```
 
 ## Dev
 ```powershell
-cd "K:\CastKit Codex\CKC_main"
 npm install
 npm run dev
 ```
@@ -37,16 +38,16 @@ npm run electron:dev
 ```
 
 ## Build (local)
-Build output goes to `K:\CastKit Codex\CKC_GOV\targets\scratch\renderer-dist`.
+Build output goes to `..\\CKC_GOV\\targets\\scratch\\renderer-dist`.
 ```powershell
 npm run build
 ```
 
 ## Package (Windows)
-Outputs to `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts`.
+Outputs to `..\\CKC_GOV\\targets\\CKC\\artifacts`.
 ```powershell
 npm run package:win
 ```
 
 Packaging creates a **versioned** output folder under:
-- `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts\`
+- `..\\CKC_GOV\\targets\\CKC\\artifacts\\`

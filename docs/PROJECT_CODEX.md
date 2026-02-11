@@ -2,22 +2,24 @@
 
 This folder (`CKC_GOV`) is the **governance + tracking + build targets** home for CKC.
 
-**Source code lives separately** in `K:\CastKit Codex\CKC_main`.
+**Source code lives separately** in `<CKC_ROOT>\\CKC_main`.
 
 This file is mirrored into the git repo for visibility:
-- Mirror: `K:\CastKit Codex\CKC_main\docs\PROJECT_CODEX.md`
+- Mirror: `CKC_main/docs/PROJECT_CODEX.md`
+
+`<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
 
 ## New developer: start here
 
 Read these first (order matters):
-1. Project Codex (this file): `K:\CastKit Codex\CKC_GOV\PROJECT_CODEX.md`
-2. Task board (status): `K:\CastKit Codex\CKC_GOV\taskboard\TASK_BOARD.md`
-3. Current spec (requirements): `K:\CastKit Codex\CKC_GOV\spec\CastKit_Codex_Spec_v00.023.md`
-4. Session dump (verbatim requirements): `K:\CastKit Codex\CKC_GOV\spec\SESSION_DUMP_2026-02-10.md`
+1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
+2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.023.md`
+4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 
 If you are reading these in PowerShell and you see garbage like `â€”`, open with UTF-8:
 ```powershell
-Get-Content -Encoding utf8 "K:\CastKit Codex\CKC_GOV\PROJECT_CODEX.md"
+Get-Content -Encoding utf8 "<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md"
 ```
 
 Daily workflow (MUST):
@@ -30,7 +32,7 @@ Daily workflow (MUST):
 7. Run the NAS mirror backup script.
 
 ## Golden rules
-- Never touch `D:` during recovery. All work happens on `K:`.
+- Never touch `D:` during recovery. All CKC work happens under `<CKC_ROOT>`.
 - No censorship: never redact/rewrite user text.
 - Template integrity: never drop Field IDs; preserve template order.
 - UI: minimal by default; sharp corners.
@@ -39,7 +41,7 @@ Daily workflow (MUST):
 
 ## Folder map
 ### 1) Source repo (code)
-Path: `K:\CastKit Codex\CKC_main`
+Path: `<CKC_ROOT>\\CKC_main`
 
 Expected structure:
 - `app/` — Electron main process + backend (SQLite, exports, IPC)
@@ -48,7 +50,7 @@ Expected structure:
 - `docs/` — in-repo docs that must ship with code
 
 ### 2) Governance repo (this folder)
-Path: `K:\CastKit Codex\CKC_GOV`
+Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
 - `CastKit_Codex_Spec_v00.023.md` — current spec (update with every addition)
@@ -61,7 +63,7 @@ Path: `K:\CastKit Codex\CKC_GOV`
 - `work_packets/`
   - `WP-*.md` — scoped work packets (what/why/how/acceptance)
 - `scripts/`
-  - `backup_to_mir.ps1` — mirror `K:\CastKit Codex` to NAS (ROBOCOPY `/MIR`)
+  - `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 - `targets/`
   - `CKC/artifacts/` — installers + portable builds
@@ -74,19 +76,19 @@ Path: `K:\CastKit Codex\CKC_GOV`
 ## Build + run conventions (Windows)
 ### Dependency installation
 - Install Node dependencies inside the repo:
-  - `K:\CastKit Codex\CKC_main\node_modules`
+  - `<CKC_ROOT>\\CKC_main\\node_modules`
 
 ### Cache locations (keep off C:)
 Set these env vars before running npm/electron builds:
-- `npm_config_cache=K:\CastKit Codex\CKC_GOV\targets\cache\npm`
-- `ELECTRON_CACHE=K:\CastKit Codex\CKC_GOV\targets\cache\electron`
-- `ELECTRON_BUILDER_CACHE=K:\CastKit Codex\CKC_GOV\targets\cache\electron-builder`
+- `npm_config_cache=<CKC_ROOT>\\CKC_GOV\\targets\\cache\\npm`
+- `ELECTRON_CACHE=<CKC_ROOT>\\CKC_GOV\\targets\\cache\\electron`
+- `ELECTRON_BUILDER_CACHE=<CKC_ROOT>\\CKC_GOV\\targets\\cache\\electron-builder`
 
 ### Output locations (keep artifacts out of repo)
 - Electron builder output MUST go to:
-  - `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts`
+  - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts`
 - Build logs MUST go to:
-  - `K:\CastKit Codex\CKC_GOV\targets\CKC\logs`
+  - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
 
 ### Versioning + release policy (MUST)
 - Every distributable build must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so code → build is traceable.
@@ -96,12 +98,12 @@ Set these env vars before running npm/electron builds:
 ### Packaging (Windows)
 Build a portable `.exe` and NSIS installer `.exe` using:
 ```powershell
-cd "K:\CastKit Codex\CKC_main"
+cd "<CKC_ROOT>\\CKC_main"
 npm run package:win
 ```
 
 This writes versioned outputs under:
-- `K:\CastKit Codex\CKC_GOV\targets\CKC\artifacts\`
+- `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\`
 
 ### Publishing a GitHub Release (recommended)
 Do **not** commit `.exe` artifacts into `CKC_main` git history. Instead, publish them as a GitHub Release.
@@ -111,7 +113,7 @@ There is a workflow in the repo that builds Windows artifacts on tag push:
 
 Recommended flow:
 ```powershell
-cd "K:\CastKit Codex\CKC_main"
+cd "<CKC_ROOT>\\CKC_main"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch
 ```
 This bumps `package.json` version, commits, tags `vX.Y.Z`, runs packaging, then pushes commit + tag. The tag triggers GitHub Actions to attach the installer + portable `.exe` to the GitHub Release.
@@ -138,7 +140,7 @@ Rules for `https://github.com/Nuntissura/CastKit_Codex`:
 
 Quick commands (typical):
 ```powershell
-cd "K:\CastKit Codex\CKC_main"
+cd "<CKC_ROOT>\\CKC_main"
 npm test
 npx tsc --noEmit
 git status
@@ -159,23 +161,23 @@ git push origin main
 ## Backup to NAS (mirror)
 
 Scripts live in `CKC_GOV/scripts/`:
-- `backup_to_mir.ps1` — mirror `K:\CastKit Codex` to NAS (ROBOCOPY `/MIR`)
+- `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`)
 - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 
 Run a backup now:
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\backup_to_mir.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\backup_to_mir.ps1"
 ```
 
 Automate backups (recommended):
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "K:\CastKit Codex\CKC_GOV\scripts\register_backup_task.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\register_backup_task.ps1"
 ```
 This creates a Scheduled Task that runs the mirror backup every 30 minutes while logged in.
 
 Backup status/logs:
-- `K:\CastKit Codex\CKC_GOV\targets\backup_logs\LAST_RUN.txt`
-- `K:\CastKit Codex\CKC_GOV\targets\backup_logs\backup_*.log`
+- `<CKC_ROOT>\\CKC_GOV\\targets\\backup_logs\\LAST_RUN.txt`
+- `<CKC_ROOT>\\CKC_GOV\\targets\\backup_logs\\backup_*.log`
 
 Important: the backup uses ROBOCOPY `/MIR` (mirror). Deletions in source can delete in destination.
 
