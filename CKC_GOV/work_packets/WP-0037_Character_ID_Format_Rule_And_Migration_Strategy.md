@@ -1,0 +1,44 @@
+# WP-0037 — Character ID: fixed format rule + migration strategy
+
+Date: 2026-02-12
+Owner: Codex
+Status: BACKLOG
+
+## Summary
+Define and implement a fixed, human-friendly Character ID formatting rule so IDs are readable, comparable, and reliable for linking/merging/exporting.
+
+## Motivation / context
+Users interpret the Character ID as a primary identifier. Random internal IDs (e.g. `char_...`) are hard to recognize and make merges/links error-prone.
+
+## Scope
+- Decide an ID rule (example options):
+  - `CKC-CHAR-000001` (sequential)
+  - `CHAR-000001` (sequential)
+  - `CKC-YYYY-0001` (time-bucketed sequential)
+- Implement the chosen rule:
+  - new characters get IDs that follow the rule
+  - the sheet field `CHAR-ID-001` reflects the rule
+  - IDs remain safe for folder names (no special chars)
+- Migration strategy for existing characters:
+  - keep old IDs but optionally assign/display a new “public” ID, or
+  - migrate internal IDs + folders + DB references (higher risk)
+- Ensure Character ID is protected from overwrite via ingest/merge/version revert flows.
+
+## Non-goals
+- Cross-library syncing of IDs (future).
+- Multi-user conflict resolution (future).
+
+## Acceptance criteria
+- [ ] ID format rule is documented and enforced for new characters.
+- [ ] Existing libraries have a safe migration path (documented and tested).
+- [ ] Ingest/merge cannot corrupt or overwrite the Character ID.
+- [ ] Automated tests cover ID generation + a basic migration case.
+
+## Test plan
+- [ ] Automated: unit tests around ID generation + validation.
+- [ ] Manual: create several characters and verify IDs increment/format correctly in UI and exports.
+
+## Governance checklist (MUST)
+- [x] Task Board updated with this WP.
+- [ ] Spec impact: yes (user-facing identity rule). Bump spec + mirror into `CKC_main/docs/` when implemented.
+
