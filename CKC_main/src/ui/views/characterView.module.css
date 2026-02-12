@@ -190,8 +190,42 @@
 
 .middleBody {
   padding: 18px;
+  flex: 1 1 auto;
   overflow: auto;
   min-height: 0;
+}
+
+.docsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.docsPane {
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.docsPaneHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.docsPaneTitle {
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .iconRow {
@@ -416,6 +450,21 @@
   background: transparent;
   padding: 10px 12px;
   resize: vertical;
+}
+
+.docTextFlex {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  resize: none;
+}
+
+.moodboardBox {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modalBackdrop {

@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Make Notes/Stories/Moodboard safe to use as a writing surface: autosave drafts, preserve state when switching tabs/docs, improve the docs-only library drawer (search + tags), and restore the “notes always visible” layout (notes top, stories/moodboard below).
@@ -34,16 +34,16 @@ Make Notes/Stories/Moodboard safe to use as a writing surface: autosave drafts, 
 - Complex multi-user editing.
 
 ## Acceptance criteria
-- [ ] Switching docs/tabs never loses typed text (autosave works).
-- [ ] Notes are always visible at top in docs mode.
-- [ ] Drawer supports docs-only search + tag filtering and has a “Full library” view.
-- [ ] State persists after restart (open doc selection and drafts where applicable).
+- [x] Switching docs/tabs never loses typed text (autosave works).
+- [x] Notes are always visible at top in docs mode.
+- [x] Drawer supports docs-only search + tag filtering and has a “Full library” view.
+- [x] State persists after restart (open doc selection and drafts where applicable).
 
 ## Test plan
 - [ ] Manual: type in note, switch to story, come back: text is saved.
 - [ ] Manual: type and kill app; restart: latest draft is present.
-- [ ] Automated: `npm test`.
+- [x] Automated: `npm test`.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (docs UX). Bump spec + mirror into `CKC_main/docs/`.
+- [x] Spec impact: yes (docs UX). Bump spec + mirror into `CKC_main/docs/`.

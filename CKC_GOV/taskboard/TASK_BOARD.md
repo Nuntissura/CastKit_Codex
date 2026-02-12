@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-02-11
+Last updated: 2026-02-12
 
 This is the single source of truth for work status.
 
@@ -46,9 +46,9 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0028 | Startup: library init concurrency + portable defaults | DONE | Codex | Fix null-DB startup race; portable default `libraryRoot` near `.exe`; prompt if missing. |
 | WP-0029 | Resizable panels + persisted layouts (2/3 panel) | DONE | Codex | Splitters + per-mode persistence via config (`layoutLibrary2/layoutCharacter2/layoutCharacter3`); manual smoke recommended. |
 | WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | DONE | Codex | Header controls (no overlay), arrow nav, bigger thumbs, no-match clear filters, per-thumb carousel toggle, hamburger-safe header inset, rating hotkeys LAlt+0..5. |
-| WP-0031 | Docs mode: autosave + drawer search + layout restoration | IN_PROGRESS | Codex | Notes always visible; below show stories/moodboard; autosave; full docs library view + filters. |
+| WP-0031 | Docs mode: autosave + drawer search + layout restoration | DONE | Codex | Autosave + stacked Notes; lower Stories/Moodboard toggle; docs drawer search/tags + “All”; UI state persisted in config. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | BACKLOG | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |
 | WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | BACKLOG | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
 
 ## Current focus
-- Current: WP-0031 — docs mode: autosave + drawer search + layout restoration.
+- Next: WP-0032 — sheet editor: free-text enums + reusable per-field presets.

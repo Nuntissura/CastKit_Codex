@@ -126,7 +126,8 @@ export function CharacterView({
 }) {
   const [character, setCharacter] = React.useState<CKCCharacter | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [tab, setTab] = React.useState<'sheet' | 'photos' | 'notes' | 'tools'>('sheet');
+  const [rightTab, setRightTab] = React.useState<'sheet' | 'photos' | 'tools'>('sheet');
+  const [isDocsOpen, setIsDocsOpen] = React.useState<boolean>(false);
   const [mediaMode, setMediaMode] = React.useState<'carousel' | 'photos'>('carousel');
 
   const splitterPx = 10;
@@ -169,19 +170,38 @@ export function CharacterView({
   const tagsDatalistId = React.useId();
   const docsTagsDatalistId = React.useId();
 
-  const [docType, setDocType] = React.useState<CKCDocType>('notes');
-  const [docQueryText, setDocQueryText] = React.useState<string>('');
-  const [docTagDraftText, setDocTagDraftText] = React.useState<string>('');
-  const [docTagFilters, setDocTagFilters] = React.useState<string[]>([]);
-  const [docs, setDocs] = React.useState<CKCDocListItem[] | null>(null);
-  const [selectedDocId, setSelectedDocId] = React.useState<string | null>(null);
-  const [loadedDoc, setLoadedDoc] = React.useState<CKCDocDetail | null>(null);
-  const [draftDocTitle, setDraftDocTitle] = React.useState<string>('');
-  const [draftDocContent, setDraftDocContent] = React.useState<string>('');
-  const [draftDocTagsText, setDraftDocTagsText] = React.useState<string>('');
-  const [docError, setDocError] = React.useState<string | null>(null);
-  const [isDocSaving, setIsDocSaving] = React.useState<boolean>(false);
-  const [moodboard, setMoodboard] = React.useState<MoodboardState>(() => emptyMoodboard());
+  const [docsLowerType, setDocsLowerType] = React.useState<'stories' | 'moodboard'>('stories');
+
+  const [docsDrawerScope, setDocsDrawerScope] = React.useState<CKCDocType | 'all'>('notes');
+  const [docsDrawerQueryText, setDocsDrawerQueryText] = React.useState<string>('');
+  const [docsDrawerTagDraftText, setDocsDrawerTagDraftText] = React.useState<string>('');
+  const [docsDrawerTagFilters, setDocsDrawerTagFilters] = React.useState<string[]>([]);
+  const [docsDrawerDocs, setDocsDrawerDocs] = React.useState<CKCDocListItem[] | null>(null);
+  const [docsDrawerError, setDocsDrawerError] = React.useState<string | null>(null);
+
+  const [notesDocId, setNotesDocId] = React.useState<string | null>(null);
+  const [notesLoadedDoc, setNotesLoadedDoc] = React.useState<CKCDocDetail | null>(null);
+  const [notesDraftTitle, setNotesDraftTitle] = React.useState<string>('');
+  const [notesDraftContent, setNotesDraftContent] = React.useState<string>('');
+  const [notesDraftTagsText, setNotesDraftTagsText] = React.useState<string>('');
+  const [notesError, setNotesError] = React.useState<string | null>(null);
+  const [isNotesSaving, setIsNotesSaving] = React.useState<boolean>(false);
+
+  const [storiesDocId, setStoriesDocId] = React.useState<string | null>(null);
+  const [storiesLoadedDoc, setStoriesLoadedDoc] = React.useState<CKCDocDetail | null>(null);
+  const [storiesDraftTitle, setStoriesDraftTitle] = React.useState<string>('');
+  const [storiesDraftContent, setStoriesDraftContent] = React.useState<string>('');
+  const [storiesDraftTagsText, setStoriesDraftTagsText] = React.useState<string>('');
+  const [storiesError, setStoriesError] = React.useState<string | null>(null);
+  const [isStoriesSaving, setIsStoriesSaving] = React.useState<boolean>(false);
+
+  const [moodboardDocId, setMoodboardDocId] = React.useState<string | null>(null);
+  const [moodboardLoadedDoc, setMoodboardLoadedDoc] = React.useState<CKCDocDetail | null>(null);
+  const [moodboardDraftTitle, setMoodboardDraftTitle] = React.useState<string>('');
+  const [moodboardDraftTagsText, setMoodboardDraftTagsText] = React.useState<string>('');
+  const [moodboardDraft, setMoodboardDraft] = React.useState<MoodboardState>(() => emptyMoodboard());
+  const [moodboardError, setMoodboardError] = React.useState<string | null>(null);
+  const [isMoodboardSaving, setIsMoodboardSaving] = React.useState<boolean>(false);
 
   const [isImagePickerOpen, setIsImagePickerOpen] = React.useState<boolean>(false);
   const [imagePickerSource, setImagePickerSource] = React.useState<'character' | 'global'>('character');
@@ -255,6 +275,15 @@ export function CharacterView({
         const l3 = (cfg?.layoutCharacter3 && typeof cfg.layoutCharacter3 === 'object' ? cfg.layoutCharacter3 : null) as any;
         if (typeof l3?.leftFrac === 'number') setCharacterLeftFrac3(clamp01(l3.leftFrac));
         if (typeof l3?.middleFrac === 'number') setCharacterMiddleFrac3(clamp01(l3.middleFrac));
+
+        const docsUi = (cfg?.docsUi && typeof cfg.docsUi === 'object' ? cfg.docsUi : null) as any;
+        const lowerType = docsUi?.lowerType;
+        if (lowerType === 'stories' || lowerType === 'moodboard') setDocsLowerType(lowerType);
+
+        const selected = (docsUi?.selected && typeof docsUi.selected === 'object' ? docsUi.selected : null) as any;
+        if (typeof selected?.notes === 'string') setNotesDocId(selected.notes);
+        if (typeof selected?.stories === 'string') setStoriesDocId(selected.stories);
+        if (typeof selected?.moodboard === 'string') setMoodboardDocId(selected.moodboard);
       })
       .catch(() => {});
   }, []);
@@ -489,63 +518,107 @@ export function CharacterView({
     setIconError(null);
   }, [characterId, character?.iconImageId, character?.iconFocusX, character?.iconFocusY]);
 
-  const reloadDocs = React.useCallback(() => {
+  const reloadDocsDrawer = React.useCallback(() => {
+    setDocsDrawerError(null);
+    setDocsDrawerDocs(null);
+
+    if (docsDrawerScope === 'all') {
+      void Promise.all(
+        (['notes', 'stories', 'moodboard'] as const).map((t) =>
+          window.ckc.listDocs({ docType: t, queryText: docsDrawerQueryText, tagFilters: docsDrawerTagFilters })
+        )
+      )
+        .then((lists) => {
+          const merged = ([] as CKCDocListItem[]).concat(...(lists || []));
+          merged.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+          setDocsDrawerDocs(merged);
+        })
+        .catch((err: unknown) => {
+          setDocsDrawerError(err instanceof Error ? err.message : String(err));
+          setDocsDrawerDocs([]);
+        });
+      return;
+    }
+
+    void window.ckc
+      .listDocs({ docType: docsDrawerScope, queryText: docsDrawerQueryText, tagFilters: docsDrawerTagFilters })
+      .then((rows) => setDocsDrawerDocs(rows))
+      .catch((err: unknown) => {
+        setDocsDrawerError(err instanceof Error ? err.message : String(err));
+        setDocsDrawerDocs([]);
+      });
+  }, [docsDrawerScope, docsDrawerQueryText, docsDrawerTagFilters]);
+
+  React.useEffect(() => {
+    if (!isLibraryDrawerOpen) return;
+    reloadDocsDrawer();
+  }, [isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  React.useEffect(() => {
+    if (!notesDocId) {
+      setNotesLoadedDoc(null);
+      return;
+    }
+    setNotesError(null);
     window.ckc
-      .listDocs({ docType, queryText: docQueryText, tagFilters: docTagFilters })
-      .then((rows) => setDocs(rows))
-      .catch((err: unknown) => setDocError(err instanceof Error ? err.message : String(err)));
-  }, [docType, docQueryText, docTagFilters]);
-
-  React.useEffect(() => {
-    if (tab !== 'notes' && !isLibraryDrawerOpen) return;
-    reloadDocs();
-  }, [tab, isLibraryDrawerOpen, reloadDocs]);
-
-  React.useEffect(() => {
-    // Reset selection when switching doc type.
-    setSelectedDocId(null);
-    setLoadedDoc(null);
-    setDraftDocTitle('');
-    setDraftDocContent('');
-    setDraftDocTagsText('');
-    setMoodboard(emptyMoodboard());
-  }, [docType]);
-
-  React.useEffect(() => {
-    if (!selectedDocId) return;
-    setDocError(null);
-    window.ckc
-      .getDoc({ docType, docId: selectedDocId })
+      .getDoc({ docType: 'notes', docId: notesDocId })
       .then((doc) => {
-        setLoadedDoc(doc);
-        setDraftDocTitle(doc?.title ?? '');
-        setDraftDocTagsText(tagsArrayToText(doc?.tags ?? []));
+        setNotesLoadedDoc(doc);
+        setNotesDraftTitle(doc?.title ?? '');
+        setNotesDraftContent(doc?.content ?? '');
+        setNotesDraftTagsText(tagsArrayToText(doc?.tags ?? []));
+      })
+      .catch((err: unknown) => setNotesError(err instanceof Error ? err.message : String(err)));
+  }, [notesDocId]);
 
-        if (docType === 'moodboard') {
-          try {
-            const parsed = JSON.parse(doc?.content ?? '{}');
-            if (
-              parsed &&
-              typeof parsed === 'object' &&
-              parsed.version === 1 &&
-              Array.isArray(parsed.strokes) &&
-              Array.isArray(parsed.images)
-            ) {
-              setMoodboard(parsed);
-            } else {
-              setMoodboard(emptyMoodboard());
-            }
-          } catch {
-            setMoodboard(emptyMoodboard());
+  React.useEffect(() => {
+    if (!storiesDocId) {
+      setStoriesLoadedDoc(null);
+      return;
+    }
+    setStoriesError(null);
+    window.ckc
+      .getDoc({ docType: 'stories', docId: storiesDocId })
+      .then((doc) => {
+        setStoriesLoadedDoc(doc);
+        setStoriesDraftTitle(doc?.title ?? '');
+        setStoriesDraftContent(doc?.content ?? '');
+        setStoriesDraftTagsText(tagsArrayToText(doc?.tags ?? []));
+      })
+      .catch((err: unknown) => setStoriesError(err instanceof Error ? err.message : String(err)));
+  }, [storiesDocId]);
+
+  React.useEffect(() => {
+    if (!moodboardDocId) {
+      setMoodboardLoadedDoc(null);
+      return;
+    }
+    setMoodboardError(null);
+    window.ckc
+      .getDoc({ docType: 'moodboard', docId: moodboardDocId })
+      .then((doc) => {
+        setMoodboardLoadedDoc(doc);
+        setMoodboardDraftTitle(doc?.title ?? '');
+        setMoodboardDraftTagsText(tagsArrayToText(doc?.tags ?? []));
+        try {
+          const parsed = JSON.parse(doc?.content ?? '{}');
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            parsed.version === 1 &&
+            Array.isArray(parsed.strokes) &&
+            Array.isArray(parsed.images)
+          ) {
+            setMoodboardDraft(parsed);
+          } else {
+            setMoodboardDraft(emptyMoodboard());
           }
-          setDraftDocContent('');
-        } else {
-          setDraftDocContent(doc?.content ?? '');
-          setMoodboard(emptyMoodboard());
+        } catch {
+          setMoodboardDraft(emptyMoodboard());
         }
       })
-      .catch((err: unknown) => setDocError(err instanceof Error ? err.message : String(err)));
-  }, [selectedDocId, docType]);
+      .catch((err: unknown) => setMoodboardError(err instanceof Error ? err.message : String(err)));
+  }, [moodboardDocId]);
 
   React.useEffect(() => {
     if (!isImagePickerOpen) return;
@@ -563,23 +636,23 @@ export function CharacterView({
     return carousel.length > 0 ? carousel : all;
   }, [character, mediaMode]);
 
-  const docSmartTags = React.useMemo(() => {
-    if (!docs) return [];
+  const docsDrawerSmartTags = React.useMemo(() => {
+    if (!docsDrawerDocs) return [];
     const seen = new Set<string>();
-    for (const d of docs) {
+    for (const d of docsDrawerDocs) {
       for (const t of d.tags || []) seen.add(String(t));
     }
     return Array.from(seen)
       .map((t) => t.trim())
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  }, [docs]);
+  }, [docsDrawerDocs]);
 
-  const addDocTagFiltersFromText = (text: string) => {
+  const addDocsDrawerTagFiltersFromText = (text: string) => {
     const toAdd = tagsTextToArray(text);
     if (toAdd.length === 0) return;
-    setDocTagFilters((prev) => Array.from(new Set([...(prev || []), ...toAdd])));
-    setDocTagDraftText('');
+    setDocsDrawerTagFilters((prev) => Array.from(new Set([...(prev || []), ...toAdd])));
+    setDocsDrawerTagDraftText('');
   };
 
   const isDirty = React.useMemo(() => {
@@ -704,97 +777,380 @@ export function CharacterView({
     [characterId, reloadCharacter]
   );
 
-  const docTags = React.useMemo(() => tagsTextToArray(draftDocTagsText), [draftDocTagsText]);
+  const notesDocIdRef = React.useRef<string | null>(notesDocId);
+  const storiesDocIdRef = React.useRef<string | null>(storiesDocId);
+  const moodboardDocIdRef = React.useRef<string | null>(moodboardDocId);
 
-  const docIsDirty = React.useMemo(() => {
-    const loadedTags = loadedDoc?.tags ?? [];
+  React.useEffect(() => {
+    notesDocIdRef.current = notesDocId;
+  }, [notesDocId]);
+
+  React.useEffect(() => {
+    storiesDocIdRef.current = storiesDocId;
+  }, [storiesDocId]);
+
+  React.useEffect(() => {
+    moodboardDocIdRef.current = moodboardDocId;
+  }, [moodboardDocId]);
+
+  const notesTags = React.useMemo(() => tagsTextToArray(notesDraftTagsText), [notesDraftTagsText]);
+  const storiesTags = React.useMemo(() => tagsTextToArray(storiesDraftTagsText), [storiesDraftTagsText]);
+  const moodboardTags = React.useMemo(() => tagsTextToArray(moodboardDraftTagsText), [moodboardDraftTagsText]);
+
+  const notesIsDirty = React.useMemo(() => {
+    const loadedTags = notesLoadedDoc?.tags ?? [];
     const sameTags =
-      loadedTags.length === docTags.length &&
-      loadedTags.every((t) => docTags.includes(t)) &&
-      docTags.every((t) => loadedTags.includes(t));
-
-    if (docType === 'moodboard') {
-      const currentJson = JSON.stringify(moodboard);
-      const loadedJson = loadedDoc?.content ?? '';
-      return String(draftDocTitle ?? '') !== String(loadedDoc?.title ?? '') || !sameTags || currentJson !== String(loadedJson ?? '');
-    }
+      loadedTags.length === notesTags.length &&
+      loadedTags.every((t) => notesTags.includes(t)) &&
+      notesTags.every((t) => loadedTags.includes(t));
 
     return (
-      String(draftDocTitle ?? '') !== String(loadedDoc?.title ?? '') ||
-      String(draftDocContent ?? '') !== String(loadedDoc?.content ?? '') ||
+      String(notesDraftTitle ?? '') !== String(notesLoadedDoc?.title ?? '') ||
+      String(notesDraftContent ?? '') !== String(notesLoadedDoc?.content ?? '') ||
       !sameTags
     );
-  }, [docType, loadedDoc, draftDocTitle, draftDocContent, docTags, moodboard]);
+  }, [notesLoadedDoc, notesDraftTitle, notesDraftContent, notesTags]);
 
-  const saveDoc = async () => {
-    setIsDocSaving(true);
-    setDocError(null);
+  const storiesIsDirty = React.useMemo(() => {
+    const loadedTags = storiesLoadedDoc?.tags ?? [];
+    const sameTags =
+      loadedTags.length === storiesTags.length &&
+      loadedTags.every((t) => storiesTags.includes(t)) &&
+      storiesTags.every((t) => loadedTags.includes(t));
+
+    return (
+      String(storiesDraftTitle ?? '') !== String(storiesLoadedDoc?.title ?? '') ||
+      String(storiesDraftContent ?? '') !== String(storiesLoadedDoc?.content ?? '') ||
+      !sameTags
+    );
+  }, [storiesLoadedDoc, storiesDraftTitle, storiesDraftContent, storiesTags]);
+
+  const moodboardIsDirty = React.useMemo(() => {
+    const loadedTags = moodboardLoadedDoc?.tags ?? [];
+    const sameTags =
+      loadedTags.length === moodboardTags.length &&
+      loadedTags.every((t) => moodboardTags.includes(t)) &&
+      moodboardTags.every((t) => loadedTags.includes(t));
+
+    const currentJson = JSON.stringify(moodboardDraft);
+    const loadedJson = moodboardLoadedDoc?.content ?? '';
+
+    return (
+      String(moodboardDraftTitle ?? '') !== String(moodboardLoadedDoc?.title ?? '') ||
+      !sameTags ||
+      currentJson !== String(loadedJson ?? '')
+    );
+  }, [moodboardLoadedDoc, moodboardDraftTitle, moodboardTags, moodboardDraft]);
+
+  const saveNotes = React.useCallback(async () => {
+    if (isNotesSaving) return;
+
+    const docIdAtStart = notesDocIdRef.current;
+    const title = String(notesDraftTitle || '').trim() || 'Untitled';
+    const content = String(notesDraftContent ?? '');
+    const tags = notesTags;
+
+    const isMeaningful = !!docIdAtStart || title !== 'Untitled' || content.trim().length > 0 || tags.length > 0;
+    if (!isMeaningful) return;
+
+    setIsNotesSaving(true);
+    setNotesError(null);
     try {
-      const content = docType === 'moodboard' ? JSON.stringify(moodboard) : draftDocContent;
-      const res = await window.ckc.upsertDoc({
-        docType,
-        docId: selectedDocId,
-        title: draftDocTitle,
-        content,
-        tags: docTags,
-      });
+      const res = await window.ckc.upsertDoc({ docType: 'notes', docId: docIdAtStart, title, content, tags });
+      const nextId = res?.docId || docIdAtStart;
+      if (!nextId) return;
 
-      const nextId = res?.docId || selectedDocId;
-      if (nextId) setSelectedDocId(nextId);
-      reloadDocs();
-      if (nextId) {
-        const fresh = await window.ckc.getDoc({ docType, docId: nextId });
-        setLoadedDoc(fresh);
-      }
+      if (notesDocIdRef.current !== docIdAtStart) return;
+      notesDocIdRef.current = nextId;
+      setNotesDocId(nextId);
+
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+      const fresh = await window.ckc.getDoc({ docType: 'notes', docId: nextId });
+      if (notesDocIdRef.current === nextId) setNotesLoadedDoc(fresh);
     } catch (err: unknown) {
-      setDocError(err instanceof Error ? err.message : String(err));
+      setNotesError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsDocSaving(false);
+      setIsNotesSaving(false);
     }
-  };
+  }, [isNotesSaving, notesDraftTitle, notesDraftContent, notesTags, isLibraryDrawerOpen, reloadDocsDrawer]);
 
-  const newDoc = async () => {
-    setIsDocSaving(true);
-    setDocError(null);
+  const saveStories = React.useCallback(async () => {
+    if (isStoriesSaving) return;
+
+    const docIdAtStart = storiesDocIdRef.current;
+    const title = String(storiesDraftTitle || '').trim() || 'Untitled';
+    const content = String(storiesDraftContent ?? '');
+    const tags = storiesTags;
+
+    const isMeaningful = !!docIdAtStart || title !== 'Untitled' || content.trim().length > 0 || tags.length > 0;
+    if (!isMeaningful) return;
+
+    setIsStoriesSaving(true);
+    setStoriesError(null);
     try {
-      const res = await window.ckc.upsertDoc({
-        docType,
-        title: 'Untitled',
-        content: docType === 'moodboard' ? JSON.stringify(emptyMoodboard()) : '',
-        tags: [],
-      });
+      const res = await window.ckc.upsertDoc({ docType: 'stories', docId: docIdAtStart, title, content, tags });
+      const nextId = res?.docId || docIdAtStart;
+      if (!nextId) return;
+
+      if (storiesDocIdRef.current !== docIdAtStart) return;
+      storiesDocIdRef.current = nextId;
+      setStoriesDocId(nextId);
+
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+      const fresh = await window.ckc.getDoc({ docType: 'stories', docId: nextId });
+      if (storiesDocIdRef.current === nextId) setStoriesLoadedDoc(fresh);
+    } catch (err: unknown) {
+      setStoriesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsStoriesSaving(false);
+    }
+  }, [isStoriesSaving, storiesDraftTitle, storiesDraftContent, storiesTags, isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  const saveMoodboard = React.useCallback(async () => {
+    if (isMoodboardSaving) return;
+
+    const docIdAtStart = moodboardDocIdRef.current;
+    const title = String(moodboardDraftTitle || '').trim() || 'Untitled';
+    const content = JSON.stringify(moodboardDraft);
+    const tags = moodboardTags;
+
+    const isMeaningful = !!docIdAtStart || title !== 'Untitled' || content.trim().length > 0 || tags.length > 0;
+    if (!isMeaningful) return;
+
+    setIsMoodboardSaving(true);
+    setMoodboardError(null);
+    try {
+      const res = await window.ckc.upsertDoc({ docType: 'moodboard', docId: docIdAtStart, title, content, tags });
+      const nextId = res?.docId || docIdAtStart;
+      if (!nextId) return;
+
+      if (moodboardDocIdRef.current !== docIdAtStart) return;
+      moodboardDocIdRef.current = nextId;
+      setMoodboardDocId(nextId);
+
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+      const fresh = await window.ckc.getDoc({ docType: 'moodboard', docId: nextId });
+      if (moodboardDocIdRef.current === nextId) setMoodboardLoadedDoc(fresh);
+    } catch (err: unknown) {
+      setMoodboardError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsMoodboardSaving(false);
+    }
+  }, [isMoodboardSaving, moodboardDraftTitle, moodboardDraft, moodboardTags, isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  const newNotesDoc = React.useCallback(async () => {
+    setIsNotesSaving(true);
+    setNotesError(null);
+    try {
+      const res = await window.ckc.upsertDoc({ docType: 'notes', title: 'Untitled', content: '', tags: [] });
       if (res?.docId) {
-        setSelectedDocId(res.docId);
-        reloadDocs();
+        notesDocIdRef.current = res.docId;
+        setNotesDocId(res.docId);
+        if (isLibraryDrawerOpen) reloadDocsDrawer();
         onCloseLibraryDrawer();
       }
     } catch (err: unknown) {
-      setDocError(err instanceof Error ? err.message : String(err));
+      setNotesError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsDocSaving(false);
+      setIsNotesSaving(false);
     }
-  };
+  }, [isLibraryDrawerOpen, reloadDocsDrawer, onCloseLibraryDrawer]);
 
-  const deleteDoc = async () => {
-    if (!selectedDocId) return;
-    if (!confirm('Delete this document?')) return;
-    setIsDocSaving(true);
-    setDocError(null);
+  const newStoriesDoc = React.useCallback(async () => {
+    setIsStoriesSaving(true);
+    setStoriesError(null);
     try {
-      await window.ckc.deleteDoc({ docType, docId: selectedDocId });
-      setSelectedDocId(null);
-      setLoadedDoc(null);
-      setDraftDocTitle('');
-      setDraftDocContent('');
-      setDraftDocTagsText('');
-      setMoodboard(emptyMoodboard());
-      reloadDocs();
+      const res = await window.ckc.upsertDoc({ docType: 'stories', title: 'Untitled', content: '', tags: [] });
+      if (res?.docId) {
+        storiesDocIdRef.current = res.docId;
+        setStoriesDocId(res.docId);
+        if (isLibraryDrawerOpen) reloadDocsDrawer();
+        onCloseLibraryDrawer();
+      }
     } catch (err: unknown) {
-      setDocError(err instanceof Error ? err.message : String(err));
+      setStoriesError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsDocSaving(false);
+      setIsStoriesSaving(false);
     }
-  };
+  }, [isLibraryDrawerOpen, reloadDocsDrawer, onCloseLibraryDrawer]);
+
+  const newMoodboardDoc = React.useCallback(async () => {
+    setIsMoodboardSaving(true);
+    setMoodboardError(null);
+    try {
+      const res = await window.ckc.upsertDoc({
+        docType: 'moodboard',
+        title: 'Untitled',
+        content: JSON.stringify(emptyMoodboard()),
+        tags: [],
+      });
+      if (res?.docId) {
+        moodboardDocIdRef.current = res.docId;
+        setMoodboardDocId(res.docId);
+        if (isLibraryDrawerOpen) reloadDocsDrawer();
+        onCloseLibraryDrawer();
+      }
+    } catch (err: unknown) {
+      setMoodboardError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsMoodboardSaving(false);
+    }
+  }, [isLibraryDrawerOpen, reloadDocsDrawer, onCloseLibraryDrawer]);
+
+  const deleteNotesDoc = React.useCallback(async () => {
+    const id = notesDocIdRef.current;
+    if (!id) return;
+    if (!confirm('Delete this note?')) return;
+    setIsNotesSaving(true);
+    setNotesError(null);
+    try {
+      await window.ckc.deleteDoc({ docType: 'notes', docId: id });
+      if (notesDocIdRef.current === id) {
+        notesDocIdRef.current = null;
+        setNotesDocId(null);
+        setNotesLoadedDoc(null);
+        setNotesDraftTitle('');
+        setNotesDraftContent('');
+        setNotesDraftTagsText('');
+      }
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+    } catch (err: unknown) {
+      setNotesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsNotesSaving(false);
+    }
+  }, [isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  const deleteStoriesDoc = React.useCallback(async () => {
+    const id = storiesDocIdRef.current;
+    if (!id) return;
+    if (!confirm('Delete this story?')) return;
+    setIsStoriesSaving(true);
+    setStoriesError(null);
+    try {
+      await window.ckc.deleteDoc({ docType: 'stories', docId: id });
+      if (storiesDocIdRef.current === id) {
+        storiesDocIdRef.current = null;
+        setStoriesDocId(null);
+        setStoriesLoadedDoc(null);
+        setStoriesDraftTitle('');
+        setStoriesDraftContent('');
+        setStoriesDraftTagsText('');
+      }
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+    } catch (err: unknown) {
+      setStoriesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsStoriesSaving(false);
+    }
+  }, [isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  const deleteMoodboardDoc = React.useCallback(async () => {
+    const id = moodboardDocIdRef.current;
+    if (!id) return;
+    if (!confirm('Delete this moodboard?')) return;
+    setIsMoodboardSaving(true);
+    setMoodboardError(null);
+    try {
+      await window.ckc.deleteDoc({ docType: 'moodboard', docId: id });
+      if (moodboardDocIdRef.current === id) {
+        moodboardDocIdRef.current = null;
+        setMoodboardDocId(null);
+        setMoodboardLoadedDoc(null);
+        setMoodboardDraftTitle('');
+        setMoodboardDraftTagsText('');
+        setMoodboardDraft(emptyMoodboard());
+      }
+      if (isLibraryDrawerOpen) reloadDocsDrawer();
+    } catch (err: unknown) {
+      setMoodboardError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsMoodboardSaving(false);
+    }
+  }, [isLibraryDrawerOpen, reloadDocsDrawer]);
+
+  const notesAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storiesAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moodboardAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushNotesAutosave = React.useCallback(() => {
+    if (notesAutosaveTimerRef.current) {
+      clearTimeout(notesAutosaveTimerRef.current);
+      notesAutosaveTimerRef.current = null;
+    }
+    if (notesIsDirty) void saveNotes();
+  }, [notesIsDirty, saveNotes]);
+
+  const flushStoriesAutosave = React.useCallback(() => {
+    if (storiesAutosaveTimerRef.current) {
+      clearTimeout(storiesAutosaveTimerRef.current);
+      storiesAutosaveTimerRef.current = null;
+    }
+    if (storiesIsDirty) void saveStories();
+  }, [storiesIsDirty, saveStories]);
+
+  const flushMoodboardAutosave = React.useCallback(() => {
+    if (moodboardAutosaveTimerRef.current) {
+      clearTimeout(moodboardAutosaveTimerRef.current);
+      moodboardAutosaveTimerRef.current = null;
+    }
+    if (moodboardIsDirty) void saveMoodboard();
+  }, [moodboardIsDirty, saveMoodboard]);
+
+  React.useEffect(() => {
+    if (!isDocsOpen) return;
+    if (!notesIsDirty) return;
+    if (notesAutosaveTimerRef.current) clearTimeout(notesAutosaveTimerRef.current);
+    notesAutosaveTimerRef.current = setTimeout(() => void saveNotes(), 800);
+    return () => {
+      if (notesAutosaveTimerRef.current) {
+        clearTimeout(notesAutosaveTimerRef.current);
+        notesAutosaveTimerRef.current = null;
+      }
+    };
+  }, [isDocsOpen, notesIsDirty, notesDraftTitle, notesDraftContent, notesDraftTagsText, saveNotes]);
+
+  React.useEffect(() => {
+    if (!isDocsOpen) return;
+    if (!storiesIsDirty) return;
+    if (storiesAutosaveTimerRef.current) clearTimeout(storiesAutosaveTimerRef.current);
+    storiesAutosaveTimerRef.current = setTimeout(() => void saveStories(), 900);
+    return () => {
+      if (storiesAutosaveTimerRef.current) {
+        clearTimeout(storiesAutosaveTimerRef.current);
+        storiesAutosaveTimerRef.current = null;
+      }
+    };
+  }, [isDocsOpen, storiesIsDirty, storiesDraftTitle, storiesDraftContent, storiesDraftTagsText, saveStories]);
+
+  React.useEffect(() => {
+    if (!isDocsOpen) return;
+    if (!moodboardIsDirty) return;
+    if (moodboardAutosaveTimerRef.current) clearTimeout(moodboardAutosaveTimerRef.current);
+    moodboardAutosaveTimerRef.current = setTimeout(() => void saveMoodboard(), 1200);
+    return () => {
+      if (moodboardAutosaveTimerRef.current) {
+        clearTimeout(moodboardAutosaveTimerRef.current);
+        moodboardAutosaveTimerRef.current = null;
+      }
+    };
+  }, [isDocsOpen, moodboardIsDirty, moodboardDraftTitle, moodboardDraftTagsText, moodboardDraft, saveMoodboard]);
+
+  React.useEffect(() => {
+    if (isDocsOpen) return;
+    flushNotesAutosave();
+    flushStoriesAutosave();
+    flushMoodboardAutosave();
+  }, [isDocsOpen, flushNotesAutosave, flushStoriesAutosave, flushMoodboardAutosave]);
+
+  React.useEffect(() => {
+    void window.ckc.setConfig({
+      docsUi: {
+        lowerType: docsLowerType,
+        selected: { notes: notesDocId, stories: storiesDocId, moodboard: moodboardDocId },
+      },
+    });
+  }, [docsLowerType, notesDocId, storiesDocId, moodboardDocId]);
 
   const importImagesForCharacter = async () => {
     if (!characterId) return;
@@ -861,7 +1217,7 @@ export function CharacterView({
   };
 
   const addMoodboardImage = (imageId: string) => {
-    setMoodboard((prev) => ({
+    setMoodboardDraft((prev) => ({
       ...prev,
       images: [
         ...(prev.images || []),
@@ -886,15 +1242,29 @@ export function CharacterView({
                 <button
                   key={t}
                   className={styles.tabBtn}
-                  data-active={docType === t ? '1' : '0'}
-                  onClick={() => setDocType(t)}
+                  data-active={docsDrawerScope === t ? '1' : '0'}
+                  onClick={() => setDocsDrawerScope(t)}
                 >
                   {t === 'notes' ? 'Notes' : t === 'stories' ? 'Stories' : 'Moodboard'}
                 </button>
               ))}
+              <button
+                className={styles.tabBtn}
+                data-active={docsDrawerScope === 'all' ? '1' : '0'}
+                onClick={() => setDocsDrawerScope('all')}
+                title="Show all doc types together"
+              >
+                All
+              </button>
             </div>
             <div className={styles.docsDrawerActions}>
-              <button className={styles.btnSecondary} onClick={() => void newDoc()} disabled={isDocSaving}>
+              <button
+                className={styles.btnSecondary}
+                onClick={() =>
+                  void (docsDrawerScope === 'stories' ? newStoriesDoc() : docsDrawerScope === 'moodboard' ? newMoodboardDoc() : newNotesDoc())
+                }
+                disabled={docsDrawerScope === 'stories' ? isStoriesSaving : docsDrawerScope === 'moodboard' ? isMoodboardSaving : isNotesSaving}
+              >
                 New
               </button>
               <button className={styles.btnSecondary} onClick={onCloseLibraryDrawer}>
@@ -904,19 +1274,20 @@ export function CharacterView({
           </div>
 
           <label className={styles.docsSearch}>
-            Search <input value={docQueryText} onChange={(e) => setDocQueryText(e.target.value)} placeholder="Title…" />
+            Search{' '}
+            <input value={docsDrawerQueryText} onChange={(e) => setDocsDrawerQueryText(e.target.value)} placeholder="Title…" />
           </label>
 
           <label className={styles.docsSearch}>
             Tags
             <div className={styles.docsTagRow}>
               <input
-                value={docTagDraftText}
-                onChange={(e) => setDocTagDraftText(e.target.value)}
+                value={docsDrawerTagDraftText}
+                onChange={(e) => setDocsDrawerTagDraftText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    addDocTagFiltersFromText(docTagDraftText);
+                    addDocsDrawerTagFiltersFromText(docsDrawerTagDraftText);
                   }
                 }}
                 placeholder="tag"
@@ -924,14 +1295,18 @@ export function CharacterView({
               />
               <button
                 className={styles.btnSecondary}
-                onClick={() => addDocTagFiltersFromText(docTagDraftText)}
-                disabled={tagsTextToArray(docTagDraftText).length === 0}
+                onClick={() => addDocsDrawerTagFiltersFromText(docsDrawerTagDraftText)}
+                disabled={tagsTextToArray(docsDrawerTagDraftText).length === 0}
                 title="Add tag filter"
               >
                 Add
               </button>
-              {docTagFilters.length ? (
-                <button className={styles.btnSecondary} onClick={() => setDocTagFilters([])} title="Clear all tag filters">
+              {docsDrawerTagFilters.length ? (
+                <button
+                  className={styles.btnSecondary}
+                  onClick={() => setDocsDrawerTagFilters([])}
+                  title="Clear all tag filters"
+                >
                   Clear
                 </button>
               ) : null}
@@ -943,13 +1318,13 @@ export function CharacterView({
             </div>
           </label>
 
-          {docTagFilters.length ? (
+          {docsDrawerTagFilters.length ? (
             <div className={styles.tagChips}>
-              {docTagFilters.map((t) => (
+              {docsDrawerTagFilters.map((t) => (
                 <button
                   key={t}
                   className={styles.tagChip}
-                  onClick={() => setDocTagFilters((cur) => (cur || []).filter((x) => x !== t))}
+                  onClick={() => setDocsDrawerTagFilters((cur) => (cur || []).filter((x) => x !== t))}
                   title="Remove tag filter"
                 >
                   x {t}
@@ -958,40 +1333,74 @@ export function CharacterView({
             </div>
           ) : null}
 
-          {docSmartTags.length ? (
+          {docsDrawerSmartTags.length ? (
             <details className={styles.smartTagsBox}>
               <summary>Smart tags</summary>
               <div className={styles.smartTags}>
-                {docSmartTags.slice(0, 200).map((t) => (
-                  <button key={t} className={styles.tagChip} onClick={() => addDocTagFiltersFromText(t)} title="Add tag filter">
+                {docsDrawerSmartTags.slice(0, 200).map((t) => (
+                  <button
+                    key={t}
+                    className={styles.tagChip}
+                    onClick={() => addDocsDrawerTagFiltersFromText(t)}
+                    title="Add tag filter"
+                  >
                     {t}
                   </button>
                 ))}
-                {docSmartTags.length > 200 ? <span className={styles.muted}>...</span> : null}
+                {docsDrawerSmartTags.length > 200 ? <span className={styles.muted}>...</span> : null}
               </div>
             </details>
           ) : null}
 
-          {docError ? <div className={styles.error}>{docError}</div> : null}
-          {docs === null ? (
+          {docsDrawerError ? <div className={styles.error}>{docsDrawerError}</div> : null}
+          {docsDrawerDocs === null ? (
             <div className={styles.muted}>Loading…</div>
-          ) : docs.length === 0 ? (
+          ) : docsDrawerDocs.length === 0 ? (
             <div className={styles.muted}>No documents.</div>
           ) : (
             <div className={styles.docsList}>
-              {docs.map((d) => (
+              {docsDrawerDocs.map((d) => (
                 <button
                   key={d.id}
                   className={styles.docsItem}
-                  data-active={d.id === selectedDocId ? '1' : '0'}
+                  data-active={
+                    d.docType === 'notes'
+                      ? d.id === notesDocId
+                        ? '1'
+                        : '0'
+                      : d.docType === 'stories'
+                        ? d.id === storiesDocId
+                          ? '1'
+                          : '0'
+                        : d.id === moodboardDocId
+                          ? '1'
+                          : '0'
+                  }
                   onClick={() => {
-                    setSelectedDocId(d.id);
+                    if (d.docType === 'notes') {
+                      flushNotesAutosave();
+                      notesDocIdRef.current = d.id;
+                      setNotesDocId(d.id);
+                    } else if (d.docType === 'stories') {
+                      flushStoriesAutosave();
+                      storiesDocIdRef.current = d.id;
+                      setStoriesDocId(d.id);
+                      setDocsLowerType('stories');
+                    } else {
+                      flushMoodboardAutosave();
+                      moodboardDocIdRef.current = d.id;
+                      setMoodboardDocId(d.id);
+                      setDocsLowerType('moodboard');
+                    }
                     onCloseLibraryDrawer();
                   }}
                   title={d.tags?.length ? d.tags.join(', ') : undefined}
                 >
                   <div className={styles.docsItemTitle}>{d.title}</div>
-                  <div className={styles.docsItemMeta}>{new Date(d.updatedAt).toLocaleString()}</div>
+                  <div className={styles.docsItemMeta}>
+                    {docsDrawerScope === 'all' ? `${d.docType} • ` : null}
+                    {new Date(d.updatedAt).toLocaleString()}
+                  </div>
                 </button>
               ))}
             </div>
@@ -1001,9 +1410,9 @@ export function CharacterView({
 
       <div
         className={styles.layout}
-        data-mode={tab === 'notes' ? 'docs' : 'default'}
+        data-mode={isDocsOpen ? 'docs' : 'default'}
         ref={layoutRef}
-        style={{ gridTemplateColumns: tab === 'notes' ? characterGridDocs : characterGridDefault }}
+        style={{ gridTemplateColumns: isDocsOpen ? characterGridDocs : characterGridDefault }}
       >
         <section className={styles.left}>
           <div className={styles.leftBody}>
@@ -1049,136 +1458,283 @@ export function CharacterView({
           role="separator"
           aria-orientation="vertical"
           title="Resize panels"
-          onPointerDown={tab === 'notes' ? beginResizeCharacter3Left : beginResizeCharacter2}
+          onPointerDown={isDocsOpen ? beginResizeCharacter3Left : beginResizeCharacter2}
           onPointerMove={onResizeCharacterMove}
           onPointerUp={endResizeCharacter}
           onPointerCancel={endResizeCharacter}
           onLostPointerCapture={endResizeCharacter}
         />
 
-        {tab === 'notes' ? (
+        {isDocsOpen ? (
           <>
             <section className={styles.middle}>
               <div className={styles.middleHeader}>
-              <div className={styles.docsTypeRow}>
-                {(['notes', 'stories', 'moodboard'] as const).map((t) => (
-                  <button
-                    key={t}
-                    className={styles.tabBtn}
-                    data-active={docType === t ? '1' : '0'}
-                    onClick={() => setDocType(t)}
-                  >
-                    {t === 'notes' ? 'Notes' : t === 'stories' ? 'Stories' : 'Moodboard'}
+                <div className={styles.middleTitle}>Docs</div>
+                <div className={styles.docsActionsRow}>
+                  <button className={styles.btnSecondary} onClick={() => setIsDocsOpen(false)}>
+                    Close
                   </button>
-                ))}
-              </div>
-
-              <div className={styles.docsActionsRow}>
-                <button className={styles.btnSecondary} onClick={onOpenLibraryDrawer}>
-                  Library
-                </button>
-                <button className={styles.btnSecondary} onClick={() => void newDoc()} disabled={isDocSaving}>
-                  New
-                </button>
-                <button className={styles.btnSecondary} onClick={() => void saveDoc()} disabled={!docIsDirty || isDocSaving}>
-                  {isDocSaving ? 'Saving…' : docIsDirty ? 'Save' : 'Saved'}
-                </button>
-                <button
-                  className={styles.btnSecondary}
-                  onClick={() => void deleteDoc()}
-                  disabled={!selectedDocId || isDocSaving}
-                >
-                  Delete
-                </button>
-                <button className={styles.btnSecondary} onClick={() => setTab('sheet')}>
-                  Close
-                </button>
-              </div>
+                </div>
               </div>
 
               <div className={styles.middleBody}>
-                {docError ? <div className={styles.error}>{docError}</div> : null}
-
-                <div className={styles.docForm}>
-                  <label className={styles.docLabel}>
-                    Title{' '}
-                    <input value={draftDocTitle} onChange={(e) => setDraftDocTitle(e.target.value)} placeholder="Untitled" />
-                  </label>
-                  <label className={styles.docLabel}>
-                    Tags{' '}
-                    <input
-                      value={draftDocTagsText}
-                      onChange={(e) => setDraftDocTagsText(e.target.value)}
-                      placeholder="tag, tag2"
-                    />
-                  </label>
-                </div>
-
-                {docType === 'moodboard' ? (
-                  <>
-                    <MoodboardCanvas
-                      value={moodboard}
-                      onChange={setMoodboard}
-                      onRequestAddImage={() => {
-                        setIsImagePickerOpen(true);
-                        setImagePickerSource('character');
-                      }}
-                    />
-
-                    {isImagePickerOpen ? (
-                      <div className={styles.modalBackdrop} onClick={() => setIsImagePickerOpen(false)}>
-                        <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-                          <div className={styles.modalHeader}>
-                            <div className={styles.modalTitle}>Add image</div>
-                            <button className={styles.btnSecondary} onClick={() => setIsImagePickerOpen(false)}>
-                              Close
-                            </button>
-                          </div>
-
-                          <div className={styles.modalTabs}>
-                            <button
-                              className={styles.tabBtn}
-                              data-active={imagePickerSource === 'character' ? '1' : '0'}
-                              onClick={() => setImagePickerSource('character')}
-                            >
-                              This character
-                            </button>
-                            <button
-                              className={styles.tabBtn}
-                              data-active={imagePickerSource === 'global' ? '1' : '0'}
-                              onClick={() => setImagePickerSource('global')}
-                            >
-                              Global carousel
-                            </button>
-                          </div>
-
-                          <div className={styles.modalGrid}>
-                            {(imagePickerSource === 'character' ? (character?.images ?? []) : globalPickerImages).map((img: any) => (
-                              <button
-                                key={img.id}
-                                className={styles.modalImgBtn}
-                                onClick={() => {
-                                  addMoodboardImage(img.id);
-                                  setIsImagePickerOpen(false);
-                                }}
-                                title={img.tags?.length ? img.tags.join(', ') : undefined}
-                              >
-                                <img className={styles.modalImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                <div className={styles.docsStack}>
+                  <div className={styles.docsPane}>
+                    <div className={styles.docsPaneHeader}>
+                      <div className={styles.docsPaneTitle}>Notes</div>
+                      <div className={styles.docsActionsRow}>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            setDocsDrawerScope('notes');
+                            onOpenLibraryDrawer();
+                          }}
+                        >
+                          Library
+                        </button>
+                        <button className={styles.btnSecondary} onClick={() => void newNotesDoc()} disabled={isNotesSaving}>
+                          New
+                        </button>
+                        <button className={styles.btnSecondary} onClick={() => void saveNotes()} disabled={!notesIsDirty || isNotesSaving}>
+                          {isNotesSaving ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void deleteNotesDoc()}
+                          disabled={!notesDocId || isNotesSaving}
+                        >
+                          Delete
+                        </button>
                       </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <textarea
-                    className={styles.docText}
-                    value={draftDocContent}
-                    onChange={(e) => setDraftDocContent(e.target.value)}
-                    placeholder={docType === 'notes' ? 'Write a note…' : 'Write a story…'}
-                  />
-                )}
+                    </div>
+
+                    {notesError ? <div className={styles.error}>{notesError}</div> : null}
+
+                    <div className={styles.docForm}>
+                      <label className={styles.docLabel}>
+                        Title
+                        <input
+                          value={notesDraftTitle}
+                          onChange={(e) => setNotesDraftTitle(e.target.value)}
+                          onBlur={() => flushNotesAutosave()}
+                          placeholder="Untitled"
+                        />
+                      </label>
+                      <label className={styles.docLabel}>
+                        Tags
+                        <input
+                          value={notesDraftTagsText}
+                          onChange={(e) => setNotesDraftTagsText(e.target.value)}
+                          onBlur={() => flushNotesAutosave()}
+                          placeholder="tag, tag2"
+                        />
+                      </label>
+                    </div>
+
+                    <textarea
+                      className={styles.docTextFlex}
+                      value={notesDraftContent}
+                      onChange={(e) => setNotesDraftContent(e.target.value)}
+                      onBlur={() => flushNotesAutosave()}
+                      placeholder="Write a note…"
+                    />
+                  </div>
+
+                  <div className={styles.docsPane}>
+                    <div className={styles.docsPaneHeader}>
+                      <div className={styles.docsTypeRow}>
+                        <button
+                          className={styles.tabBtn}
+                          data-active={docsLowerType === 'stories' ? '1' : '0'}
+                          onClick={() => {
+                            flushMoodboardAutosave();
+                            setDocsLowerType('stories');
+                          }}
+                        >
+                          Stories
+                        </button>
+                        <button
+                          className={styles.tabBtn}
+                          data-active={docsLowerType === 'moodboard' ? '1' : '0'}
+                          onClick={() => {
+                            flushStoriesAutosave();
+                            setDocsLowerType('moodboard');
+                          }}
+                        >
+                          Moodboard
+                        </button>
+                      </div>
+
+                      <div className={styles.docsActionsRow}>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            setDocsDrawerScope(docsLowerType);
+                            onOpenLibraryDrawer();
+                          }}
+                        >
+                          Library
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void (docsLowerType === 'stories' ? newStoriesDoc() : newMoodboardDoc())}
+                          disabled={docsLowerType === 'stories' ? isStoriesSaving : isMoodboardSaving}
+                        >
+                          New
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void (docsLowerType === 'stories' ? saveStories() : saveMoodboard())}
+                          disabled={
+                            docsLowerType === 'stories'
+                              ? !storiesIsDirty || isStoriesSaving
+                              : !moodboardIsDirty || isMoodboardSaving
+                          }
+                        >
+                          {docsLowerType === 'stories'
+                            ? isStoriesSaving
+                              ? 'Saving…'
+                              : storiesIsDirty
+                                ? 'Save'
+                                : 'Saved'
+                            : isMoodboardSaving
+                              ? 'Saving…'
+                              : moodboardIsDirty
+                                ? 'Save'
+                                : 'Saved'}
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void (docsLowerType === 'stories' ? deleteStoriesDoc() : deleteMoodboardDoc())}
+                          disabled={
+                            docsLowerType === 'stories'
+                              ? !storiesDocId || isStoriesSaving
+                              : !moodboardDocId || isMoodboardSaving
+                          }
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {docsLowerType === 'stories' ? (
+                      <>
+                        {storiesError ? <div className={styles.error}>{storiesError}</div> : null}
+
+                        <div className={styles.docForm}>
+                          <label className={styles.docLabel}>
+                            Title
+                            <input
+                              value={storiesDraftTitle}
+                              onChange={(e) => setStoriesDraftTitle(e.target.value)}
+                              onBlur={() => flushStoriesAutosave()}
+                              placeholder="Untitled"
+                            />
+                          </label>
+                          <label className={styles.docLabel}>
+                            Tags
+                            <input
+                              value={storiesDraftTagsText}
+                              onChange={(e) => setStoriesDraftTagsText(e.target.value)}
+                              onBlur={() => flushStoriesAutosave()}
+                              placeholder="tag, tag2"
+                            />
+                          </label>
+                        </div>
+
+                        <textarea
+                          className={styles.docTextFlex}
+                          value={storiesDraftContent}
+                          onChange={(e) => setStoriesDraftContent(e.target.value)}
+                          onBlur={() => flushStoriesAutosave()}
+                          placeholder="Write a story…"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {moodboardError ? <div className={styles.error}>{moodboardError}</div> : null}
+
+                        <div className={styles.docForm}>
+                          <label className={styles.docLabel}>
+                            Title
+                            <input
+                              value={moodboardDraftTitle}
+                              onChange={(e) => setMoodboardDraftTitle(e.target.value)}
+                              onBlur={() => flushMoodboardAutosave()}
+                              placeholder="Untitled"
+                            />
+                          </label>
+                          <label className={styles.docLabel}>
+                            Tags
+                            <input
+                              value={moodboardDraftTagsText}
+                              onChange={(e) => setMoodboardDraftTagsText(e.target.value)}
+                              onBlur={() => flushMoodboardAutosave()}
+                              placeholder="tag, tag2"
+                            />
+                          </label>
+                        </div>
+
+                        <div className={styles.moodboardBox}>
+                          <MoodboardCanvas
+                            value={moodboardDraft}
+                            onChange={setMoodboardDraft}
+                            onRequestAddImage={() => {
+                              setIsImagePickerOpen(true);
+                              setImagePickerSource('character');
+                            }}
+                          />
+                        </div>
+
+                        {isImagePickerOpen ? (
+                          <div className={styles.modalBackdrop} onClick={() => setIsImagePickerOpen(false)}>
+                            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+                              <div className={styles.modalHeader}>
+                                <div className={styles.modalTitle}>Add image</div>
+                                <button className={styles.btnSecondary} onClick={() => setIsImagePickerOpen(false)}>
+                                  Close
+                                </button>
+                              </div>
+
+                              <div className={styles.modalTabs}>
+                                <button
+                                  className={styles.tabBtn}
+                                  data-active={imagePickerSource === 'character' ? '1' : '0'}
+                                  onClick={() => setImagePickerSource('character')}
+                                >
+                                  This character
+                                </button>
+                                <button
+                                  className={styles.tabBtn}
+                                  data-active={imagePickerSource === 'global' ? '1' : '0'}
+                                  onClick={() => setImagePickerSource('global')}
+                                >
+                                  Global carousel
+                                </button>
+                              </div>
+
+                              <div className={styles.modalGrid}>
+                                {(imagePickerSource === 'character' ? (character?.images ?? []) : globalPickerImages).map((img: any) => (
+                                  <button
+                                    key={img.id}
+                                    className={styles.modalImgBtn}
+                                    onClick={() => {
+                                      addMoodboardImage(img.id);
+                                      setIsImagePickerOpen(false);
+                                    }}
+                                    title={img.tags?.length ? img.tags.join(', ') : undefined}
+                                  >
+                                    <img className={styles.modalImg} src={`ckc://thumb/${encodeURIComponent(img.id)}`} alt="" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -1203,7 +1759,7 @@ export function CharacterView({
               <div className={styles.sub}>Character Editor (rebuild)</div>
             </div>
             <div className={styles.headerRight}>
-              {tab === 'sheet' ? (
+              {rightTab === 'sheet' ? (
                 <button className={styles.btnSecondary} onClick={() => void saveSheet()} disabled={!isDirty || isSaving}>
                   {isSaving ? 'Saving…' : isDirty ? 'Save' : 'Saved'}
                 </button>
@@ -1223,16 +1779,16 @@ export function CharacterView({
           </div>
 
           <div className={styles.tabs}>
-            <button className={styles.tabBtn} data-active={tab === 'sheet' ? '1' : '0'} onClick={() => setTab('sheet')}>
+            <button className={styles.tabBtn} data-active={rightTab === 'sheet' ? '1' : '0'} onClick={() => setRightTab('sheet')}>
               Sheet
             </button>
-            <button className={styles.tabBtn} data-active={tab === 'photos' ? '1' : '0'} onClick={() => setTab('photos')}>
+            <button className={styles.tabBtn} data-active={rightTab === 'photos' ? '1' : '0'} onClick={() => setRightTab('photos')}>
               Photos
             </button>
-            <button className={styles.tabBtn} data-active={tab === 'notes' ? '1' : '0'} onClick={() => setTab('notes')}>
+            <button className={styles.tabBtn} data-active={isDocsOpen ? '1' : '0'} onClick={() => setIsDocsOpen((v) => !v)}>
               Notes
             </button>
-            <button className={styles.tabBtn} data-active={tab === 'tools' ? '1' : '0'} onClick={() => setTab('tools')}>
+            <button className={styles.tabBtn} data-active={rightTab === 'tools' ? '1' : '0'} onClick={() => setRightTab('tools')}>
               Tools
             </button>
           </div>
@@ -1244,7 +1800,7 @@ export function CharacterView({
             <div className={styles.muted}>Loading…</div>
           ) : (
             <div className={styles.body}>
-              {tab === 'sheet' ? (
+              {rightTab === 'sheet' ? (
                 <>
                   <div className={styles.sectionTitle}>Sheet</div>
 
@@ -1353,12 +1909,12 @@ export function CharacterView({
                     />
                   )}
                 </>
-              ) : tab === 'photos' ? (
+              ) : rightTab === 'photos' ? (
                 <>
                   <div className={styles.sectionTitle}>Photos</div>
                   <div className={styles.muted}>Media lives in the left pane; this panel will hold photo metadata/edit tools.</div>
                 </>
-              ) : tab === 'tools' ? (
+              ) : rightTab === 'tools' ? (
                 <>
                   <div className={styles.sectionTitle}>Tools</div>
                   <div className={styles.smallNote}>Character icon is shown in the Library list. Focus sliders control the crop.</div>
@@ -1612,7 +2168,7 @@ export function CharacterView({
               ) : (
                 <>
                   <div className={styles.sectionTitle}>Notes</div>
-                  <div className={styles.muted}>Use the Notes tab to open the 3-panel docs mode.</div>
+                  <div className={styles.muted}>Use the Notes button to toggle the 3-panel docs mode.</div>
                 </>
               )}
             </div>
