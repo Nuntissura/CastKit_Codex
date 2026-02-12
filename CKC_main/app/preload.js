@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('ckc', {
 
     listCharacters: (params) => ipcRenderer.invoke('ckc:listCharacters', params),
     listAllTags: () => ipcRenderer.invoke('ckc:listAllTags'),
+    listFieldValueSuggestions: (params) => ipcRenderer.invoke('ckc:listFieldValueSuggestions', params),
     listGlobalCarouselImages: (params) => ipcRenderer.invoke('ckc:listGlobalCarouselImages', params),
     listDocs: (params) => ipcRenderer.invoke('ckc:listDocs', params),
     getDoc: (params) => ipcRenderer.invoke('ckc:getDoc', params),

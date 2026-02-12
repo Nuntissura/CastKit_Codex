@@ -215,6 +215,7 @@ interface Window {
     getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
     listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
     listAllTags: () => Promise<string[]>;
+    listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
     importCharacterFromSheetDialog: () => Promise<{ characterId: string } | null>;
     getCharacter: (characterId: string) => Promise<CKCCharacter | null>;

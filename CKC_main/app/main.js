@@ -386,6 +386,11 @@ function registerIpcHandlers() {
         return lib.listAllTags();
     });
 
+    ipcMain.handle('ckc:listFieldValueSuggestions', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listFieldValueSuggestions(params || {});
+    });
+
     ipcMain.handle('ckc:listGlobalCarouselImages', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.listGlobalCarouselImages(params || {});

@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Improve the character sheet editor so dropdown-like fields remain fast but never restrictive, and add reusable per-field value presets that can be reused across characters.
@@ -25,15 +25,15 @@ Improve the character sheet editor so dropdown-like fields remain fast but never
 - AI rewrite features.
 
 ## Acceptance criteria
-- [ ] Enum fields allow arbitrary input while still suggesting known options.
-- [ ] A user can reuse a value for Field ID X across characters without copy-paste.
-- [ ] Presets are field-specific (do not pollute other field IDs).
+- [x] Enum fields allow arbitrary input while still suggesting known options.
+- [x] A user can reuse a value for Field ID X across characters without copy-paste.
+- [x] Presets are field-specific (do not pollute other field IDs).
 
 ## Test plan
 - [ ] Manual: type a custom value in an enum field; it saves and reloads.
 - [ ] Manual: use a preset from another character for the same field id.
-- [ ] Automated: `npm test`.
+- [x] Automated: `npm test`.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (sheet editor UX). Bump spec + mirror into `CKC_main/docs/`.
+- [x] Spec impact: yes (sheet editor UX). Bump spec + mirror into `CKC_main/docs/`.

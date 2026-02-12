@@ -33,6 +33,33 @@ export function SheetEditor({
   valuesById: Record<string, string>;
   onChange: (fieldId: string, value: string) => void;
 }) {
+  const [suggestionsByFieldId, setSuggestionsByFieldId] = React.useState<Record<string, string[]>>({});
+  const loadedSuggestionsRef = React.useRef<Set<string>>(new Set());
+  const loadingSuggestionsRef = React.useRef<Set<string>>(new Set());
+
+  const ensureSuggestionsLoaded = React.useCallback((fieldId: string) => {
+    const fid = String(fieldId ?? '').trim();
+    if (!fid) return;
+    if (loadedSuggestionsRef.current.has(fid)) return;
+    if (loadingSuggestionsRef.current.has(fid)) return;
+
+    loadingSuggestionsRef.current.add(fid);
+    window.ckc
+      .listFieldValueSuggestions({ fieldId: fid, limit: 60 })
+      .then((rows) => {
+        const vals = Array.isArray(rows) ? rows.map((v) => String(v)).map((v) => v.trim()).filter(Boolean) : [];
+        loadedSuggestionsRef.current.add(fid);
+        setSuggestionsByFieldId((prev) => ({ ...prev, [fid]: vals }));
+      })
+      .catch(() => {
+        loadedSuggestionsRef.current.add(fid);
+        setSuggestionsByFieldId((prev) => ({ ...prev, [fid]: [] }));
+      })
+      .finally(() => {
+        loadingSuggestionsRef.current.delete(fid);
+      });
+  }, []);
+
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
     for (const s of templateSections) map[s.title] = initialCollapsed(s.title);
@@ -72,6 +99,23 @@ export function SheetEditor({
                   const value = valuesById[field.id] ?? '';
                   const isRule = field.type === 'rule';
                   const rows = inputRowsForField(field);
+                  const listId = `ckc-field-suggest-${field.id}`;
+                  const presets = suggestionsByFieldId[field.id] ?? [];
+                  const enumValues = field.type === 'enum' && Array.isArray(field.enumValues) ? field.enumValues : [];
+
+                  const suggestions = (() => {
+                    const seen = new Set<string>();
+                    const out: string[] = [];
+                    for (const s of [...enumValues, ...presets]) {
+                      const v = String(s ?? '').trim();
+                      if (!v) continue;
+                      const k = v.toLowerCase();
+                      if (seen.has(k)) continue;
+                      seen.add(k);
+                      out.push(v);
+                    }
+                    return out;
+                  })();
 
                   return (
                     <div key={field.id} className={styles.field}>
@@ -86,25 +130,41 @@ export function SheetEditor({
                       {isRule ? (
                         <pre className={styles.ruleText}>{value}</pre>
                       ) : field.type === 'enum' && field.enumValues?.length ? (
-                        <select
-                          className={styles.select}
-                          value={value.trim().length ? value : ''}
-                          onChange={(e) => onChange(field.id, e.target.value)}
-                        >
-                          <option value="">(blank)</option>
-                          {field.enumValues.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                        <>
+                          <input
+                            className={styles.input}
+                            value={value}
+                            onChange={(e) => onChange(field.id, e.target.value)}
+                            onFocus={() => ensureSuggestionsLoaded(field.id)}
+                            list={suggestions.length ? listId : undefined}
+                            placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                          />
+                          {suggestions.length ? (
+                            <datalist id={listId}>
+                              {suggestions.map((opt) => (
+                                <option key={opt} value={opt} />
+                              ))}
+                            </datalist>
+                          ) : null}
+                        </>
                       ) : rows <= 3 ? (
-                        <input
-                          className={styles.input}
-                          value={value}
-                          onChange={(e) => onChange(field.id, e.target.value)}
-                          placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
-                        />
+                        <>
+                          <input
+                            className={styles.input}
+                            value={value}
+                            onChange={(e) => onChange(field.id, e.target.value)}
+                            onFocus={() => ensureSuggestionsLoaded(field.id)}
+                            list={suggestions.length ? listId : undefined}
+                            placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                          />
+                          {suggestions.length ? (
+                            <datalist id={listId}>
+                              {suggestions.map((opt) => (
+                                <option key={opt} value={opt} />
+                              ))}
+                            </datalist>
+                          ) : null}
+                        </>
                       ) : (
                         <textarea
                           className={styles.textarea}

@@ -822,6 +822,43 @@ class CKCLibrary {
     return Array.from(seen).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }
 
+  async listFieldValueSuggestions({ fieldId, limit = 60 } = {}) {
+    const fid = String(fieldId ?? '').trim();
+    if (!fid) return [];
+
+    const limNum = Number(limit);
+    const lim = Number.isFinite(limNum) ? Math.max(0, Math.min(200, Math.floor(limNum))) : 60;
+    if (lim <= 0) return [];
+
+    const rows = await all(
+      this.db,
+      `SELECT value_text AS valueText, MAX(updated_at) AS updatedAt
+       FROM FieldValue
+       WHERE field_id = ?
+         AND value_text IS NOT NULL
+         AND LENGTH(TRIM(value_text)) > 0
+       GROUP BY value_text
+       ORDER BY updatedAt DESC
+       LIMIT ?`,
+      [fid, lim]
+    );
+
+    const seen = new Set();
+    const out = [];
+    for (const r of rows) {
+      const raw = String(r.valueText ?? '');
+      const v = raw.trim();
+      if (!v) continue;
+      if (v.includes('\n') || v.includes('\r')) continue;
+      if (v.length > 240) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+    }
+    return out;
+  }
+
   async listGlobalCarouselImages({ preferFrontpage = true } = {}) {
     const rows = await all(
       this.db,
