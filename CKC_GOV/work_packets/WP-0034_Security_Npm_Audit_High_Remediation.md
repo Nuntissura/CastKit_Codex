@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Eliminate HIGH severity `npm audit` findings that appear during packaging/release builds (especially the stage `npm install --omit=dev`) so release builds are not shipping with known HIGH-risk dependency vulnerabilities.
@@ -27,19 +27,18 @@ Eliminate HIGH severity `npm audit` findings that appear during packaging/releas
 - Fixing Moderate/Low findings unless they are tightly coupled to clearing HIGH.
 
 ## Acceptance criteria
-- [ ] `cd CKC_main; npm audit --omit=dev --audit-level=high` reports **0** HIGH vulnerabilities.
-- [ ] Packaging stage install no longer reports HIGH vulnerabilities during release build.
-- [ ] `cd CKC_main; npm test` passes.
-- [ ] `cd CKC_main; npx tsc --noEmit` passes.
+- [x] `cd CKC_main; npm audit --omit=dev --audit-level=high` reports **0** HIGH vulnerabilities.
+- [x] Packaging stage install no longer reports HIGH vulnerabilities during release build.
+- [x] `cd CKC_main; npm test` passes.
+- [x] `cd CKC_main; npx tsc --noEmit` passes.
 
 ## Test plan
-- [ ] Automated: `npm install` (updates lockfile as needed).
-- [ ] Automated: `npm audit --omit=dev --audit-level=high`.
-- [ ] Automated: `npm test`.
-- [ ] Automated: `npx tsc --noEmit`.
+- [x] Automated: `npm install` (updates lockfile as needed).
+- [x] Automated: `npm audit --omit=dev --audit-level=high`.
+- [x] Automated: `npm test`.
+- [x] Automated: `npx tsc --noEmit`.
 - [ ] Manual: run `npm run package:win` for a tagged release build.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: no (security/dependency remediation only; no UX/behavior change).
-
+- [x] Spec impact: no (security/dependency remediation only; no UX/behavior change).

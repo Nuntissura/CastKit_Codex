@@ -149,6 +149,9 @@ $stagePkg = [ordered]@{
   dependencies = [ordered]@{
     sqlite3 = [string]$pkg.dependencies.sqlite3
   }
+  overrides = [ordered]@{
+    tar = '7.5.7'
+  }
   build = [ordered]@{
     appId = 'com.nuntissura.castkitcodex'
     productName = 'CastKit Codex'
