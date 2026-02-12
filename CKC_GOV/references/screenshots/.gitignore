@@ -1,0 +1,9 @@
+# Ignore everything in this drop folder by default (no noisy git status).
+*
+
+# Keep these tracked.
+!.gitignore
+!README.md
+!keep/
+!keep/**
+

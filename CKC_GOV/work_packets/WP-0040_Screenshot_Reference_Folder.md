@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Create a dedicated folder for dumping UI screenshots as reference material for CKC development and LLM discussions, without polluting git status.
@@ -22,18 +22,18 @@ Screenshots are useful for describing UI/UX issues to Codex and other models. We
 - Any UI changes.
 
 ## Acceptance criteria
-- [ ] Folder exists: `CKC_GOV/references/screenshots/`.
-- [ ] Dropping screenshots into the folder does not create noisy untracked git status by default.
-- [ ] A `keep/` subfolder exists for screenshots that should be committed.
+- [x] Folder exists: `CKC_GOV/references/screenshots/`.
+- [x] Dropping screenshots into the folder does not create noisy untracked git status by default.
+- [x] A `keep/` subfolder exists for screenshots that should be committed.
 
 ## Test plan
-- [ ] Manual: drop a `.png`/`.jpg` into `CKC_GOV/references/screenshots/` and confirm `git status` stays clean.
+- [x] Manual: drop a `.png`/`.jpg` into `CKC_GOV/references/screenshots/` and confirm `git status` stays clean.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
   - No spec impact (repo hygiene / references only).
-- [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
+- [x] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
 
 ## Implementation notes
 - Key files to touch:
@@ -49,4 +49,3 @@ Delete `CKC_GOV/references/` and remove the WP row from the Task Board.
 
 ## Notes
 - Do NOT touch `D:`.
-
