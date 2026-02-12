@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Improve the character sheet editor so dropdown-like fields remain fast but never restrictive, and add reusable per-field value presets that can be reused across characters.
@@ -37,4 +37,3 @@ Improve the character sheet editor so dropdown-like fields remain fast but never
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
 - [ ] Spec impact: yes (sheet editor UX). Bump spec + mirror into `CKC_main/docs/`.
-
