@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Expose the existing backend capabilities for ingest/patch/versions in the UI:
@@ -32,17 +32,17 @@ Users need safe, auditable merges of sheet content (from txt/md) without losing 
 - Rich text diff rendering (plain compare is fine).
 
 ## Acceptance criteria
-- [ ] Paste ingest parses both “ID only” and “ID + descriptor” formats and previews changes.
-- [ ] Apply overwrites only selected fields and creates a new version.
-- [ ] Import from txt/md works.
-- [ ] Version list shows past versions; diff view compares two versions.
-- [ ] Selective revert from a version works and creates a new version (no destructive overwrite).
+- [x] Paste ingest parses both “ID only” and “ID + descriptor” formats and previews changes.
+- [x] Apply overwrites only selected fields and creates a new version.
+- [x] Import from txt/md works.
+- [x] Version list shows past versions; diff view compares two versions.
+- [x] Selective revert from a version works and creates a new version (no destructive overwrite).
 
 ## Test plan
 - [ ] Manual: ingest paste, preview, apply subset, confirm version created.
 - [ ] Manual: revert subset from an older version, confirm version created.
-- [ ] Automated: `npm test`.
+- [x] Automated: `npm test`.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (ingest/merge/version UX). Bump spec + mirror into `CKC_main/docs/`.
+- [x] Spec impact: yes (ingest/merge/version UX). Bump spec + mirror into `CKC_main/docs/`.

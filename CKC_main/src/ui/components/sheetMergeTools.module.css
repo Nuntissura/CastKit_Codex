@@ -1,0 +1,253 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel {
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-weight: 800;
+}
+
+.note {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--bg-accent);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.textarea,
+.input,
+.select {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+}
+
+.errorBox {
+  border: 1px solid rgba(255, 0, 0, 0.35);
+  background: rgba(255, 0, 0, 0.06);
+  padding: 10px 12px;
+}
+
+.errorTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.issueList {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.issueSeverity {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.issueSeverity[data-sev='error'] {
+  color: var(--danger);
+}
+
+.issueSeverity[data-sev='warn'] {
+  color: rgba(255, 0, 0, 0.75);
+}
+
+.issueField {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.summary b {
+  color: var(--text-primary);
+}
+
+.changeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.changeRow {
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.42);
+  overflow: hidden;
+}
+
+.changeSummary {
+  display: grid;
+  grid-template-columns: 22px minmax(90px, auto) 1fr auto auto auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 10px;
+  cursor: pointer;
+}
+
+.changeSummary:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.checkboxWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fieldId {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+  color: var(--accent-color);
+  white-space: nowrap;
+}
+
+.label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.badge[data-type='add'] {
+  border-color: rgba(0, 128, 0, 0.35);
+}
+
+.badge[data-type='modify'] {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.badge[data-type='blank'] {
+  border-color: rgba(0, 0, 0, 0.2);
+  opacity: 0.8;
+}
+
+.badge[data-type='invalid'] {
+  border-color: rgba(255, 0, 0, 0.4);
+  color: var(--danger);
+}
+
+.badge[data-type='same'] {
+  border-color: rgba(0, 0, 0, 0.15);
+  opacity: 0.65;
+}
+
+.changeBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.2);
+}
+
+.valueBox {
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.valueTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.unmapped {
+  border: 1px dashed var(--glass-border);
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+}
+
+.unmappedTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.unmappedLine {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.divider {
+  border-top: 1px solid var(--glass-border);
+  margin: 6px 0;
+}
+

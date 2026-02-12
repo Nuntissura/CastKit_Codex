@@ -2,7 +2,9 @@ import React from 'react';
 import { LibraryDrawer } from '../components/LibraryDrawer';
 import { MediaPane } from '../components/MediaPane';
 import { MoodboardCanvas, type MoodboardState } from '../components/MoodboardCanvas';
+import { SheetIngestMergeTools } from '../components/SheetIngestMergeTools';
 import { SheetEditor } from '../components/SheetEditor';
+import { SheetVersionTools } from '../components/SheetVersionTools';
 import { useElementWidth } from '../hooks/useElementWidth';
 import styles from './characterView.module.css';
 
@@ -2163,6 +2165,28 @@ export function CharacterView({
                         Last export: <code>{lastExportPath}</code>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <SheetIngestMergeTools
+                      characterId={characterId}
+                      isSheetDirty={isDirty}
+                      onCharacterRefreshed={(next) => {
+                        setCharacter(next);
+                        setDraftValuesById(next.valuesById || {});
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <SheetVersionTools
+                      characterId={characterId}
+                      isSheetDirty={isDirty}
+                      onCharacterRefreshed={(next) => {
+                        setCharacter(next);
+                        setDraftValuesById(next.valuesById || {});
+                      }}
+                    />
                   </div>
                 </>
               ) : (

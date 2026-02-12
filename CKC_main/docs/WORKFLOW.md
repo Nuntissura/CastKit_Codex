@@ -13,7 +13,7 @@ On the workstation, governance lives under `<CKC_ROOT>\\CKC_GOV` (Task Board, Wo
 Start here:
 - `docs/PROJECT_CODEX.md` (mirrored from `CKC_GOV/PROJECT_CODEX.md`)
 - `docs/TASK_BOARD.md` (mirrored from `CKC_GOV/taskboard/TASK_BOARD.md`)
-- `docs/CastKit_Codex_Spec_v00.031.md` (mirrored from `CKC_GOV/spec/`)
+- `docs/CastKit_Codex_Spec_v00.032.md` (mirrored from `CKC_GOV/spec/`)
 - `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
 
 ## Rules (MUST)
@@ -28,8 +28,8 @@ Start here:
    - push to origin so GitHub stays current
 
 3. **Update spec with every addition**
-   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.031.md`
-   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.031.md`
+   - Current spec: `CKC_GOV/spec/CastKit_Codex_Spec_v00.032.md`
+   - Mirror into this repo: `docs/CastKit_Codex_Spec_v00.032.md`
    - Session dump (verbatim requirements): `docs/SESSION_DUMP_2026-02-10.md`
    - When bumping spec version, move the previous version into `CKC_GOV/spec/archive_spec/`
    - If the spec summary/decisions ever contradict the session dump, the **session dump wins**.

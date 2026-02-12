@@ -48,7 +48,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0030 | Media panel chrome: filters, thumbs, hotkeys, overlap | DONE | Codex | Header controls (no overlay), arrow nav, bigger thumbs, no-match clear filters, per-thumb carousel toggle, hamburger-safe header inset, rating hotkeys LAlt+0..5. |
 | WP-0031 | Docs mode: autosave + drawer search + layout restoration | DONE | Codex | Autosave + stacked Notes; lower Stories/Moodboard toggle; docs drawer search/tags + “All”; UI state persisted in config. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | DONE | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |
-| WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | IN_PROGRESS | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
+| WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | DONE | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
 
 ## Current focus
-- Current: WP-0033 — sheet ingest/merge + diff + selective overwrite + versions UI.
+- Current: Release build + manual UX verification.

@@ -205,6 +205,64 @@ type CKCRepairMissingImagesByHashResult = {
   }>;
 };
 
+type CKCValidationIssue = {
+  fieldId: string;
+  severity: 'error' | 'warn';
+  message: string;
+};
+
+type CKCSheetChangeType = 'same' | 'blank' | 'add' | 'modify' | 'invalid';
+
+type CKCSheetFieldChange = {
+  fieldId: string;
+  label: string;
+  section: string;
+  currentValue: string;
+  proposedValue: string;
+  changeType: CKCSheetChangeType;
+  isProtected: boolean;
+  defaultSelected: boolean;
+  issues: CKCValidationIssue[];
+};
+
+type CKCSheetIngestPreviewResult = {
+  targetCharacterId: string | null;
+  changes: CKCSheetFieldChange[];
+  unmapped: Array<{ fieldId: string; rawLine: string }>;
+};
+
+type CKCOpenTextFileResult = {
+  path: string;
+  text: string;
+};
+
+type CKCSheetVersionSource = 'ui_edit' | 'ingest' | 'paste_patch' | 'import';
+
+type CKCSheetVersionListItem = {
+  id: string;
+  createdAt: string;
+  source: CKCSheetVersionSource;
+  relativePath: string;
+  hash: string;
+  notes: string;
+};
+
+type CKCSheetVersionDiffChange = {
+  fieldId: string;
+  label: string;
+  section: string;
+  fromValue: string;
+  toValue: string;
+};
+
+type CKCSheetVersionDiffResult = {
+  characterId: string;
+  fromVersionId: string;
+  toVersionId: string;
+  changeCount: number;
+  changes: CKCSheetVersionDiffChange[];
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -236,6 +294,23 @@ interface Window {
     updateSpinOff: (params?: unknown) => Promise<{ ok: true }>;
     deleteSpinOff: (spinoffId: string) => Promise<{ ok: true }>;
     selectFolderDialog: (opts?: unknown) => Promise<string | null>;
+    openTextFileDialog: (opts?: unknown) => Promise<CKCOpenTextFileResult | null>;
+    ingestPreview: (params: { characterId?: string | null; inputText: string }) => Promise<CKCSheetIngestPreviewResult>;
+    ingestApply: (params: {
+      characterId: string;
+      selectedFieldIds: string[];
+      inputText: string;
+      validationMode?: string;
+      allowSaveWithErrors?: boolean;
+    }) => Promise<{ ok: boolean; issues?: CKCValidationIssue[] }>;
+    patchPreview: (params: { characterId: string; patchText: string }) => Promise<CKCSheetIngestPreviewResult>;
+    patchApply: (params: {
+      characterId: string;
+      selectedFieldIds: string[];
+      patchText: string;
+      validationMode?: string;
+      allowSaveWithErrors?: boolean;
+    }) => Promise<{ ok: boolean; issues?: CKCValidationIssue[] }>;
     exportEmptyTemplate: (params?: unknown) => Promise<{ ok: true; path: string; templateId: string }>;
     exportTemplateFieldPack: (params?: unknown) => Promise<{
       ok: true;
@@ -255,5 +330,15 @@ interface Window {
     setImageMeta: (params: unknown) => Promise<unknown>;
     addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
+    listVersions: (characterId: string) => Promise<CKCSheetVersionListItem[]>;
+    diffVersions: (params: { characterId: string; fromVersionId: string; toVersionId: string }) => Promise<CKCSheetVersionDiffResult>;
+    revertPreviewFromVersion: (params: { characterId: string; versionId: string }) => Promise<CKCSheetIngestPreviewResult>;
+    revertApplyFromVersion: (params: {
+      characterId: string;
+      versionId: string;
+      selectedFieldIds: string[];
+      validationMode?: string;
+      allowSaveWithErrors?: boolean;
+    }) => Promise<{ ok: boolean; issues?: CKCValidationIssue[] }>;
   };
 }

@@ -241,6 +241,7 @@ class CKCLibrary {
     await this.ensureTemplateLoaded();
     await this.ensureBuiltinSafeSubsetPack();
     await this.ensureBuiltinAllFieldsPack();
+    await this.ensureDefaultProtectedFields();
   }
 
   close() {
@@ -539,6 +540,23 @@ class CKCLibrary {
          SET template_hash_at_create = ?, field_id_list = ?, updated_at = CURRENT_TIMESTAMP
          WHERE template_id = ? AND name = ? AND is_builtin = 1`,
         [templateAst.hash, JSON.stringify(filtered), templateId, name]
+      );
+    }
+  }
+
+  async ensureDefaultProtectedFields() {
+    const defaults = ['CHAR-ID-001'];
+    for (const fid of defaults) {
+      const row = await get(
+        this.db,
+        `SELECT protected_id FROM ProtectedField WHERE scope = 'global' AND field_id = ? LIMIT 1`,
+        [fid]
+      );
+      if (row) continue;
+      await run(
+        this.db,
+        `INSERT INTO ProtectedField(protected_id, scope, field_id, notes) VALUES(?, 'global', ?, ?)`,
+        [randomId('prot_'), fid, 'System default protected field.']
       );
     }
   }
@@ -2043,9 +2061,11 @@ class CKCLibrary {
     }
 
     const changes = [];
+    const presentIds = new Set(Array.from(extraction.assignments.keys()));
     for (const section of templateAst.sections) {
       for (const field of section.fields) {
-        const proposed = extraction.assignments.has(field.id) ? extraction.assignments.get(field.id) : '';
+        if (!presentIds.has(field.id)) continue;
+        const proposed = extraction.assignments.get(field.id) ?? '';
         const current = currentValues[field.id] ?? '';
         const fieldIssues = issuesById.get(field.id) || [];
         const changeType = classifyChangeType(current, proposed, fieldIssues);
@@ -2087,6 +2107,7 @@ class CKCLibrary {
     const updates = {};
     for (const c of preview.changes) {
       if (!selected.has(c.fieldId)) continue;
+      if (c.isProtected) continue;
       // Never overwrite with blank unless explicitly selected (already is).
       updates[c.fieldId] = c.proposedValue ?? '';
     }
@@ -2136,6 +2157,7 @@ class CKCLibrary {
     const updates = {};
     for (const c of preview.changes) {
       if (!selected.has(c.fieldId)) continue;
+      if (c.isProtected) continue;
       updates[c.fieldId] = c.proposedValue ?? '';
     }
 
@@ -2360,7 +2382,8 @@ class CKCLibrary {
     const text = fs.readFileSync(abs, 'utf8');
     const extraction = extractFieldAssignmentsFromText(text);
 
-    const selected = new Set(selectedFieldIds || []);
+    const protectedIds = new Set(await this.listProtectedFieldIds(characterId));
+    const selected = new Set((selectedFieldIds || []).filter((fid) => !protectedIds.has(fid)));
     const updates = {};
     for (const [fieldId, valueText] of extraction.assignments) {
       if (!selected.has(fieldId)) continue;
