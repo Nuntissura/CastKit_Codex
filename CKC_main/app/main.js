@@ -322,6 +322,9 @@ function registerIpcHandlers() {
         const model = typeof llm.model === 'string' ? llm.model : '';
         const apiKey = typeof llm.apiKey === 'string' ? llm.apiKey : '';
         const systemPrompt = typeof llm.systemPrompt === 'string' ? llm.systemPrompt : '';
+        const timeoutSecRaw = typeof llm.timeoutSec === 'number' ? llm.timeoutSec : NaN;
+        const timeoutSec = Number.isFinite(timeoutSecRaw) ? timeoutSecRaw : 900;
+        const clampedTimeoutSec = Math.max(5, Math.min(7200, timeoutSec));
 
         if (!String(baseUrl).trim()) throw new Error('Local model base URL is not configured (Tools → Local model).');
         if (!String(model).trim()) throw new Error('Local model name is not configured (Tools → Local model).');
@@ -342,7 +345,7 @@ function registerIpcHandlers() {
             messages: mergedMessages,
             temperature,
             maxTokens,
-            timeoutMs: 60_000,
+            timeoutMs: Math.round(clampedTimeoutSec * 1000),
         });
         return { ok: true, text: res.text };
     });

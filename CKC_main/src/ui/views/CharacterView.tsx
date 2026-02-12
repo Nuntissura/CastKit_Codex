@@ -226,6 +226,7 @@ export function CharacterView({
   const [llmModel, setLlmModel] = React.useState<string>('');
   const [llmApiKey, setLlmApiKey] = React.useState<string>('');
   const [llmSystemPrompt, setLlmSystemPrompt] = React.useState<string>('');
+  const [llmTimeoutSec, setLlmTimeoutSec] = React.useState<number>(900);
   const [llmPrompt, setLlmPrompt] = React.useState<string>('');
   const [llmResponse, setLlmResponse] = React.useState<string>('');
   const [llmError, setLlmError] = React.useState<string | null>(null);
@@ -301,6 +302,7 @@ export function CharacterView({
         if (typeof llm?.model === 'string') setLlmModel(llm.model);
         if (typeof llm?.apiKey === 'string') setLlmApiKey(llm.apiKey);
         if (typeof llm?.systemPrompt === 'string') setLlmSystemPrompt(llm.systemPrompt);
+        if (typeof llm?.timeoutSec === 'number' && Number.isFinite(llm.timeoutSec)) setLlmTimeoutSec(llm.timeoutSec);
       })
       .catch(() => {});
   }, []);
@@ -1250,15 +1252,18 @@ export function CharacterView({
   };
 
   const persistLlmConfig = React.useCallback(async () => {
+    const timeoutSec = Number.isFinite(llmTimeoutSec) ? llmTimeoutSec : 900;
+    const clampedTimeoutSec = Math.max(5, Math.min(7200, timeoutSec));
     await window.ckc.setConfig({
       llm: {
         baseUrl: String(llmBaseUrl || '').trim(),
         model: String(llmModel || '').trim(),
         apiKey: String(llmApiKey || '').trim(),
         systemPrompt: String(llmSystemPrompt || ''),
+        timeoutSec: clampedTimeoutSec,
       },
     });
-  }, [llmApiKey, llmBaseUrl, llmModel, llmSystemPrompt]);
+  }, [llmApiKey, llmBaseUrl, llmModel, llmSystemPrompt, llmTimeoutSec]);
 
   const runLlm = React.useCallback(async () => {
     const prompt = String(llmPrompt || '').trim();
@@ -2257,6 +2262,18 @@ export function CharacterView({
                             value={llmApiKey}
                             onChange={(e) => setLlmApiKey(e.target.value)}
                             placeholder="(usually blank for local)"
+                          />
+                        </label>
+                        <label className={styles.docLabel}>
+                          Timeout (sec)
+                          <input
+                            type="number"
+                            min={5}
+                            max={7200}
+                            step={5}
+                            value={String(llmTimeoutSec)}
+                            onChange={(e) => setLlmTimeoutSec(Number(e.target.value))}
+                            placeholder="900"
                           />
                         </label>
                         <label className={styles.docLabel} style={{ gridColumn: '1 / -1' }}>
