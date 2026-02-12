@@ -49,6 +49,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0031 | Docs mode: autosave + drawer search + layout restoration | DONE | Codex | Autosave + stacked Notes; lower Stories/Moodboard toggle; docs drawer search/tags + “All”; UI state persisted in config. |
 | WP-0032 | Sheet editor: free-text enums + reusable per-field presets | DONE | Codex | Enum suggestions + custom text; reuse values per Field ID across characters. |
 | WP-0033 | Sheet ingest/merge + diff + selective overwrite + versions UI | DONE | Codex | Paste/import, preview diff, apply selected fields, version list/diff/revert (non-destructive). |
+| WP-0034 | Security: remediate `npm audit` HIGH (release builds) | IN_PROGRESS | Codex | Clear HIGH vulnerabilities (esp. `tar`) for prod + stage packaging trees. |
 
 ## Current focus
-- Current: Release build + manual UX verification.
+- Current: WP-0034 — Security: remediate `npm audit` HIGH (release builds).
