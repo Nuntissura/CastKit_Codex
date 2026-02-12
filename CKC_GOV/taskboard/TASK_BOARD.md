@@ -55,6 +55,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0037 | Character ID: fixed format rule + migration strategy | BACKLOG | Codex | Define/enforce human-friendly Character ID rule; document + test migration. |
 | WP-0038 | Docs mode middle pane polish | DONE | Codex | Clean up Notes + Stories/Moodboard middle panel layout (no behavior change). |
 | WP-0039 | Local model integration spike (experimental) | DONE | Codex | Add minimal local LLM plumbing (OpenAI-compatible HTTP) + Tools UI to test prompts. |
+| WP-0040 | Screenshot reference folder | BACKLOG | Codex | Add `CKC_GOV/references/screenshots/` drop zone (ignored by default) + `keep/` for committed assets. |
 
 ## Current focus
 - Current: Release build + manual UX verification.
