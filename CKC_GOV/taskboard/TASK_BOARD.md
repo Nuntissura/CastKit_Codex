@@ -53,8 +53,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0035 | Startup: global carousel IPC crash + cold-start library load | BACKLOG | Codex | Address reported `ckc:listGlobalCarouselImages` null-DB crash; ensure first-load shows data without refresh. |
 | WP-0036 | Backup task: no popups (background) + easy enable/disable | BACKLOG | Codex | Ensure Scheduled Task never interrupts focus; add unregister helper + docs. |
 | WP-0037 | Character ID: fixed format rule + migration strategy | BACKLOG | Codex | Define/enforce human-friendly Character ID rule; document + test migration. |
-| WP-0038 | Docs mode middle pane polish | BACKLOG | Codex | Clean up Notes + Stories/Moodboard middle panel layout (no behavior change). |
-| WP-0039 | Local model integration spike (experimental) | BACKLOG | Codex | Add minimal local LLM plumbing (OpenAI-compatible HTTP) + Tools UI to test prompts. |
+| WP-0038 | Docs mode middle pane polish | DONE | Codex | Clean up Notes + Stories/Moodboard middle panel layout (no behavior change). |
+| WP-0039 | Local model integration spike (experimental) | DONE | Codex | Add minimal local LLM plumbing (OpenAI-compatible HTTP) + Tools UI to test prompts. |
 
 ## Current focus
 - Current: Release build + manual UX verification.

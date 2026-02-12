@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add an experimental “local model” integration path by letting CKC call a locally running LLM server (OpenAI-compatible HTTP API) via Electron main-process IPC, with a minimal UI to test prompts and view responses.
@@ -38,11 +38,11 @@ Local/offline generation is useful for character/notes workflows and avoids clou
 - [ ] Manual (with local server): run a local LLM (e.g. Ollama or LM Studio) → prompt returns response.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (version bump + changelog entry + archive old spec):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (version bump + changelog entry + archive old spec):
   - update `CKC_GOV/spec/CastKit_Codex_Spec_v*.md`
   - mirror into `CKC_main/docs/`
-- [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
+- [x] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
 
 ## Implementation notes
 - Key files to touch:
@@ -66,4 +66,3 @@ Remove the IPC + UI and delete the `llm` config fields (leave unknown keys toler
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

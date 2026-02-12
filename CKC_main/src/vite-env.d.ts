@@ -269,6 +269,11 @@ interface Window {
     getConfig: () => Promise<unknown>;
     getConfigInfo: () => Promise<CKCConfigInfo>;
     setConfig: (cfg: unknown) => Promise<unknown>;
+    llmChat: (params: {
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      temperature?: number;
+      maxTokens?: number;
+    }) => Promise<{ ok: true; text: string }>;
     selectLibraryRoot: () => Promise<string | null>;
     getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
     listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;

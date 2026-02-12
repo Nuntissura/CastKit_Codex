@@ -222,6 +222,15 @@ export function CharacterView({
 
   const [isImportingImages, setIsImportingImages] = React.useState<boolean>(false);
 
+  const [llmBaseUrl, setLlmBaseUrl] = React.useState<string>('http://127.0.0.1:11434/v1');
+  const [llmModel, setLlmModel] = React.useState<string>('');
+  const [llmApiKey, setLlmApiKey] = React.useState<string>('');
+  const [llmSystemPrompt, setLlmSystemPrompt] = React.useState<string>('');
+  const [llmPrompt, setLlmPrompt] = React.useState<string>('');
+  const [llmResponse, setLlmResponse] = React.useState<string>('');
+  const [llmError, setLlmError] = React.useState<string | null>(null);
+  const [isLlmBusy, setIsLlmBusy] = React.useState<boolean>(false);
+
   const defaultExportsDir = React.useMemo(() => {
     return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
   }, [libraryRoot]);
@@ -286,6 +295,12 @@ export function CharacterView({
         if (typeof selected?.notes === 'string') setNotesDocId(selected.notes);
         if (typeof selected?.stories === 'string') setStoriesDocId(selected.stories);
         if (typeof selected?.moodboard === 'string') setMoodboardDocId(selected.moodboard);
+
+        const llm = (cfg?.llm && typeof cfg.llm === 'object' ? cfg.llm : null) as any;
+        if (typeof llm?.baseUrl === 'string') setLlmBaseUrl(llm.baseUrl);
+        if (typeof llm?.model === 'string') setLlmModel(llm.model);
+        if (typeof llm?.apiKey === 'string') setLlmApiKey(llm.apiKey);
+        if (typeof llm?.systemPrompt === 'string') setLlmSystemPrompt(llm.systemPrompt);
       })
       .catch(() => {});
   }, []);
@@ -1233,6 +1248,34 @@ export function CharacterView({
       ],
     }));
   };
+
+  const persistLlmConfig = React.useCallback(async () => {
+    await window.ckc.setConfig({
+      llm: {
+        baseUrl: String(llmBaseUrl || '').trim(),
+        model: String(llmModel || '').trim(),
+        apiKey: String(llmApiKey || '').trim(),
+        systemPrompt: String(llmSystemPrompt || ''),
+      },
+    });
+  }, [llmApiKey, llmBaseUrl, llmModel, llmSystemPrompt]);
+
+  const runLlm = React.useCallback(async () => {
+    const prompt = String(llmPrompt || '').trim();
+    if (!prompt) return;
+    setIsLlmBusy(true);
+    setLlmError(null);
+    setLlmResponse('');
+    try {
+      await persistLlmConfig();
+      const res: any = await window.ckc.llmChat({ messages: [{ role: 'user', content: prompt }] });
+      setLlmResponse(typeof res?.text === 'string' ? res.text : JSON.stringify(res, null, 2));
+    } catch (err: unknown) {
+      setLlmError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLlmBusy(false);
+    }
+  }, [llmPrompt, persistLlmConfig]);
 
   return (
     <>
@@ -2188,6 +2231,98 @@ export function CharacterView({
                       }}
                     />
                   </div>
+
+                  <details style={{ marginTop: 18 }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                      Local model (experimental)
+                    </summary>
+                    <div style={{ marginTop: 10 }}>
+                      <div className={styles.docForm}>
+                        <label className={styles.docLabel}>
+                          Base URL
+                          <input
+                            value={llmBaseUrl}
+                            onChange={(e) => setLlmBaseUrl(e.target.value)}
+                            placeholder="http://127.0.0.1:11434/v1"
+                          />
+                        </label>
+                        <label className={styles.docLabel}>
+                          Model
+                          <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="model name" />
+                        </label>
+                        <label className={styles.docLabel}>
+                          API key (optional)
+                          <input
+                            type="password"
+                            value={llmApiKey}
+                            onChange={(e) => setLlmApiKey(e.target.value)}
+                            placeholder="(usually blank for local)"
+                          />
+                        </label>
+                        <label className={styles.docLabel} style={{ gridColumn: '1 / -1' }}>
+                          System prompt (optional)
+                          <textarea
+                            value={llmSystemPrompt}
+                            onChange={(e) => setLlmSystemPrompt(e.target.value)}
+                            placeholder="System prompt…"
+                            rows={3}
+                          />
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            setLlmError(null);
+                            void persistLlmConfig().catch((err: unknown) =>
+                              setLlmError(err instanceof Error ? err.message : String(err))
+                            );
+                          }}
+                          disabled={isLlmBusy}
+                        >
+                          Save settings
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => void runLlm()}
+                          disabled={isLlmBusy || !llmPrompt.trim() || !llmBaseUrl.trim() || !llmModel.trim()}
+                        >
+                          {isLlmBusy ? 'Running…' : 'Run prompt'}
+                        </button>
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => {
+                            setLlmPrompt('');
+                            setLlmResponse('');
+                            setLlmError(null);
+                          }}
+                          disabled={isLlmBusy}
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      <div className={styles.smallNote} style={{ marginTop: 10 }}>
+                        OpenAI-compatible chat endpoint. Known defaults: Ollama `http://127.0.0.1:11434/v1`, LM Studio
+                        `http://127.0.0.1:1234/v1`.
+                      </div>
+
+                      <textarea
+                        className={styles.llmPrompt}
+                        value={llmPrompt}
+                        onChange={(e) => setLlmPrompt(e.target.value)}
+                        placeholder="Prompt…"
+                      />
+
+                      {llmError ? (
+                        <div className={styles.error} style={{ margin: '10px 0' }}>
+                          {llmError}
+                        </div>
+                      ) : null}
+                      {llmResponse ? <pre className={styles.llmResponse}>{llmResponse}</pre> : null}
+                    </div>
+                  </details>
                 </>
               ) : (
                 <>

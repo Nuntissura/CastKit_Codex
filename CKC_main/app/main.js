@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { CKCLibrary } = require('./backend/library');
+const { openAiChatCompletions } = require('./backend/llm');
 
 const CONFIG_FILE = 'ckc-config.json';
 
@@ -312,6 +313,38 @@ function registerIpcHandlers() {
         }
 
         return appConfig;
+    });
+
+    ipcMain.handle('ckc:llmChat', async (_evt, params) => {
+        const p = params && typeof params === 'object' ? params : {};
+        const llm = appConfig?.llm && typeof appConfig.llm === 'object' ? appConfig.llm : {};
+        const baseUrl = typeof llm.baseUrl === 'string' ? llm.baseUrl : '';
+        const model = typeof llm.model === 'string' ? llm.model : '';
+        const apiKey = typeof llm.apiKey === 'string' ? llm.apiKey : '';
+        const systemPrompt = typeof llm.systemPrompt === 'string' ? llm.systemPrompt : '';
+
+        if (!String(baseUrl).trim()) throw new Error('Local model base URL is not configured (Tools → Local model).');
+        if (!String(model).trim()) throw new Error('Local model name is not configured (Tools → Local model).');
+
+        const messages = Array.isArray(p.messages) ? p.messages : [];
+        const mergedMessages = [];
+        const sys = String(systemPrompt || '').trim();
+        if (sys) mergedMessages.push({ role: 'system', content: sys });
+        mergedMessages.push(...messages);
+
+        const temperature = typeof p.temperature === 'number' ? p.temperature : undefined;
+        const maxTokens = typeof p.maxTokens === 'number' ? p.maxTokens : undefined;
+
+        const res = await openAiChatCompletions({
+            baseUrl,
+            apiKey,
+            model,
+            messages: mergedMessages,
+            temperature,
+            maxTokens,
+            timeoutMs: 60_000,
+        });
+        return { ok: true, text: res.text };
     });
 
     ipcMain.handle('ckc:getLibraryDiagnostics', async (_evt, params) => {

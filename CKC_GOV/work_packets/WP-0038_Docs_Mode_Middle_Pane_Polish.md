@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Polish the Character view docs-mode (3-panel) middle pane so Notes + Stories/Moodboard are clean and readable at typical widths, with less awkward wrapping and clutter.
@@ -11,7 +11,7 @@ Polish the Character view docs-mode (3-panel) middle pane so Notes + Stories/Moo
 The current stacked docs UI in the middle panel is functionally correct but visually messy at common panel widths (wrapping/spacing makes the editor feel chaotic). This is a UX polish pass, not a feature redesign.
 
 Spec refs:
-- `CKC_GOV/spec/CastKit_Codex_Spec_v00.032.md` §8 “Docs mode (autosave + stacked layout)”
+- `CKC_GOV/spec/CastKit_Codex_Spec_v00.033.md` §8 “Docs mode (autosave + stacked layout)”
 
 ## Scope
 ### In
@@ -36,10 +36,10 @@ Spec refs:
 - [ ] Manual: open Character → toggle Notes (docs mode) → resize splitters → verify Notes + Stories/Moodboard panes remain clean and usable.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+ - [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
   - No spec impact (CSS/layout polish only; behavior unchanged).
-- [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
+- [x] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
 
 ## Implementation notes
 - Key files to touch:
@@ -59,4 +59,3 @@ Revert the CSS changes in `characterView.module.css`.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

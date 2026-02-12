@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('ckc', {
     getConfig: () => ipcRenderer.invoke('ckc:getConfig'),
     getConfigInfo: () => ipcRenderer.invoke('ckc:getConfigInfo'),
     setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
+    llmChat: (params) => ipcRenderer.invoke('ckc:llmChat', params),
     selectLibraryRoot: () => ipcRenderer.invoke('ckc:selectLibraryRoot'),
     getLibraryDiagnostics: (params) => ipcRenderer.invoke('ckc:getLibraryDiagnostics', params),
 
