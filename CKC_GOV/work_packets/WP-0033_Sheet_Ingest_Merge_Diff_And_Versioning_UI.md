@@ -2,7 +2,7 @@
 
 Date: 2026-02-11
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Expose the existing backend capabilities for ingest/patch/versions in the UI:
@@ -46,4 +46,3 @@ Users need safe, auditable merges of sheet content (from txt/md) without losing 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
 - [ ] Spec impact: yes (ingest/merge/version UX). Bump spec + mirror into `CKC_main/docs/`.
-
