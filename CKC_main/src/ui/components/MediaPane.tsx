@@ -70,6 +70,7 @@ export function MediaPane({
   images,
   defaultShowThumbnails = false,
   defaultShowControls = false,
+  autoOpenControlsOnSelect = false,
   emptyLabel = 'No images.',
   headerLeft = null,
   showCarouselToggleOnThumbs = false,
@@ -79,6 +80,7 @@ export function MediaPane({
   images: MediaImage[];
   defaultShowThumbnails?: boolean;
   defaultShowControls?: boolean;
+  autoOpenControlsOnSelect?: boolean;
   emptyLabel?: string;
   headerLeft?: React.ReactNode;
   showCarouselToggleOnThumbs?: boolean;
@@ -147,6 +149,7 @@ export function MediaPane({
   const selected = selectedId ? filteredImages.find((i) => i.id === selectedId) ?? null : null;
   const isBusy = !!busyImageId && busyImageId === selected?.id;
   const notesIsDirty = !!selected && String(draftNotes ?? '') !== String(selected.notes ?? '');
+  const didInitialSelectionRef = React.useRef<boolean>(false);
 
   const clearFilters = React.useCallback(() => {
     setFilterFavoriteOnly(false);
@@ -163,6 +166,16 @@ export function MediaPane({
     setDraftNotes(String(selected.notes ?? ''));
     setViewerError(false);
   }, [selected?.id, selected?.notes]);
+
+  React.useEffect(() => {
+    if (!autoOpenControlsOnSelect) return;
+    if (!selected) return;
+    if (!didInitialSelectionRef.current) {
+      didInitialSelectionRef.current = true;
+      return;
+    }
+    if (!showControls) setShowControls(true);
+  }, [autoOpenControlsOnSelect, selected?.id, showControls]);
 
   const patchMeta = async (
     imageId: string,
@@ -302,41 +315,6 @@ export function MediaPane({
 
       {showControls ? (
         <div className={styles.controlsPanel}>
-          {selected ? (
-            <>
-              <button
-                className={styles.controlBtn}
-                disabled={isBusy}
-                onClick={() => patchMeta(selected.id, { favorite: !selected.favorite })}
-                title="Favorite"
-              >
-                {selected.favorite ? '★ Favorite' : '☆ Favorite'}
-              </button>
-
-              <div className={styles.stars} aria-label="Rating">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    className={styles.starBtn}
-                    disabled={isBusy}
-                    onClick={() => patchMeta(selected.id, { rating: n })}
-                    title={`${n} star`}
-                  >
-                    {selected.rating >= n ? '★' : '☆'}
-                  </button>
-                ))}
-                <button
-                  className={styles.clearBtn}
-                  disabled={isBusy}
-                  onClick={() => patchMeta(selected.id, { rating: 0 })}
-                  title="Clear rating"
-                >
-                  Clear
-                </button>
-              </div>
-            </>
-          ) : null}
-
           <div className={styles.filterRow}>
             <div className={styles.filterTitle}>Filters</div>
             <label className={styles.filterItem}>
@@ -383,6 +361,11 @@ export function MediaPane({
             className={styles.viewerImg}
             src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
             alt=""
+            onClick={() => {
+              if (!autoOpenControlsOnSelect) return;
+              if (showControls) return;
+              setShowControls(true);
+            }}
             onError={() => setViewerError(true)}
           />
         ) : selected && viewerError ? (
@@ -426,7 +409,68 @@ export function MediaPane({
 
         {selected && showControls ? (
           <div className={styles.bottomBar} aria-label="Image metadata">
-            <div className={styles.bottomTags} aria-label="Tags">
+            <div className={styles.notesRow}>
+              <div className={styles.notesTitle}>Notes</div>
+
+              <div className={styles.notesRight}>
+                <div className={styles.metaControls} aria-label="Controls">
+                  <button
+                    className={styles.tagBtn}
+                    data-active={selected.favorite ? '1' : '0'}
+                    disabled={isBusy}
+                    onClick={() => patchMeta(selected.id, { favorite: !selected.favorite })}
+                    title="Favorite"
+                  >
+                    {selected.favorite ? '★ Favorite' : '☆ Favorite'}
+                  </button>
+
+                  <div className={styles.stars} aria-label="Rating">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        className={styles.starBtn}
+                        disabled={isBusy}
+                        onClick={() => patchMeta(selected.id, { rating: n })}
+                        title={`${n} star`}
+                      >
+                        {selected.rating >= n ? '★' : '☆'}
+                      </button>
+                    ))}
+                    <button
+                      className={styles.clearBtn}
+                      disabled={isBusy}
+                      onClick={() => patchMeta(selected.id, { rating: 0 })}
+                      title="Clear rating"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  className={styles.notesSave}
+                  disabled={isBusy || !notesIsDirty}
+                  onClick={() => void patchMeta(selected.id, { notes: String(draftNotes ?? '') })}
+                  title="Save notes"
+                >
+                  {isBusy ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              className={styles.notesInput}
+              value={draftNotes}
+              onChange={(e) => setDraftNotes(e.target.value)}
+              onBlur={() => {
+                if (!selected) return;
+                if (!notesIsDirty) return;
+                void patchMeta(selected.id, { notes: String(draftNotes ?? '') });
+              }}
+              placeholder="Notes…"
+            />
+
+            <div className={styles.metaTagsRow} aria-label="Tags">
               {(['carousel', 'frontpage'] as const).map((tag) => {
                 const active = (selected.tags || []).includes(tag);
                 return (
@@ -446,31 +490,6 @@ export function MediaPane({
                   </button>
                 );
               })}
-            </div>
-
-            <div className={styles.bottomNotes}>
-              <div className={styles.notesRow}>
-                <div className={styles.notesTitle}>Notes</div>
-                <button
-                  className={styles.notesSave}
-                  disabled={isBusy || !notesIsDirty}
-                  onClick={() => void patchMeta(selected.id, { notes: String(draftNotes ?? '') })}
-                  title="Save notes"
-                >
-                  {isBusy ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
-                </button>
-              </div>
-              <textarea
-                className={styles.notesInput}
-                value={draftNotes}
-                onChange={(e) => setDraftNotes(e.target.value)}
-                onBlur={() => {
-                  if (!selected) return;
-                  if (!notesIsDirty) return;
-                  void patchMeta(selected.id, { notes: String(draftNotes ?? '') });
-                }}
-                placeholder="Notes…"
-              />
             </div>
           </div>
         ) : null}

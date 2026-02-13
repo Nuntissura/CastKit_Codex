@@ -210,6 +210,11 @@ export function CharacterView({
   const [globalPickerImages, setGlobalPickerImages] = React.useState<CKCGlobalImage[]>([]);
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
+  const [defaultLibraryRootInfo, setDefaultLibraryRootInfo] = React.useState<{
+    isPortable: boolean;
+    portableDir: string | null;
+    defaultLibraryRoot: string;
+  } | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
   const [selectedSpinOffId, setSelectedSpinOffId] = React.useState<string | null>(null);
@@ -221,6 +226,7 @@ export function CharacterView({
   const [isExporting, setIsExporting] = React.useState<boolean>(false);
 
   const [isImportingImages, setIsImportingImages] = React.useState<boolean>(false);
+  const [isHeaderDropActive, setIsHeaderDropActive] = React.useState<boolean>(false);
 
   const [llmBaseUrl, setLlmBaseUrl] = React.useState<string>('http://127.0.0.1:11434/v1');
   const [llmModel, setLlmModel] = React.useState<string>('');
@@ -277,6 +283,7 @@ export function CharacterView({
   }, [characterId, templateAst]);
 
   React.useEffect(() => {
+    window.ckc.getDefaultLibraryRootInfo().then(setDefaultLibraryRootInfo).catch(() => setDefaultLibraryRootInfo(null));
     window.ckc
       .getConfig()
       .then((cfg: any) => {
@@ -1186,6 +1193,23 @@ export function CharacterView({
     }
   };
 
+  const importImagesForCharacterFromPaths = async (filePaths: string[]) => {
+    if (!characterId) return;
+    const paths = Array.isArray(filePaths) ? filePaths.map((p) => String(p || '')).filter(Boolean) : [];
+    if (paths.length === 0) return;
+    setIsImportingImages(true);
+    setError(null);
+    try {
+      await window.ckc.importImages({ characterId, filePaths: paths });
+      const c = await window.ckc.getCharacter(characterId);
+      setCharacter(c);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImportingImages(false);
+    }
+  };
+
   const chooseCharacterExportDir = async () => {
     setExportError(null);
     try {
@@ -1466,9 +1490,9 @@ export function CharacterView({
       >
         <section className={styles.left}>
           <div className={styles.leftBody}>
-            <MediaPane
-              headerLeft={
-                <div className={styles.leftHeader}>
+              <MediaPane
+                headerLeft={
+                  <div className={styles.leftHeader}>
                   <button
                     className={styles.leftToggle}
                     data-active={mediaMode === 'carousel' ? '1' : '0'}
@@ -1484,13 +1508,14 @@ export function CharacterView({
                     Photos
                   </button>
                 </div>
-              }
-              showCarouselToggleOnThumbs={mediaMode === 'photos'}
-              images={images}
-              emptyLabel="No images for this character yet."
-              onPatchImageMeta={(imageId, patch) => {
-                setCharacter((prev) => {
-                  if (!prev) return prev;
+                }
+                showCarouselToggleOnThumbs={mediaMode === 'photos'}
+                autoOpenControlsOnSelect={mediaMode === 'photos'}
+                images={images}
+                emptyLabel="No images for this character yet."
+                onPatchImageMeta={(imageId, patch) => {
+                  setCharacter((prev) => {
+                    if (!prev) return prev;
                   return {
                     ...prev,
                     images: (prev.images || []).map((img) =>
@@ -1804,9 +1829,34 @@ export function CharacterView({
 
         <aside className={styles.right}>
           <div className={styles.header}>
-            <div className={styles.headerLeft}>
+            <div
+              className={styles.headerLeft}
+              data-drop-active={isHeaderDropActive ? '1' : '0'}
+              onDragEnter={(e) => {
+                if (!characterId || isImportingImages) return;
+                e.preventDefault();
+                setIsHeaderDropActive(true);
+              }}
+              onDragOver={(e) => {
+                if (!characterId || isImportingImages) return;
+                e.preventDefault();
+                setIsHeaderDropActive(true);
+              }}
+              onDragLeave={() => setIsHeaderDropActive(false)}
+              onDrop={(e) => {
+                if (!characterId || isImportingImages) return;
+                e.preventDefault();
+                setIsHeaderDropActive(false);
+                const files = Array.from(e.dataTransfer?.files ?? []);
+                const filePaths = files
+                  .map((f) => (f && typeof (f as any).path === 'string' ? String((f as any).path) : ''))
+                  .filter(Boolean);
+                void importImagesForCharacterFromPaths(filePaths);
+              }}
+              title="Drop image files here to import into this character"
+            >
               <div className={styles.name}>{character?.displayName ?? 'Character'}</div>
-              <div className={styles.sub}>Character Editor (rebuild)</div>
+              <div className={styles.sub}>{isHeaderDropActive ? 'Drop to import images...' : 'Character Editor (rebuild)'}</div>
             </div>
             <div className={styles.headerRight}>
               {rightTab === 'sheet' ? (
@@ -2071,6 +2121,51 @@ export function CharacterView({
 
                   <div style={{ marginTop: 18 }}>
                     <div className={styles.sectionTitle}>Exports</div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Data folder:</span>
+                      <code style={{ fontSize: '0.85rem' }}>{libraryRoot ?? '(unknown)'}</code>
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={!libraryRoot || isExporting}
+                        onClick={() => {
+                          if (!libraryRoot) return;
+                          void window.ckc.openPath(libraryRoot);
+                        }}
+                      >
+                        Open folder
+                      </button>
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={isExporting}
+                        onClick={async () => {
+                          const next = await window.ckc.selectLibraryRoot();
+                          if (!next) return;
+                          setLibraryRoot(next);
+                          onBack();
+                        }}
+                        title="Change the data folder (db, characters, exports)"
+                      >
+                        Change...
+                      </button>
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={isExporting || !defaultLibraryRootInfo}
+                        onClick={async () => {
+                          if (!defaultLibraryRootInfo) return;
+                          const next = await window.ckc.resetLibraryRootToDefault();
+                          setLibraryRoot(next);
+                          onBack();
+                        }}
+                        title={
+                          defaultLibraryRootInfo?.isPortable
+                            ? `Reset to portable default:\n${defaultLibraryRootInfo.defaultLibraryRoot}`
+                            : `Reset to default:\n${defaultLibraryRootInfo?.defaultLibraryRoot ?? ''}`
+                        }
+                      >
+                        Reset
+                      </button>
+                    </div>
 
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Output:</span>

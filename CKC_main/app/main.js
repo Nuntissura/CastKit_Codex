@@ -29,7 +29,7 @@ function getPortableBaseDir() {
 function getDefaultLibraryRoot() {
     const portableDir = getPortableBaseDir();
     if (portableDir) return path.join(portableDir, 'CastKit Codex Library');
-    return path.join(app.getPath('documents'), 'CastKit Codex Library');
+    return path.join(app.getPath('userData'), 'CastKit Codex Library');
 }
 
 function getPrimaryConfigPath() {
@@ -56,7 +56,10 @@ function loadConfig() {
         if (primaryConfigPath !== fallbackConfigPath && fs.existsSync(fallbackConfigPath)) {
             const raw = fs.readFileSync(fallbackConfigPath, 'utf8');
             configPath = primaryConfigPath;
-            return { configPath, config: JSON.parse(raw) };
+            const cfg = JSON.parse(raw);
+            // Marker so we can make a good UX decision on first portable run.
+            cfg._portableMigratedFromUserData = true;
+            return { configPath, config: cfg };
         }
     } catch {
         // fall through to defaults
@@ -139,13 +142,87 @@ function looksLikeLibraryRoot(absPath) {
     }
 }
 
+function pathInsideDir(dirAbs, candidateAbs) {
+    try {
+        if (!dirAbs || !candidateAbs) return false;
+        const dir = path.resolve(String(dirAbs));
+        const candidate = path.resolve(String(candidateAbs));
+        if (process.platform === 'win32') {
+            const d = dir.toLowerCase();
+            const c = candidate.toLowerCase();
+            return c === d || c.startsWith(d + path.sep);
+        }
+        return candidate === dir || candidate.startsWith(dir + path.sep);
+    } catch {
+        return false;
+    }
+}
+
 async function ensureLibraryRootAvailable() {
     const configured = String(appConfig?.libraryRoot || '').trim();
-    if (configured && fs.existsSync(configured)) return;
-
     const portableDir = getPortableBaseDir();
     const defaultRoot = getDefaultLibraryRoot();
     const nearExeCandidate = portableDir ? path.join(portableDir, 'CastKit Codex Library') : null;
+
+    if (configured && fs.existsSync(configured)) {
+        // Portable UX: if a portable build is pointing at a libraryRoot outside the portable folder,
+        // ask once whether to keep it or switch to a near-exe library.
+        if (
+            portableDir &&
+            !pathInsideDir(portableDir, configured) &&
+            !String(appConfig?.portableLibraryChoice || '').trim()
+        ) {
+            const res = mainWindow
+                ? await dialog.showMessageBox(mainWindow, {
+                    type: 'question',
+                    message: 'Portable build: choose where your data lives',
+                    detail:
+                        `Current data folder (libraryRoot):\n${configured}\n\n` +
+                        `Portable default (next to this .exe):\n${defaultRoot}\n\n` +
+                        `If you keep the current folder, exports will also write there (exports live under: libraryRoot\\exports).`,
+                    buttons: ['Switch to portable default', 'Keep current folder', 'Pick folder...', 'Quit'],
+                    defaultId: 0,
+                    cancelId: 3,
+                    noLink: true,
+                })
+                : null;
+
+            const choice = res ? res.response : 1;
+
+            if (choice === 3) {
+                app.quit();
+                throw new Error('Library root selection cancelled (user quit).');
+            }
+
+            if (choice === 2) {
+                const picked = await dialog.showOpenDialog(mainWindow, {
+                    title: 'Select Library Root',
+                    properties: ['openDirectory', 'createDirectory'],
+                });
+                if (picked.canceled || !picked.filePaths[0]) {
+                    app.quit();
+                    throw new Error('Library root selection cancelled (no folder selected).');
+                }
+                appConfig.libraryRoot = picked.filePaths[0];
+                appConfig.portableLibraryChoice = 'picked';
+                saveConfig(appConfigPath, appConfig);
+                return;
+            }
+
+            if (choice === 0) {
+                appConfig.libraryRoot = defaultRoot;
+                appConfig.portableLibraryChoice = 'portable_default';
+                saveConfig(appConfigPath, appConfig);
+                return;
+            }
+
+            // Keep current
+            appConfig.portableLibraryChoice = 'keep_external';
+            saveConfig(appConfigPath, appConfig);
+        }
+
+        return;
+    }
 
     // If portable and a near-exe candidate exists, prefer it automatically.
     if (nearExeCandidate && looksLikeLibraryRoot(nearExeCandidate)) {
@@ -363,6 +440,25 @@ function registerIpcHandlers() {
         });
         if (result.canceled || !result.filePaths[0]) return null;
         appConfig.libraryRoot = result.filePaths[0];
+        saveConfig(appConfigPath, appConfig);
+        resetLibrary();
+        await ensureLibrary();
+        return appConfig.libraryRoot;
+    });
+
+    ipcMain.handle('ckc:getDefaultLibraryRootInfo', async () => {
+        return {
+            isPortable: !!getPortableBaseDir(),
+            portableDir: getPortableBaseDir(),
+            defaultLibraryRoot: getDefaultLibraryRoot(),
+        };
+    });
+
+    ipcMain.handle('ckc:resetLibraryRootToDefault', async () => {
+        appConfig.libraryRoot = getDefaultLibraryRoot();
+        if (getPortableBaseDir()) {
+            appConfig.portableLibraryChoice = 'portable_default';
+        }
         saveConfig(appConfigPath, appConfig);
         resetLibrary();
         await ensureLibrary();
@@ -744,14 +840,25 @@ function registerIpcHandlers() {
 
     ipcMain.handle('ckc:importImages', async (_evt, params) => {
         const lib = await ensureLibrary();
-        const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-            title: 'Import Images',
-            properties: ['openFile', 'multiSelections'],
-            filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
-        });
-        if (canceled) return { imported: [], duplicates: [] };
+        const characterId = params && typeof params === 'object' ? params.characterId : null;
+        if (!characterId) throw new Error('Missing characterId');
 
-        const first = await lib.importImages({ characterId: params.characterId, filePaths, duplicatePolicy: 'skip' });
+        let filePaths = Array.isArray(params?.filePaths) ? params.filePaths.map(p => String(p || '')).filter(Boolean) : null;
+        if (!filePaths || filePaths.length === 0) {
+            const picked = await dialog.showOpenDialog(mainWindow, {
+                title: 'Import Images',
+                properties: ['openFile', 'multiSelections'],
+                filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
+            });
+            if (picked.canceled) return { imported: [], duplicates: [] };
+            filePaths = picked.filePaths || [];
+        }
+
+        const allowedExt = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+        filePaths = filePaths.filter((p) => allowedExt.has(path.extname(String(p || '')).toLowerCase()));
+        if (filePaths.length === 0) return { imported: [], duplicates: [] };
+
+        const first = await lib.importImages({ characterId, filePaths, duplicatePolicy: 'skip' });
         let imported = first.imported || [];
 
         const duplicates = first.duplicates || [];
@@ -766,7 +873,7 @@ function registerIpcHandlers() {
             });
             if (res.response === 0) {
                 const dupPaths = duplicates.map(d => d.srcPath).filter(Boolean);
-                const second = await lib.importImages({ characterId: params.characterId, filePaths: dupPaths, duplicatePolicy: 'keepBoth' });
+                const second = await lib.importImages({ characterId, filePaths: dupPaths, duplicatePolicy: 'keepBoth' });
                 imported = imported.concat(second.imported || []);
             }
         }

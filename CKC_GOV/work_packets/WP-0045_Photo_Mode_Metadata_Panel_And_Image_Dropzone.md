@@ -2,7 +2,7 @@
 
 Date: 2026-02-13
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Improve the photo viewing workflow:
@@ -26,20 +26,20 @@ Current UX friction:
 - Moodboard changes.
 
 ## Acceptance criteria
-- [ ] In photo mode, selecting an image automatically reveals notes/tags/controls for that image.
-- [ ] Filters remain at the top; per-image controls live together near notes.
-- [ ] Dragging one or more image files onto the dropzone imports them into the current character.
+- [x] In photo mode, selecting an image automatically reveals notes/tags/controls for that image.
+- [x] Filters remain at the top; per-image controls live together near notes.
+- [x] Dragging one or more image files onto the dropzone imports them into the current character.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] `cd CKC_main; npx tsc --noEmit`
+- [x] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npx tsc --noEmit`
 - [ ] Manual: Character -> Photos mode -> click thumbs; verify metadata shows and saves; drag-drop images imports.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly "No spec impact" with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly "No spec impact" with rationale):
   - No spec impact (UI workflow polish for CKC testbed).
-- [ ] Session dump alignment: no conflicts.
+- [x] Session dump alignment: no conflicts.
 
 ## Implementation notes
 - Likely files:
@@ -55,4 +55,3 @@ Revert UI + IPC changes.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

@@ -66,6 +66,11 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
   const [configPath, setConfigPath] = React.useState<string | null>(null);
+  const [defaultLibraryRootInfo, setDefaultLibraryRootInfo] = React.useState<{
+    isPortable: boolean;
+    portableDir: string | null;
+    defaultLibraryRoot: string;
+  } | null>(null);
 
   const [layoutRef, layoutWidth] = useElementWidth<HTMLDivElement>();
   const [libraryLeftFrac, setLibraryLeftFrac] = React.useState<number>(0.55);
@@ -95,6 +100,10 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   React.useEffect(() => {
     libraryLeftFracRef.current = libraryLeftFrac;
   }, [libraryLeftFrac]);
+
+  React.useEffect(() => {
+    window.ckc.getDefaultLibraryRootInfo().then(setDefaultLibraryRootInfo).catch(() => setDefaultLibraryRootInfo(null));
+  }, []);
 
   React.useEffect(() => {
     window.ckc
@@ -498,6 +507,26 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
               title="Change the library root folder (db, characters, exports)"
             >
               Changeâ€¦
+            </button>
+            <button
+              disabled={!defaultLibraryRootInfo}
+              onClick={async () => {
+                if (!defaultLibraryRootInfo) return;
+                setError(null);
+                const next = await window.ckc.resetLibraryRootToDefault();
+                setLibraryRoot(next);
+                setExportDir(null);
+                setDiagnostics(null);
+                setRefreshNonce((n) => n + 1);
+                void reloadDiagnostics();
+              }}
+              title={
+                defaultLibraryRootInfo?.isPortable
+                  ? `Reset to portable default:\n${defaultLibraryRootInfo.defaultLibraryRoot}`
+                  : `Reset to default:\n${defaultLibraryRootInfo?.defaultLibraryRoot ?? ''}`
+              }
+            >
+              Reset
             </button>
             <button
               disabled={diagnosticsBusy}

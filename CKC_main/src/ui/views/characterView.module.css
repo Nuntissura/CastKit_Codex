@@ -298,6 +298,13 @@
 
 .headerLeft {
   min-width: 0;
+  padding: 6px 10px;
+  border: 1px dashed transparent;
+}
+
+.headerLeft[data-drop-active='1'] {
+  border-color: var(--accent-color);
+  background: rgba(255, 0, 0, 0.06);
 }
 
 .docsDrawer {

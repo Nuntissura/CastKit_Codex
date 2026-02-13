@@ -273,11 +273,13 @@ interface Window {
       messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
       temperature?: number;
       maxTokens?: number;
-    }) => Promise<{ ok: true; text: string }>;
-    selectLibraryRoot: () => Promise<string | null>;
-    getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
-    listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
-    listAllTags: () => Promise<string[]>;
+      }) => Promise<{ ok: true; text: string }>;
+      selectLibraryRoot: () => Promise<string | null>;
+      getDefaultLibraryRootInfo: () => Promise<{ isPortable: boolean; portableDir: string | null; defaultLibraryRoot: string }>;
+      resetLibraryRootToDefault: () => Promise<string>;
+      getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
+      listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
+      listAllTags: () => Promise<string[]>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
     importCharacterFromSheetDialog: () => Promise<{ characterId: string } | null>;

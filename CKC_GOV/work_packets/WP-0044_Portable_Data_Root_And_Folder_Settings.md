@@ -2,7 +2,7 @@
 
 Date: 2026-02-13
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Make CKC default all data (db, characters, exports) to the portable `.exe` folder by default, and make it easy to switch/reset the data folder from the UI.
@@ -26,24 +26,24 @@ CKC should feel "portable and safe" by default:
 - Any DB/schema changes.
 
 ## Acceptance criteria
-- [ ] On a portable run, CKC defaults to `<portable_dir>\\CastKit Codex Library` unless the user explicitly chooses a different folder.
-- [ ] If a portable run detects an existing libraryRoot outside the portable folder, CKC asks once what to do (keep vs switch vs pick).
-- [ ] UI includes a clear way to:
+- [x] On a portable run, CKC defaults to `<portable_dir>\\CastKit Codex Library` unless the user explicitly chooses a different folder.
+- [x] If a portable run detects an existing libraryRoot outside the portable folder, CKC asks once what to do (keep vs switch vs pick).
+- [x] UI includes a clear way to:
   - open the current data folder
   - change it
   - reset to portable default
-- [ ] Exports default under `<libraryRoot>\\exports` and therefore follow the chosen data folder.
+- [x] Exports default under `<libraryRoot>\\exports` and therefore follow the chosen data folder.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] `cd CKC_main; npx tsc --noEmit`
+- [x] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npx tsc --noEmit`
 - [ ] Manual: run portable build -> verify data folder selection/reset works and exports land under the chosen folder.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly "No spec impact" with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly "No spec impact" with rationale):
   - No spec impact (behavioral default + UI affordance only; spec not required for CKC testbed).
-- [ ] Session dump alignment: no conflicts.
+- [x] Session dump alignment: no conflicts.
 
 ## Implementation notes
 - Likely files:
@@ -60,4 +60,3 @@ Revert the portable prompt/reset changes.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-
