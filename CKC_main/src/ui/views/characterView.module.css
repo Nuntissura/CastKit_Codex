@@ -191,8 +191,10 @@
 .middleBody {
   padding: 18px;
   flex: 1 1 auto;
-  overflow: auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .docsStack {
@@ -201,6 +203,7 @@
   gap: 12px;
   min-height: 0;
   flex: 1 1 auto;
+  overflow: auto;
 }
 
 .docsPane {
@@ -216,8 +219,8 @@
 }
 
 .docsPaneHeader {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: start;
 }
@@ -226,6 +229,7 @@
   font-weight: 800;
   letter-spacing: 0.02em;
   min-width: 0;
+  flex: 1 1 220px;
 }
 
 .iconRow {
@@ -323,6 +327,8 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .docsSearch {
@@ -418,6 +424,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
 }
 
 .docForm {
@@ -439,6 +447,7 @@
   border: 1px solid var(--glass-border);
   background: transparent;
   padding: 8px 10px;
+  width: 100%;
 }
 
 .docLabel textarea {
@@ -446,6 +455,7 @@
   background: transparent;
   padding: 8px 10px;
   resize: vertical;
+  width: 100%;
 }
 
 .docText {

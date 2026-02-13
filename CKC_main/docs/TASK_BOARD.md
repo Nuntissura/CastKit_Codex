@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 This is the single source of truth for work status.
 
@@ -57,6 +57,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0039 | Local model integration spike (experimental) | DONE | Codex | Add minimal local LLM plumbing (OpenAI-compatible HTTP) + Tools UI to test prompts. |
 | WP-0040 | Screenshot reference folder | DONE | Codex | Add `CKC_GOV/references/screenshots/` drop zone (ignored by default) + `keep/` for committed assets. |
 | WP-0041 | Local model timeout configurable | DONE | Codex | Increase local-model timeout and allow configuring `llm.timeoutSec`. |
+| WP-0042 | Docs mode middle pane layout fix | DONE | Codex | Fix docs middle pane header wrap + prevent tiny/overlapping controls at narrow widths. |
 
 ## Current focus
 - Current: Release build + manual UX verification.
