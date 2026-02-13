@@ -58,7 +58,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0040 | Screenshot reference folder | DONE | Codex | Add `CKC_GOV/references/screenshots/` drop zone (ignored by default) + `keep/` for committed assets. |
 | WP-0041 | Local model timeout configurable | DONE | Codex | Increase local-model timeout and allow configuring `llm.timeoutSec`. |
 | WP-0042 | Docs mode middle pane layout fix | DONE | Codex | Fix docs middle pane header wrap + prevent tiny/overlapping controls at narrow widths. |
-| WP-0043 | Reusable fail log system + UI style guide | IN_PROGRESS | Codex | Make mistakes + UI patterns repeatable across projects (CKC + Handshake). |
+| WP-0043 | Reusable fail log system + UI style guide | DONE | Codex | Make mistakes + UI patterns repeatable across projects (CKC + Handshake). |
 
 ## Current focus
 - Current: Release build + manual UX verification.

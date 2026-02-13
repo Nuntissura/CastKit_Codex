@@ -18,6 +18,7 @@ Read these first (order matters):
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
 3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.034.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
+5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
 If you are reading these in PowerShell and you see garbage like `â€”`, open with UTF-8:
 ```powershell
@@ -75,7 +76,8 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `cache/` — npm/electron caches (keep C: clean)
   - `scratch/` — temporary experiments
 - `fail_log/`
-  - `FAIL_LOG.md` — failure/incident log (append-only)
+  - `FAIL_LOG.md` — failure/incident log (legacy, append-only narrative)
+  - `INDEX.md` — incident index (one incident per file under `incidents/`)
 
 ## Build + run conventions (Windows)
 ### Dependency installation
