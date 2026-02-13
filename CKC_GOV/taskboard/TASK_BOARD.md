@@ -59,6 +59,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0041 | Local model timeout configurable | DONE | Codex | Increase local-model timeout and allow configuring `llm.timeoutSec`. |
 | WP-0042 | Docs mode middle pane layout fix | DONE | Codex | Fix docs middle pane header wrap + prevent tiny/overlapping controls at narrow widths. |
 | WP-0043 | Reusable fail log system + UI style guide | DONE | Codex | Make mistakes + UI patterns repeatable across projects (CKC + Handshake). |
+| WP-0044 | Portable data root + folder settings | BACKLOG | Codex | Default data near portable exe; easy UI reset/change; avoid D: by accident. |
+| WP-0045 | Photo mode metadata panel + image dropzone | BACKLOG | Codex | Auto-show per-image meta in photo mode; group controls; drag-drop import near header. |
 
 ## Current focus
 - Current: Release build + manual UX verification.
