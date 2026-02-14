@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('ckc', {
     getDefaultLibraryRootInfo: () => ipcRenderer.invoke('ckc:getDefaultLibraryRootInfo'),
     resetLibraryRootToDefault: () => ipcRenderer.invoke('ckc:resetLibraryRootToDefault'),
     getLibraryDiagnostics: (params) => ipcRenderer.invoke('ckc:getLibraryDiagnostics', params),
+    listDuplicateGroups: (params) => ipcRenderer.invoke('ckc:listDuplicateGroups', params),
 
     getTemplate: () => ipcRenderer.invoke('ckc:getTemplate'),
     listTemplates: () => ipcRenderer.invoke('ckc:listTemplates'),

@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a duplicates view that groups images by exact hash (byte-identical) and provides safe, explicit cleanup actions.
@@ -25,17 +25,17 @@ Add a duplicates view that groups images by exact hash (byte-identical) and prov
 - Auto-de-duplication.
 
 ## Acceptance criteria
-- [ ] CKC shows groups of duplicates (hash groups with >1 image).
-- [ ] User can open duplicates in context (jump to character + image).
-- [ ] User can remove selected duplicate DB rows safely (no silent disk deletes).
+- [x] CKC shows groups of duplicates (hash groups with >1 image).
+- [x] User can open duplicates in context (jump to character + image).
+- [x] User can remove selected duplicate DB rows safely (no silent disk deletes).
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npm test`
 - [ ] Manual: import same file twice; verify duplicates view shows group; remove one; confirm remaining works.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
 
 ## Implementation notes
 - Key files:
@@ -43,6 +43,7 @@ Add a duplicates view that groups images by exact hash (byte-identical) and prov
   - `CKC_main/src/ui/views/LibraryView.tsx` (or a Tools view)
 - Data model:
   - Reuse existing `file_hash` on image assets.
+- Implemented `listDuplicateGroups()` backend + Library→Duplicates UI with “Delete extras (keep best)” + per-image open-in-context.
 
 ## Rollback
 Remove duplicates UI and keep data unchanged.
@@ -50,4 +51,3 @@ Remove duplicates UI and keep data unchanged.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

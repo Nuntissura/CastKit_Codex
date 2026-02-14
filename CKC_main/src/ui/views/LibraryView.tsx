@@ -15,6 +15,20 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+function formatBytes(bytes: number): string {
+  const b = Number(bytes) || 0;
+  if (b <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let n = b;
+  let u = 0;
+  while (n >= 1024 && u < units.length - 1) {
+    n /= 1024;
+    u += 1;
+  }
+  const fixed = u === 0 ? 0 : n >= 10 ? 1 : 2;
+  return `${n.toFixed(fixed)} ${units[u]}`;
+}
+
 function isEditableActiveElement(): boolean {
   const active = document.activeElement;
   if (!active) return false;
@@ -32,7 +46,11 @@ function tagsTextToArray(text: string): string[] {
   return Array.from(new Set(parts));
 }
 
-export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId: string) => void }) {
+export function LibraryView({
+  onOpenCharacter,
+}: {
+  onOpenCharacter: (characterId: string, selectImageId?: string | null) => void;
+}) {
   const splitterPx = 10;
   const minLeftPx = 360;
   const minRightPx = 420;
@@ -110,6 +128,10 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [repairBusy, setRepairBusy] = React.useState<boolean>(false);
   const [repairError, setRepairError] = React.useState<string | null>(null);
   const [repairResult, setRepairResult] = React.useState<CKCRepairMissingImagesByHashResult | null>(null);
+
+  const [dupGroups, setDupGroups] = React.useState<CKCDuplicateGroup[] | null>(null);
+  const [dupBusy, setDupBusy] = React.useState<boolean>(false);
+  const [dupError, setDupError] = React.useState<string | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
   const [exportSections, setExportSections] = React.useState<string[] | null>(null);
@@ -353,6 +375,72 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       }
     },
     [repairScanDir, repairIncludeSubdirs, reloadDiagnostics, reloadCarousel]
+  );
+
+  const reloadDuplicateGroups = React.useCallback(async () => {
+    setDupError(null);
+    setDupBusy(true);
+    try {
+      const rows = await window.ckc.listDuplicateGroups({ minCount: 2, limitGroups: 200, maxPerGroup: 200 });
+      setDupGroups(Array.isArray(rows) ? rows : []);
+    } catch (err: unknown) {
+      setDupError(err instanceof Error ? err.message : String(err));
+      setDupGroups([]);
+    } finally {
+      setDupBusy(false);
+    }
+  }, []);
+
+  const deleteDuplicateExtras = React.useCallback(
+    async (group: CKCDuplicateGroup) => {
+      const g = group as any;
+      if (!g || !Array.isArray(g.images) || g.images.length < 2) return;
+      if (g.truncated) {
+        setDupError('This duplicate group is truncated. Rescan with a higher max-per-group before deleting.');
+        return;
+      }
+
+      const imgs: CKCDuplicateImage[] = g.images;
+      const score = (img: CKCDuplicateImage): number => {
+        const fav = img.favorite ? 1000 : 0;
+        const fp = (img.tags || []).includes('frontpage') ? 50 : 0;
+        const car = (img.tags || []).includes('carousel') ? 10 : 0;
+        const rating = (Number(img.rating) || 0) * 10;
+        const missingPenalty = img.isMissing ? -500 : 0;
+        return fav + fp + car + rating + missingPenalty;
+      };
+
+      const keeper = [...imgs].sort((a, b) => score(b) - score(a) || String(a.addedAt).localeCompare(String(b.addedAt)))[0];
+      if (!keeper?.imageId) return;
+
+      const deleteIds = imgs.map((i) => i.imageId).filter((id) => id && id !== keeper.imageId);
+      if (deleteIds.length === 0) return;
+
+      const ok = window.confirm(
+        `Delete ${deleteIds.length} duplicate(s) and keep 1?\n\nKeep: ${keeper.imageId} (${keeper.characterName || keeper.characterId})\nHash: ${
+          g.fileHash
+        }\nPotential savings: ${formatBytes(Number(g.potentialSavingsBytes) || 0)}\n\nThis deletes CKC copy files only (never external reference files).`
+      );
+      if (!ok) return;
+
+      setDupError(null);
+      setDupBusy(true);
+      try {
+        const res = await window.ckc.deleteImages({ imageIds: deleteIds, deleteFiles: true });
+        const errs = Array.isArray((res as any)?.errors) ? (res as any).errors : [];
+        if (errs.length > 0) {
+          setDupError(`Deleted with ${errs.length} error(s). First: ${String(errs[0]?.message ?? 'Unknown error')}`);
+        }
+        await reloadDuplicateGroups();
+        void reloadCarousel();
+        setRefreshNonce((n) => n + 1);
+      } catch (err: unknown) {
+        setDupError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setDupBusy(false);
+      }
+    },
+    [reloadDuplicateGroups, reloadCarousel]
   );
 
   const pasteClipboardToInbox = React.useCallback(async () => {
@@ -883,6 +971,114 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
                 <b>{repairResult.thumbsCreated}</b> â€¢ Copy errors: <b>{repairResult.copyErrors}</b>
               </div>
             ) : null}
+          </details>
+
+          <details style={{ marginTop: 12 }}>
+            <summary>Duplicates (exact hash)</summary>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={dupBusy} onClick={() => void reloadDuplicateGroups()}>
+                {dupBusy ? 'Working…' : 'Scan duplicates'}
+              </button>
+              {dupGroups ? (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  groups <b>{dupGroups.length}</b>
+                </span>
+              ) : null}
+            </div>
+
+            {dupError ? <div className={styles.error}>{dupError}</div> : null}
+
+            {dupGroups ? (
+              dupGroups.length === 0 ? (
+                <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>No duplicates found.</div>
+              ) : (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {dupGroups.map((g) => (
+                    <details key={g.fileHash} style={{ border: '1px solid var(--glass-border)', padding: 8 }}>
+                      <summary>
+                        <code style={{ fontSize: '0.85rem' }}>{g.fileHash.slice(0, 14)}…</code> • <b>{g.count}</b> copies • size{' '}
+                        <b>{formatBytes(g.sizeBytes)}</b> • potential save <b>{formatBytes(g.potentialSavingsBytes)}</b>
+                      </summary>
+
+                      <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button disabled={dupBusy || g.truncated || g.count < 2} onClick={() => void deleteDuplicateExtras(g)}>
+                          Delete extras (keep best)
+                        </button>
+                        {g.truncated ? (
+                          <span style={{ color: 'rgba(255,0,0,0.75)' }}>
+                            Truncated: showing {g.images.length} of {g.count}. Rescan with higher max-per-group.
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                          gap: 10,
+                        }}
+                      >
+                        {g.images.map((img) => (
+                          <div
+                            key={img.imageId}
+                            style={{
+                              border: '1px solid var(--glass-border)',
+                              background: 'var(--glass)',
+                              padding: 8,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              minWidth: 0,
+                            }}
+                          >
+                            <img
+                              src={`ckc://thumb/${encodeURIComponent(img.imageId)}`}
+                              alt=""
+                              style={{ width: '100%', height: 90, objectFit: 'contain', background: 'rgba(0,0,0,0.08)' }}
+                            />
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                              title={img.imageId}
+                            >
+                              {img.characterName || img.characterId}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <span>
+                                {img.favorite ? '★' : '☆'} {img.rating}
+                              </span>
+                              <span>{img.storageMode}</span>
+                              <span>{img.sizeBytes != null ? formatBytes(img.sizeBytes) : '?'}</span>
+                              {img.isMissing ? <span style={{ color: 'rgba(255,0,0,0.75)' }}>missing</span> : null}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <button disabled={dupBusy} onClick={() => onOpenCharacter(img.characterId, img.imageId)} title="Open character at this image">
+                                Open
+                              </button>
+                            </div>
+                            {img.tags?.length ? (
+                              <div style={{ color: 'var(--text-secondary)', fontSize: '0.72rem' }} title={img.tags.join(', ')}>
+                                {img.tags.slice(0, 4).join(', ')}
+                                {img.tags.length > 4 ? '…' : ''}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Scan to find exact (byte-identical) duplicates by hash.</div>
+            )}
           </details>
         </CommandBar>
 

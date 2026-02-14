@@ -11,6 +11,7 @@ type DrawerMode = 'none' | 'menu' | 'library';
 export function App() {
   const [page, setPage] = React.useState<Page>('library');
   const [selectedCharacterId, setSelectedCharacterId] = React.useState<string | null>(null);
+  const [selectedImageId, setSelectedImageId] = React.useState<string | null>(null);
   const [drawerMode, setDrawerMode] = React.useState<DrawerMode>('none');
 
   useHotkeys({
@@ -46,8 +47,9 @@ export function App() {
       <div className={styles.content}>
         {page === 'library' ? (
           <LibraryView
-            onOpenCharacter={(characterId) => {
+            onOpenCharacter={(characterId, selectImageId) => {
               setSelectedCharacterId(characterId);
+              setSelectedImageId(selectImageId ? String(selectImageId) : null);
               setPage('character');
             }}
           />
@@ -57,8 +59,11 @@ export function App() {
             onBack={() => setPage('library')}
             onNavigateCharacter={(nextId) => {
               setSelectedCharacterId(nextId);
+              setSelectedImageId(null);
               setPage('character');
             }}
+            selectImageId={selectedImageId}
+            onSelectImageHandled={() => setSelectedImageId(null)}
             onOpenLibraryDrawer={() => setDrawerMode('library')}
             isLibraryDrawerOpen={drawerMode === 'library'}
             onCloseLibraryDrawer={() => setDrawerMode('none')}

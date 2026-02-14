@@ -151,6 +151,8 @@ export function CharacterView({
   characterId,
   onBack,
   onNavigateCharacter,
+  selectImageId,
+  onSelectImageHandled,
   onOpenLibraryDrawer,
   isLibraryDrawerOpen,
   onCloseLibraryDrawer,
@@ -158,6 +160,8 @@ export function CharacterView({
   characterId: string | null;
   onBack: () => void;
   onNavigateCharacter: (characterId: string) => void;
+  selectImageId?: string | null;
+  onSelectImageHandled?: () => void;
   onOpenLibraryDrawer: () => void;
   isLibraryDrawerOpen: boolean;
   onCloseLibraryDrawer: () => void;
@@ -175,6 +179,14 @@ export function CharacterView({
   const [moodboardBacklinks, setMoodboardBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [characterBacklinks, setCharacterBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [backlinksError, setBacklinksError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const id = String(selectImageId ?? '').trim();
+    if (!id) return;
+    setMediaMode('photos');
+    setRequestedImageId(id);
+    onSelectImageHandled?.();
+  }, [selectImageId, onSelectImageHandled]);
 
   const splitterPx = 10;
   const minLeftPx2 = 360;

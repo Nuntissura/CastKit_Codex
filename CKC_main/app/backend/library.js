@@ -1169,6 +1169,112 @@ class CKCLibrary {
     };
   }
 
+  async listDuplicateGroups({ minCount = 2, limitGroups = 200, maxPerGroup = 40 } = {}) {
+    const min = Math.max(2, Math.min(1000, Number(minCount) || 2));
+    const lim = Math.max(1, Math.min(2000, Number(limitGroups) || 200));
+    const per = Math.max(1, Math.min(200, Number(maxPerGroup) || 40));
+
+    const groups = await all(
+      this.db,
+      `SELECT file_hash, COUNT(*) AS c
+       FROM ImageAsset
+       GROUP BY file_hash
+       HAVING COUNT(*) >= ?
+       ORDER BY c DESC
+       LIMIT ?`,
+      [min, lim]
+    );
+
+    const out = [];
+    for (const g of groups) {
+      const fileHash = String(g.file_hash || '');
+      if (!fileHash) continue;
+
+      const rows = await all(
+        this.db,
+        `SELECT ia.image_id, ia.character_id, c.display_name, ia.relative_path, ia.storage_mode, ia.source_path,
+                ia.favorite, ia.rating, ia.tags_json, ia.added_at
+         FROM ImageAsset ia
+         JOIN Character c ON c.character_id = ia.character_id
+         WHERE ia.file_hash = ?
+         ORDER BY ia.favorite DESC, ia.rating DESC, ia.added_at DESC
+         LIMIT ?`,
+        [fileHash, per]
+      );
+
+      let maxSize = 0;
+      let totalCopyBytes = 0;
+      const images = [];
+
+      for (const r of rows) {
+        const imageId = String(r.image_id || '');
+        const characterId = String(r.character_id || '');
+        const relativePath = String(r.relative_path || '');
+        const storageMode = String(r.storage_mode || 'copy');
+        const sourcePath = r.source_path != null ? String(r.source_path) : null;
+
+        const abs =
+          storageMode === 'reference' && sourcePath
+            ? sourcePath
+            : path.join(this.getCharacterPaths(characterId).base, relativePath.replaceAll('/', path.sep));
+
+        let sizeBytes = null;
+        let isMissing = true;
+        try {
+          const st = fs.statSync(abs);
+          if (st && st.isFile()) {
+            sizeBytes = Number(st.size) || 0;
+            isMissing = false;
+          }
+        } catch {
+          // ignore
+        }
+
+        if (typeof sizeBytes === 'number' && sizeBytes > maxSize) maxSize = sizeBytes;
+        if (storageMode === 'copy' && typeof sizeBytes === 'number' && sizeBytes > 0) totalCopyBytes += sizeBytes;
+
+        let tags = [];
+        try {
+          const parsed = JSON.parse(r.tags_json ?? '[]');
+          tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+        } catch {
+          tags = [];
+        }
+
+        images.push({
+          imageId,
+          characterId,
+          characterName: String(r.display_name ?? ''),
+          relativePath,
+          storageMode,
+          sourcePath,
+          favorite: !!r.favorite,
+          rating: Number(r.rating) || 0,
+          tags,
+          addedAt: String(r.added_at ?? ''),
+          absPath: abs,
+          sizeBytes,
+          isMissing,
+        });
+      }
+
+      const count = Number(g.c) || images.length;
+      const potentialSavingsBytes = maxSize > 0 ? Math.max(0, totalCopyBytes - maxSize) : 0;
+
+      out.push({
+        fileHash,
+        count,
+        sizeBytes: maxSize,
+        totalCopyBytes,
+        potentialSavingsBytes,
+        images,
+        truncated: images.length < count,
+      });
+    }
+
+    return out;
+  }
+
   _cleanTags(tags) {
     const cleaned = [];
     const seen = new Set();

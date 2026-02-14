@@ -434,6 +434,11 @@ function registerIpcHandlers() {
         return { ...diag, configPath: appConfigPath, generatedAt: new Date().toISOString() };
     });
 
+    ipcMain.handle('ckc:listDuplicateGroups', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listDuplicateGroups(params || {});
+    });
+
     ipcMain.handle('ckc:selectLibraryRoot', async () => {
         const result = await dialog.showOpenDialog(mainWindow, {
             title: 'Select Library Root',

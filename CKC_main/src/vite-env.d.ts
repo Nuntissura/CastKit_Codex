@@ -200,6 +200,32 @@ type CKCLibraryDiagnostics = {
   }>;
 };
 
+type CKCDuplicateImage = {
+  imageId: string;
+  characterId: string;
+  characterName: string;
+  relativePath: string;
+  storageMode: 'copy' | 'reference';
+  sourcePath: string | null;
+  favorite: boolean;
+  rating: number;
+  tags: string[];
+  addedAt: string;
+  absPath: string;
+  sizeBytes: number | null;
+  isMissing: boolean;
+};
+
+type CKCDuplicateGroup = {
+  fileHash: string;
+  count: number;
+  sizeBytes: number;
+  totalCopyBytes: number;
+  potentialSavingsBytes: number;
+  images: CKCDuplicateImage[];
+  truncated: boolean;
+};
+
 type CKCRepairMissingImagesByHashResult = {
   ok: true;
   reportPath: string;
@@ -336,6 +362,7 @@ interface Window {
       getDefaultLibraryRootInfo: () => Promise<{ isPortable: boolean; portableDir: string | null; defaultLibraryRoot: string }>;
       resetLibraryRootToDefault: () => Promise<string>;
       getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
+      listDuplicateGroups: (params?: { minCount?: number; limitGroups?: number; maxPerGroup?: number } | null) => Promise<CKCDuplicateGroup[]>;
       listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
       listAllTags: () => Promise<string[]>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
