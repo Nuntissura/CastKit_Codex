@@ -22,6 +22,15 @@ type CKCGlobalImage = {
   addedAt: string;
 };
 
+type CKCInboxImage = {
+  id: string;
+  favorite: boolean;
+  rating: number;
+  notes: string;
+  tags: string[];
+  addedAt: string;
+};
+
 type CKCDocType = 'notes' | 'stories' | 'moodboard';
 
 type CKCDocListItem = {
@@ -205,6 +214,35 @@ type CKCRepairMissingImagesByHashResult = {
   }>;
 };
 
+type CKCInboxScanResult = {
+  ok: true;
+  scanned: number;
+  imported: Array<{
+    id: string;
+    relativePath: string;
+    fileHash: string;
+    thumbRelativePath: string | null;
+  }>;
+  duplicates: Array<{
+    srcPath: string;
+    fileHash: string;
+    existingCount: number;
+    alreadyImportedInBatch: number;
+  }>;
+};
+
+type CKCMoveImagesResult = {
+  ok: true;
+  moved: Array<{ imageId: string; fromCharacterId: string; toCharacterId: string; relativePath: string }>;
+  errors: Array<{ imageId: string; message: string }>;
+};
+
+type CKCDeleteImagesResult = {
+  ok: true;
+  deleted: string[];
+  errors: Array<{ imageId: string; message: string }>;
+};
+
 type CKCValidationIssue = {
   fieldId: string;
   severity: 'error' | 'warn';
@@ -285,6 +323,7 @@ interface Window {
     importCharacterFromSheetDialog: () => Promise<{ characterId: string } | null>;
     getCharacter: (characterId: string) => Promise<CKCCharacter | null>;
     listGlobalCarouselImages: (params?: unknown) => Promise<CKCGlobalImage[]>;
+    listInboxImages: () => Promise<CKCInboxImage[]>;
     listDocs: (params?: unknown) => Promise<CKCDocListItem[]>;
     getDoc: (params?: unknown) => Promise<CKCDocDetail | null>;
     upsertDoc: (params?: unknown) => Promise<{ ok: true; docId: string; docType: CKCDocType }>;
@@ -334,6 +373,9 @@ interface Window {
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
+    scanInbox: (params?: { inboxDir?: string; includeSubdirs?: boolean } | null) => Promise<CKCInboxScanResult>;
+    moveImagesToCharacter: (params: { imageIds: string[]; targetCharacterId: string }) => Promise<CKCMoveImagesResult>;
+    deleteImages: (params: { imageIds: string[]; deleteFiles?: boolean }) => Promise<CKCDeleteImagesResult>;
     repairMissingImagesByHash: (params: { scanDir: string; includeSubdirs?: boolean; dryRun?: boolean }) => Promise<CKCRepairMissingImagesByHashResult>;
     setImageMeta: (params: unknown) => Promise<unknown>;
     setImagesMetaBatch: (params: unknown) => Promise<unknown>;

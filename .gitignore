@@ -17,6 +17,11 @@ CKC_main/out/
 CKC_main/*.map
 CKC_main/*.log
 
+# Local reference screenshots for prompting (keep folder, ignore contents)
+CKC_refs/screenshots/*
+!CKC_refs/screenshots/.gitkeep
+!CKC_refs/screenshots/README.md
+
 # OS
 .DS_Store
 Thumbs.db

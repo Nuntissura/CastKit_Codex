@@ -12,6 +12,9 @@ const {
 } = require('./sheet');
 const { validateCharacterValues, classifyChangeType } = require('./validation');
 
+const INBOX_CHARACTER_ID = '__ckc_inbox';
+const INBOX_CHARACTER_NAME = 'Inbox';
+
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
@@ -257,6 +260,152 @@ class CKCLibrary {
     await this.ensureBuiltinSafeSubsetPack();
     await this.ensureBuiltinAllFieldsPack();
     await this.ensureDefaultProtectedFields();
+  }
+
+  async ensureInboxCharacter() {
+    const existing = await get(this.db, 'SELECT character_id FROM Character WHERE character_id = ?', [INBOX_CHARACTER_ID]);
+    if (existing) return INBOX_CHARACTER_ID;
+
+    const templateAst = await this.getTemplateAst(this.defaultTemplateId);
+    const characterId = INBOX_CHARACTER_ID;
+    const displayName = INBOX_CHARACTER_NAME;
+    const paths = this.getCharacterPaths(characterId);
+
+    ensureDir(paths.sheetDir);
+    ensureDir(paths.versionsDir);
+    ensureDir(paths.imagesOriginalDir);
+    ensureDir(paths.imagesThumbDir);
+    ensureDir(paths.exportsDir);
+    ensureDir(paths.extrasDir);
+    ensureDir(paths.packsDir);
+
+    const valuesById = {};
+    for (const section of templateAst.sections) {
+      for (const field of section.fields) {
+        valuesById[field.id] = field.type === 'rule' ? (field.templateDescriptor ?? '') : '';
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = characterId;
+    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-002')) valuesById['CHAR-ID-002'] = displayName;
+
+    const sheetText = generateCanonicalSheetText(
+      templateAst,
+      {
+        templateId: templateAst.id,
+        templateVersion: templateAst.version,
+        templateHash: templateAst.hash,
+        characterId,
+        displayName,
+      },
+      valuesById
+    );
+    fs.writeFileSync(paths.sheetTxtPath, sheetText, 'utf8');
+
+    await run(
+      this.db,
+      `INSERT INTO Character(character_id, display_name, template_id, template_version, template_hash, search_blob, is_system)
+       VALUES(?, ?, ?, ?, ?, ?, 1)`,
+      [characterId, displayName, templateAst.id, templateAst.version, templateAst.hash, '']
+    );
+
+    await run(this.db, 'BEGIN');
+    try {
+      for (const [fieldId, valueText] of Object.entries(valuesById)) {
+        if (!String(valueText ?? '').trim().length) continue;
+        await run(
+          this.db,
+          `INSERT INTO FieldValue(character_id, field_id, value_text, value_type)
+           VALUES(?, ?, ?, ?)`,
+          [characterId, fieldId, valueText, this._fieldTypeById(templateAst, fieldId)]
+        );
+      }
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._upsertDerivedTags(templateAst, characterId, valuesById);
+    await this._updateSearchBlob(templateAst, characterId, displayName, valuesById);
+    await this._createSheetVersion({ characterId, source: 'import', sheetPath: paths.sheetTxtPath, notes: 'System Inbox sheet created.' });
+    await this._audit('character.createInbox', characterId, { displayName, templateId: templateAst.id, templateHash: templateAst.hash });
+
+    return characterId;
+  }
+
+  async listInboxImages() {
+    const inboxId = await this.ensureInboxCharacter();
+    const rows = await all(
+      this.db,
+      `SELECT image_id, favorite, rating, notes, tags_json, added_at
+       FROM ImageAsset
+       WHERE character_id = ?
+       ORDER BY added_at DESC`,
+      [inboxId]
+    );
+    return rows.map((img) => ({
+      id: img.image_id,
+      favorite: !!img.favorite,
+      rating: img.rating,
+      notes: img.notes ?? '',
+      tags: (() => {
+        try {
+          const parsed = JSON.parse(img.tags_json ?? '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
+      addedAt: img.added_at,
+    }));
+  }
+
+  async importInboxFromDir({ inboxDir, includeSubdirs = false, maxFiles = 25_000 } = {}) {
+    const root = String(inboxDir || '').trim();
+    if (!root) throw new Error('inboxDir is required');
+    if (!fs.existsSync(root)) throw new Error(`Inbox folder not found: ${root}`);
+
+    const inboxId = await this.ensureInboxCharacter();
+
+    const allowedExt = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+    const max = Math.max(1, Math.min(500_000, Number(maxFiles) || 25_000));
+
+    const filePaths = [];
+    const dirQueue = [root];
+    while (dirQueue.length > 0 && filePaths.length < max) {
+      const dir = dirQueue.pop();
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const ent of entries) {
+        if (filePaths.length >= max) break;
+        const abs = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          if (includeSubdirs) dirQueue.push(abs);
+          continue;
+        }
+        const ext = path.extname(ent.name).toLowerCase();
+        if (!allowedExt.has(ext)) continue;
+        filePaths.push(abs);
+      }
+    }
+
+    if (filePaths.length === 0) return { ok: true, scanned: 0, imported: [], duplicates: [] };
+
+    const res = await this.importImages({ characterId: inboxId, filePaths, duplicatePolicy: 'skip' });
+    await this._audit('inbox.importFromDir', inboxId, {
+      inboxDir: root,
+      includeSubdirs: !!includeSubdirs,
+      scannedFiles: filePaths.length,
+      importedCount: res.imported?.length ?? 0,
+      duplicateCount: res.duplicates?.length ?? 0,
+    });
+    return { ok: true, scanned: filePaths.length, imported: res.imported || [], duplicates: res.duplicates || [] };
   }
 
   close() {
@@ -724,7 +873,7 @@ class CKCLibrary {
     return { ok: true };
   }
 
-  async listCharacters({ queryText = '', tagFilters = [], scopeFlags = null, galleryFilters = null } = {}) {
+  async listCharacters({ queryText = '', tagFilters = [], scopeFlags = null, galleryFilters = null, includeSystem = false } = {}) {
     const flags = {
       ids: true,
       labels: true,
@@ -741,6 +890,8 @@ class CKCLibrary {
 
     const clauses = [];
     const params = [];
+
+    if (!includeSystem) clauses.push('(is_system = 0)');
 
     if (Array.isArray(tagFilters) && tagFilters.length > 0) {
       const placeholders = tagFilters.map(() => '?').join(',');
@@ -2548,6 +2699,232 @@ class CKCLibrary {
     });
 
     return { imported, duplicates };
+  }
+
+  async moveImagesToCharacter({ imageIds, targetCharacterId }) {
+    const targetId = String(targetCharacterId || '').trim();
+    if (!targetId) throw new Error('targetCharacterId is required');
+
+    const target = await get(this.db, 'SELECT character_id FROM Character WHERE character_id = ?', [targetId]);
+    if (!target) throw new Error('Target character not found');
+
+    const rawIds = Array.isArray(imageIds) ? imageIds : [];
+    const ids = [];
+    const seen = new Set();
+    for (const id of rawIds) {
+      const s = String(id ?? '').trim();
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      ids.push(s);
+    }
+    if (ids.length === 0) return { ok: true, moved: [], errors: [] };
+
+    const targetPaths = this.getCharacterPaths(targetId);
+    ensureDir(targetPaths.imagesOriginalDir);
+    ensureDir(targetPaths.imagesThumbDir);
+
+    const moved = [];
+    const errors = [];
+
+    for (const imageId of ids) {
+      try {
+        const row = await get(
+          this.db,
+          'SELECT image_id, character_id, relative_path, storage_mode, source_path FROM ImageAsset WHERE image_id = ?',
+          [imageId]
+        );
+        if (!row) throw new Error('Image not found');
+
+        const fromId = String(row.character_id || '').trim();
+        if (!fromId) throw new Error('Image has no character_id');
+        if (fromId === targetId) {
+          moved.push({ imageId, fromCharacterId: fromId, toCharacterId: targetId, relativePath: String(row.relative_path || '') });
+          continue;
+        }
+
+        const relRaw = String(row.relative_path || '');
+        const relOs = relRaw.replaceAll('/', path.sep);
+        const fileName = path.basename(relOs);
+        const mode = String(row.storage_mode || 'copy');
+
+        let nextRel = relRaw;
+        let destOriginalAbs = null;
+
+        if (mode === 'copy') {
+          const fromPaths = this.getCharacterPaths(fromId);
+          const oldOriginalAbs = path.join(fromPaths.base, relOs);
+
+          const destDir = targetPaths.imagesOriginalDir;
+          let destAbs = path.join(destDir, fileName);
+          if (fs.existsSync(destAbs)) destAbs = uniquePath(destDir, fileName);
+
+          const newFileName = path.basename(destAbs);
+          nextRel = path.join('images', 'original', newFileName).replaceAll('\\', '/');
+          destOriginalAbs = destAbs;
+
+          if (fs.existsSync(oldOriginalAbs)) {
+            try {
+              fs.renameSync(oldOriginalAbs, destAbs);
+            } catch {
+              fs.copyFileSync(oldOriginalAbs, destAbs);
+              try {
+                fs.unlinkSync(oldOriginalAbs);
+              } catch {
+                // ignore best-effort cleanup
+              }
+            }
+          }
+
+          const oldStem = fileName.replace(path.extname(fileName), '');
+          const oldThumbAbs = path.join(fromPaths.imagesThumbDir, `${oldStem}.png`);
+          const newStem = newFileName.replace(path.extname(newFileName), '');
+          const destThumbAbs = path.join(targetPaths.imagesThumbDir, `${newStem}.png`);
+
+          let wroteThumb = false;
+          if (this.electronNativeImage && destOriginalAbs && fs.existsSync(destOriginalAbs)) {
+            try {
+              const img = this.electronNativeImage.createFromPath(destOriginalAbs);
+              const thumb = img.resize({ width: 320 });
+              fs.writeFileSync(destThumbAbs, thumb.toPNG());
+              wroteThumb = true;
+            } catch {
+              wroteThumb = false;
+            }
+          }
+
+          if (!wroteThumb && fs.existsSync(oldThumbAbs) && !fs.existsSync(destThumbAbs)) {
+            try {
+              fs.copyFileSync(oldThumbAbs, destThumbAbs);
+              wroteThumb = true;
+            } catch {
+              // ignore
+            }
+          }
+
+          if (fs.existsSync(oldThumbAbs)) {
+            try {
+              fs.unlinkSync(oldThumbAbs);
+            } catch {
+              // ignore
+            }
+          }
+        } else {
+          // Reference mode: keep relative_path but ensure the thumbnail exists in the new character folder.
+          const fromPaths = this.getCharacterPaths(fromId);
+          const stem = fileName.replace(path.extname(fileName), '');
+          if (stem) {
+            const destThumbAbs = path.join(targetPaths.imagesThumbDir, `${stem}.png`);
+            if (!fs.existsSync(destThumbAbs)) {
+              let wroteThumb = false;
+              const src = row.source_path ? String(row.source_path) : null;
+              if (this.electronNativeImage && src && fs.existsSync(src)) {
+                try {
+                  const img = this.electronNativeImage.createFromPath(src);
+                  const thumb = img.resize({ width: 320 });
+                  fs.writeFileSync(destThumbAbs, thumb.toPNG());
+                  wroteThumb = true;
+                } catch {
+                  wroteThumb = false;
+                }
+              }
+              const oldThumbAbs = path.join(fromPaths.imagesThumbDir, `${stem}.png`);
+              if (!wroteThumb && fs.existsSync(oldThumbAbs)) {
+                try {
+                  fs.copyFileSync(oldThumbAbs, destThumbAbs);
+                } catch {
+                  // ignore
+                }
+              }
+            }
+          }
+        }
+
+        await run(this.db, 'UPDATE ImageAsset SET character_id = ?, relative_path = ? WHERE image_id = ?', [
+          targetId,
+          String(nextRel || '').replaceAll('\\', '/'),
+          imageId,
+        ]);
+
+        // If this image was used as a character icon, clear it from the source character (safe UX).
+        await run(this.db, 'UPDATE Character SET icon_image_id = NULL WHERE character_id = ? AND icon_image_id = ?', [fromId, imageId]);
+
+        await run(this.db, 'UPDATE Character SET updated_at = CURRENT_TIMESTAMP WHERE character_id IN (?, ?)', [fromId, targetId]);
+
+        moved.push({ imageId, fromCharacterId: fromId, toCharacterId: targetId, relativePath: String(nextRel || '') });
+      } catch (err) {
+        errors.push({ imageId, message: String(err?.message || err || 'Unknown error') });
+      }
+    }
+
+    await this._audit('gallery.moveImagesToCharacter', targetId, { movedCount: moved.length, errorCount: errors.length });
+    return { ok: true, moved, errors };
+  }
+
+  async deleteImages({ imageIds, deleteFiles = true } = {}) {
+    const rawIds = Array.isArray(imageIds) ? imageIds : [];
+    const ids = [];
+    const seen = new Set();
+    for (const id of rawIds) {
+      const s = String(id ?? '').trim();
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      ids.push(s);
+    }
+    if (ids.length === 0) return { ok: true, deleted: [], errors: [] };
+
+    const deleted = [];
+    const errors = [];
+
+    for (const imageId of ids) {
+      try {
+        const row = await get(
+          this.db,
+          'SELECT image_id, character_id, relative_path, storage_mode, source_path FROM ImageAsset WHERE image_id = ?',
+          [imageId]
+        );
+        if (!row) continue;
+
+        const characterId = String(row.character_id || '').trim();
+        const relRaw = String(row.relative_path || '');
+        const relOs = relRaw.replaceAll('/', path.sep);
+        const mode = String(row.storage_mode || 'copy');
+
+        const paths = characterId ? this.getCharacterPaths(characterId) : null;
+        const fileName = path.basename(relOs);
+        const stem = fileName.replace(path.extname(fileName), '');
+
+        if (deleteFiles && paths) {
+          if (mode === 'copy') {
+            const origAbs = path.join(paths.base, relOs);
+            try {
+              if (fs.existsSync(origAbs)) fs.unlinkSync(origAbs);
+            } catch {
+              // ignore best-effort cleanup
+            }
+          }
+
+          if (stem) {
+            const thumbAbs = path.join(paths.imagesThumbDir, `${stem}.png`);
+            try {
+              if (fs.existsSync(thumbAbs)) fs.unlinkSync(thumbAbs);
+            } catch {
+              // ignore best-effort cleanup
+            }
+          }
+        }
+
+        await run(this.db, 'DELETE FROM ImageAsset WHERE image_id = ?', [imageId]);
+        await run(this.db, 'UPDATE Character SET icon_image_id = NULL WHERE icon_image_id = ?', [imageId]);
+        deleted.push(imageId);
+      } catch (err) {
+        errors.push({ imageId, message: String(err?.message || err || 'Unknown error') });
+      }
+    }
+
+    await this._audit('gallery.deleteImages', null, { deletedCount: deleted.length, errorCount: errors.length });
+    return { ok: true, deleted, errors };
   }
 
   async repairThumbnails({ characterId }) {

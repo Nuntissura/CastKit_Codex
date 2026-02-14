@@ -528,6 +528,11 @@ function registerIpcHandlers() {
         return lib.listGlobalCarouselImages(params || {});
     });
 
+    ipcMain.handle('ckc:listInboxImages', async () => {
+        const lib = await ensureLibrary();
+        return lib.listInboxImages();
+    });
+
     ipcMain.handle('ckc:listDocs', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.listDocs(params || {});
@@ -836,6 +841,26 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:openPath', async (_evt, filePath) => {
         await shell.openPath(filePath);
         return { ok: true };
+    });
+
+    ipcMain.handle('ckc:scanInbox', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params && typeof params === 'object' ? params : {};
+        const configured = appConfig && typeof appConfig.inboxDir === 'string' ? appConfig.inboxDir : '';
+        const inboxDir = String(p.inboxDir ?? configured ?? '').trim();
+        if (!inboxDir) throw new Error('Inbox folder is not configured (Library → Inbox).');
+        const includeSubdirs = !!p.includeSubdirs;
+        return lib.importInboxFromDir({ inboxDir, includeSubdirs });
+    });
+
+    ipcMain.handle('ckc:moveImagesToCharacter', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.moveImagesToCharacter(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteImages(params || {});
     });
 
     ipcMain.handle('ckc:importImages', async (_evt, params) => {

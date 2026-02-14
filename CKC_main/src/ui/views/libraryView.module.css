@@ -11,6 +11,23 @@
   min-height: 0;
 }
 
+.leftHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.leftToggle {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.leftToggle[data-active='1'] {
+  border-color: var(--accent-color);
+}
+
 .splitter {
   cursor: col-resize;
   background: rgba(0, 0, 0, 0.03);

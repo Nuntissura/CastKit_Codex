@@ -37,6 +37,8 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [showCommandBar, setShowCommandBar] = React.useState<boolean>(false);
   const [showExportsBar, setShowExportsBar] = React.useState<boolean>(false);
   const [showLibraryBar, setShowLibraryBar] = React.useState<boolean>(false);
+  const [showInboxBar, setShowInboxBar] = React.useState<boolean>(false);
+  const [leftMode, setLeftMode] = React.useState<'carousel' | 'inbox'>('carousel');
 
   const [queryText, setQueryText] = React.useState<string>('');
   const [favoriteOnly, setFavoriteOnly] = React.useState<boolean>(false);
@@ -58,6 +60,20 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [tagFilters, setTagFilters] = React.useState<string[]>([]);
   const [tagDraft, setTagDraft] = React.useState<string>('');
   const [allTags, setAllTags] = React.useState<string[]>([]);
+
+  const [inboxDir, setInboxDir] = React.useState<string>('');
+  const [inboxIncludeSubdirs, setInboxIncludeSubdirs] = React.useState<boolean>(false);
+  const [inboxImages, setInboxImages] = React.useState<
+    Array<{ id: string; favorite: boolean; rating: number; notes: string; tags: string[]; addedAt: string }>
+  >([]);
+  const [inboxSelectedIds, setInboxSelectedIds] = React.useState<string[]>([]);
+  const [inboxPrimaryId, setInboxPrimaryId] = React.useState<string | null>(null);
+  const [inboxBusy, setInboxBusy] = React.useState<boolean>(false);
+  const [inboxError, setInboxError] = React.useState<string | null>(null);
+  const [inboxLastScan, setInboxLastScan] = React.useState<{ scanned: number; imported: number; duplicates: number } | null>(null);
+  const [inboxAssignCharacters, setInboxAssignCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
+  const [inboxAssignTargetId, setInboxAssignTargetId] = React.useState<string>('');
+  const [inboxAssignError, setInboxAssignError] = React.useState<string | null>(null);
 
   const [savedSearches, setSavedSearches] = React.useState<CKCSavedSearch[] | null>(null);
   const [selectedSavedSearchId, setSelectedSavedSearchId] = React.useState<string>('');
@@ -113,6 +129,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
         setConfigPath(typeof info?.configPath === 'string' ? info.configPath : null);
         const cfg: any = info?.config ?? null;
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+        if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
         const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
         if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
       })
@@ -121,6 +138,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
           .getConfig()
           .then((cfg: any) => {
             if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+            if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
             const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
             if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
           })
@@ -141,6 +159,48 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
       .catch(() => setAllTags([]));
   }, [refreshNonce]);
+
+  const reloadInbox = React.useCallback(() => {
+    setInboxError(null);
+    window.ckc
+      .listInboxImages()
+      .then((rows: any) => {
+        const next = Array.isArray(rows)
+          ? rows.map((img) => ({
+              id: String(img.id),
+              favorite: !!img.favorite,
+              rating: Number(img.rating) || 0,
+              notes: String(img.notes ?? ''),
+              tags: Array.isArray(img.tags) ? img.tags.map((t: any) => String(t)) : [],
+              addedAt: String(img.addedAt ?? ''),
+            }))
+          : [];
+        setInboxImages(next);
+      })
+      .catch((err: unknown) => {
+        setInboxError(err instanceof Error ? err.message : String(err));
+        setInboxImages([]);
+      });
+  }, []);
+
+  React.useEffect(() => {
+    reloadInbox();
+  }, [reloadInbox, refreshNonce]);
+
+  const reloadInboxAssignCharacters = React.useCallback(() => {
+    window.ckc
+      .listCharacters({ queryText: '', tagFilters: [], includeSystem: false })
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setInboxAssignCharacters(list);
+        setInboxAssignTargetId((prev) => (prev ? prev : list[0]?.id ? String(list[0].id) : ''));
+      })
+      .catch(() => setInboxAssignCharacters([]));
+  }, []);
+
+  React.useEffect(() => {
+    reloadInboxAssignCharacters();
+  }, [reloadInboxAssignCharacters, refreshNonce]);
 
   const reloadSavedSearches = React.useCallback(() => {
     setSavedSearchError(null);
@@ -285,6 +345,77 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     },
     [repairScanDir, repairIncludeSubdirs, reloadDiagnostics, reloadCarousel]
   );
+
+  const scanInbox = React.useCallback(async () => {
+    const dir = String(inboxDir || '').trim();
+    if (!dir) {
+      setInboxError('Set an Inbox folder first.');
+      return;
+    }
+
+    setInboxError(null);
+    setInboxBusy(true);
+    try {
+      const res = await window.ckc.scanInbox({ inboxDir: dir, includeSubdirs: inboxIncludeSubdirs });
+      const importedCount = Array.isArray((res as any)?.imported) ? (res as any).imported.length : 0;
+      const duplicateCount = Array.isArray((res as any)?.duplicates) ? (res as any).duplicates.length : 0;
+      setInboxLastScan({ scanned: Number((res as any)?.scanned) || 0, imported: importedCount, duplicates: duplicateCount });
+      reloadInbox();
+      setLeftMode('inbox');
+      setShowInboxBar(true);
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setInboxError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInboxBusy(false);
+    }
+  }, [inboxDir, inboxIncludeSubdirs, reloadInbox]);
+
+  const assignInboxSelection = React.useCallback(async () => {
+    const targetId = String(inboxAssignTargetId || '').trim();
+    if (!targetId) return;
+    if (!Array.isArray(inboxSelectedIds) || inboxSelectedIds.length === 0) return;
+
+    setInboxAssignError(null);
+    setInboxBusy(true);
+    try {
+      const res = await window.ckc.moveImagesToCharacter({ imageIds: inboxSelectedIds, targetCharacterId: targetId });
+      const errs = Array.isArray((res as any)?.errors) ? (res as any).errors : [];
+      if (errs.length > 0) {
+        setInboxAssignError(`Moved with ${errs.length} error(s). First: ${String(errs[0]?.message ?? 'Unknown error')}`);
+      }
+      reloadInbox();
+      void reloadCarousel();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setInboxAssignError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInboxBusy(false);
+    }
+  }, [inboxAssignTargetId, inboxSelectedIds, reloadInbox, reloadCarousel]);
+
+  const deleteInboxSelection = React.useCallback(async () => {
+    if (!Array.isArray(inboxSelectedIds) || inboxSelectedIds.length === 0) return;
+    const ok = window.confirm(`Delete ${inboxSelectedIds.length} image(s) from Inbox? This deletes CKC copies only.`);
+    if (!ok) return;
+
+    setInboxAssignError(null);
+    setInboxBusy(true);
+    try {
+      const res = await window.ckc.deleteImages({ imageIds: inboxSelectedIds, deleteFiles: true });
+      const errs = Array.isArray((res as any)?.errors) ? (res as any).errors : [];
+      if (errs.length > 0) {
+        setInboxAssignError(`Deleted with ${errs.length} error(s). First: ${String(errs[0]?.message ?? 'Unknown error')}`);
+      }
+      reloadInbox();
+      void reloadCarousel();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setInboxAssignError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInboxBusy(false);
+    }
+  }, [inboxSelectedIds, reloadInbox, reloadCarousel]);
 
   React.useEffect(() => {
     if (!showLibraryBar) return;
@@ -445,16 +576,68 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     <div className={styles.layout} ref={layoutRef} style={{ gridTemplateColumns: libraryGridTemplateColumns }}>
       <section className={styles.left}>
         <MediaPane
-          images={filteredCarouselImages}
+          key={leftMode}
+          images={leftMode === 'inbox' ? inboxImages : filteredCarouselImages}
           allTags={allTags}
-          enableViewerSlideshow
-          autoStartSlideshow
-          emptyLabel="No global carousel images yet (tag an image with: carousel)."
+          headerLeft={
+            <div className={styles.leftHeader}>
+              <button
+                className={styles.leftToggle}
+                data-active={leftMode === 'carousel' ? '1' : '0'}
+                onClick={() => setLeftMode('carousel')}
+              >
+                Carousel
+              </button>
+              <button
+                className={styles.leftToggle}
+                data-active={leftMode === 'inbox' ? '1' : '0'}
+                onClick={() => {
+                  setLeftMode('inbox');
+                  setShowInboxBar(true);
+                }}
+                title="Unassigned inbox images"
+              >
+                Inbox ({inboxImages.length})
+              </button>
+              {leftMode === 'inbox' ? (
+                <button className={styles.leftToggle} disabled={inboxBusy} onClick={() => setShowInboxBar(true)} title="Inbox settings">
+                  Settings
+                </button>
+              ) : null}
+            </div>
+          }
+          defaultShowThumbnails={leftMode === 'inbox'}
+          defaultShowControls={leftMode === 'inbox'}
+          autoOpenControlsOnSelect={leftMode === 'inbox'}
+          enableViewerSlideshow={leftMode === 'carousel'}
+          autoStartSlideshow={leftMode === 'carousel'}
+          emptyLabel={
+            leftMode === 'carousel'
+              ? 'No global carousel images yet (tag an image with: carousel).'
+              : inboxDir
+                ? 'Inbox is empty. Scan the folder in the Inbox bar.'
+                : 'Inbox folder not set. Open the Inbox bar to configure.'
+          }
+          onSelectionChange={
+            leftMode === 'inbox'
+              ? (ids, primary) => {
+                  setInboxSelectedIds(ids);
+                  setInboxPrimaryId(primary);
+                }
+              : undefined
+          }
           onOpenDiagnostics={() => setShowLibraryBar(true)}
           onPatchImageMeta={(imageId, patch) => {
-            // Re-fetch to respect the global selection rule (prefer frontpage when present).
-            if (reloadCarouselDebounceRef.current) window.clearTimeout(reloadCarouselDebounceRef.current);
-            reloadCarouselDebounceRef.current = window.setTimeout(() => void reloadCarousel(), 120);
+            if (leftMode === 'carousel') {
+              // Re-fetch to respect the global selection rule (prefer frontpage when present).
+              if (reloadCarouselDebounceRef.current) window.clearTimeout(reloadCarouselDebounceRef.current);
+              reloadCarouselDebounceRef.current = window.setTimeout(() => void reloadCarousel(), 120);
+              return;
+            }
+
+            setInboxImages((prev) =>
+              (prev || []).map((img) => (img.id === imageId ? { ...img, ...patch, tags: patch.tags ?? img.tags } : img))
+            );
           }}
         />
       </section>
@@ -653,6 +836,108 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
               </div>
             ) : null}
           </details>
+        </CommandBar>
+
+        <CommandBar isOpen={showInboxBar} onToggle={() => setShowInboxBar((v) => !v)} label="Inbox">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Folder:</span>
+            <code style={{ fontSize: '0.85rem' }}>{inboxDir ? inboxDir : '(not set)'}</code>
+            <button
+              disabled={inboxBusy}
+              onClick={async () => {
+                setInboxError(null);
+                const dir = await window.ckc.selectFolderDialog({ title: 'Select Inbox folder (screenshots dump)' });
+                if (!dir) return;
+                setInboxDir(dir);
+                await window.ckc.setConfig({ inboxDir: dir });
+              }}
+            >
+              Choose folder…
+            </button>
+            <button disabled={!inboxDir} onClick={() => void window.ckc.openPath(inboxDir)}>
+              Open folder
+            </button>
+            <button
+              disabled={inboxBusy || !inboxDir}
+              onClick={async () => {
+                setInboxDir('');
+                await window.ckc.setConfig({ inboxDir: '' });
+              }}
+              title="Clears the configured inbox folder (does not delete files)"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={inboxIncludeSubdirs}
+                onChange={(e) => setInboxIncludeSubdirs(e.target.checked)}
+                disabled={inboxBusy}
+              />{' '}
+              Include subfolders
+            </label>
+            <button disabled={inboxBusy || !inboxDir} onClick={() => void scanInbox()}>
+              {inboxBusy ? 'Working…' : 'Scan Inbox'}
+            </button>
+            {inboxLastScan ? (
+              <span style={{ color: 'var(--text-secondary)' }}>
+                scanned <b>{inboxLastScan.scanned}</b> • imported <b>{inboxLastScan.imported}</b> • duplicates <b>{inboxLastScan.duplicates}</b>
+              </span>
+            ) : null}
+          </div>
+
+          {inboxError ? <div className={styles.error}>{inboxError}</div> : null}
+
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ color: 'var(--text-secondary)' }}>
+              Selected: <b>{inboxSelectedIds.length}</b>
+              {inboxPrimaryId ? (
+                <span>
+                  {' '}
+                  • primary: <code style={{ fontSize: '0.85rem' }}>{inboxPrimaryId}</code>
+                </span>
+              ) : null}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Assign to{' '}
+                <select
+                  value={inboxAssignTargetId}
+                  onChange={(e) => setInboxAssignTargetId(e.target.value)}
+                  disabled={inboxBusy || !inboxAssignCharacters}
+                >
+                  <option value="">(pick character)</option>
+                  {(inboxAssignCharacters || []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button disabled={inboxBusy || inboxSelectedIds.length === 0 || !inboxAssignTargetId} onClick={() => void assignInboxSelection()}>
+                Assign
+              </button>
+
+              <button
+                disabled={inboxBusy || inboxSelectedIds.length === 0}
+                onClick={() => void deleteInboxSelection()}
+                title="Deletes CKC copies stored in the Inbox. Does not touch your original inbox folder files."
+              >
+                Delete
+              </button>
+
+              <button disabled={inboxBusy} onClick={reloadInbox} title="Refresh inbox list">
+                Refresh
+              </button>
+            </div>
+
+            {inboxAssignError ? <div className={styles.error}>{inboxAssignError}</div> : null}
+          </div>
         </CommandBar>
 
         <CommandBar isOpen={showCommandBar} onToggle={() => setShowCommandBar((v) => !v)} label="Search / Filters">

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('ckc', {
     listAllTags: () => ipcRenderer.invoke('ckc:listAllTags'),
     listFieldValueSuggestions: (params) => ipcRenderer.invoke('ckc:listFieldValueSuggestions', params),
     listGlobalCarouselImages: (params) => ipcRenderer.invoke('ckc:listGlobalCarouselImages', params),
+    listInboxImages: () => ipcRenderer.invoke('ckc:listInboxImages'),
     listDocs: (params) => ipcRenderer.invoke('ckc:listDocs', params),
     getDoc: (params) => ipcRenderer.invoke('ckc:getDoc', params),
     upsertDoc: (params) => ipcRenderer.invoke('ckc:upsertDoc', params),
@@ -87,6 +88,9 @@ contextBridge.exposeInMainWorld('ckc', {
     exportFieldPack: (params) => ipcRenderer.invoke('ckc:exportFieldPack', params),
 
     importImages: (params) => ipcRenderer.invoke('ckc:importImages', params),
+    scanInbox: (params) => ipcRenderer.invoke('ckc:scanInbox', params),
+    moveImagesToCharacter: (params) => ipcRenderer.invoke('ckc:moveImagesToCharacter', params),
+    deleteImages: (params) => ipcRenderer.invoke('ckc:deleteImages', params),
     repairMissingImagesByHash: (params) => ipcRenderer.invoke('ckc:repairMissingImagesByHash', params),
     repairThumbnails: (characterId) => ipcRenderer.invoke('ckc:repairThumbnails', characterId),
     setImageMeta: (params) => ipcRenderer.invoke('ckc:setImageMeta', params),

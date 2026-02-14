@@ -71,6 +71,9 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'Character', 'icon_focus_x', 'REAL NOT NULL DEFAULT 0.5');
   await ensureColumn(db, 'Character', 'icon_focus_y', 'REAL NOT NULL DEFAULT 0.5');
 
+  // System characters (Inbox, future internal helpers). Hidden from normal lists by default.
+  await ensureColumn(db, 'Character', 'is_system', 'INTEGER NOT NULL DEFAULT 0');
+
   // ImageAsset: allow duplicates (no unique index), plus optional tags and reference-mode.
   await run(db, 'DROP INDEX IF EXISTS idx_image_dedupe');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash)');
