@@ -15,6 +15,23 @@ const { validateCharacterValues, classifyChangeType } = require('./validation');
 const INBOX_CHARACTER_ID = '__ckc_inbox';
 const INBOX_CHARACTER_NAME = 'Inbox';
 
+function extractBracketLinks(text) {
+  const out = new Set();
+  const raw = String(text ?? '');
+  const re = /\[\[([^\]]+?)\]\]/g;
+  let m = null;
+  while ((m = re.exec(raw)) !== null) {
+    const token = String(m[1] ?? '').trim();
+    if (!token) continue;
+    out.add(token);
+  }
+  return Array.from(out);
+}
+
+function docTargetType(docType) {
+  return `doc.${String(docType || '').trim().toLowerCase()}`;
+}
+
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
@@ -1293,6 +1310,15 @@ class CKCLibrary {
     );
 
     await this._audit('doc.upsert', null, { docType: type, docId: id });
+    try {
+      await this._reindexLinksForSource({ sourceType: type, sourceId: id, text: String(content ?? '') });
+    } catch (err) {
+      await this._audit('linkIndex.reindexFailed', null, {
+        sourceType: type,
+        sourceId: id,
+        message: String(err?.message || err || 'Unknown error'),
+      });
+    }
     return { ok: true, docId: id, docType: type };
   }
 
@@ -1301,7 +1327,227 @@ class CKCLibrary {
     const { type, table } = this._docTableForType(docType);
     await run(this.db, `DELETE FROM ${table} WHERE doc_id = ?`, [docId]);
     await this._audit('doc.delete', null, { docType: type, docId });
+    try {
+      await run(this.db, `DELETE FROM LinkIndex WHERE source_type = ? AND source_id = ?`, [type, docId]);
+      await run(this.db, `DELETE FROM LinkIndex WHERE target_type = ? AND target_id = ?`, [docTargetType(type), docId]);
+    } catch {
+      // Best-effort cleanup; user text remains untouched.
+    }
     return { ok: true };
+  }
+
+  async resolveLinkToken(token) {
+    return this._resolveLinkTokenCandidates(token);
+  }
+
+  async listBacklinks({ targetType, targetId, limit = 200 } = {}) {
+    const tt = String(targetType ?? '').trim();
+    const tid = String(targetId ?? '').trim();
+    if (!tt || !tid) return [];
+    const lim = Math.max(1, Math.min(5000, Number(limit) || 200));
+
+    const rows = await all(
+      this.db,
+      `SELECT source_type, source_id, raw_text, created_at
+       FROM LinkIndex
+       WHERE target_type = ? AND target_id = ?
+       ORDER BY created_at DESC
+       LIMIT ?`,
+      [tt, tid, lim]
+    );
+
+    const out = [];
+    for (const r of rows) {
+      const sourceType = String(r.source_type || '');
+      const sourceId = String(r.source_id || '');
+      let label = `${sourceType}:${sourceId}`;
+
+      if (sourceType === 'sheet') {
+        const c = await get(this.db, `SELECT display_name FROM Character WHERE character_id = ?`, [sourceId]);
+        label = c?.display_name ? `Sheet: ${String(c.display_name)}` : label;
+      } else if (sourceType === 'notes' || sourceType === 'stories' || sourceType === 'moodboard') {
+        try {
+          const { table } = this._docTableForType(sourceType);
+          const d = await get(this.db, `SELECT title FROM ${table} WHERE doc_id = ?`, [sourceId]);
+          label = d?.title ? `${sourceType}: ${String(d.title)}` : label;
+        } catch {
+          // ignore
+        }
+      }
+
+      out.push({
+        sourceType,
+        sourceId,
+        label,
+        rawText: String(r.raw_text ?? ''),
+        createdAt: r.created_at,
+      });
+    }
+    return out;
+  }
+
+  async _resolveLinkTokenCandidates(token) {
+    const raw = String(token ?? '').trim();
+    if (!raw) return [];
+
+    const m = raw.match(/^([A-Za-z]+):(.*)$/);
+    const known = new Set([
+      'doc',
+      'notes',
+      'note',
+      'stories',
+      'story',
+      'moodboard',
+      'mood',
+      'img',
+      'image',
+      'char',
+      'character',
+      'id',
+      'tag',
+      'imgtag',
+    ]);
+
+    let prefix = null;
+    let rest = raw;
+    if (m) {
+      const p = String(m[1] ?? '').toLowerCase();
+      if (known.has(p)) {
+        prefix = p;
+        rest = String(m[2] ?? '').trim();
+      }
+    }
+
+    const findCharactersByNameOrId = async (value) => {
+      const v = String(value ?? '').trim();
+      if (!v) return [];
+      const byId = await all(this.db, `SELECT character_id, display_name FROM Character WHERE character_id = ?`, [v]);
+      const byName = await all(this.db, `SELECT character_id, display_name FROM Character WHERE display_name = ? COLLATE NOCASE`, [v]);
+      const merged = [...byId, ...byName].filter(Boolean);
+      const seen = new Set();
+      const out = [];
+      for (const r of merged) {
+        const id = String(r.character_id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+          targetType: 'character',
+          targetId: id,
+          label: String(r.display_name ?? id),
+        });
+      }
+      return out;
+    };
+
+    const findDocsByIdOrTitle = async (docType, value) => {
+      const v = String(value ?? '').trim();
+      if (!v) return [];
+      const { type, table } = this._docTableForType(docType);
+
+      const rows = [];
+      const byId = await get(this.db, `SELECT doc_id, title FROM ${table} WHERE doc_id = ?`, [v]);
+      if (byId) rows.push(byId);
+      const byTitle = await all(
+        this.db,
+        `SELECT doc_id, title
+         FROM ${table}
+         WHERE title = ? COLLATE NOCASE
+         ORDER BY updated_at DESC
+         LIMIT 25`,
+        [v]
+      );
+      for (const r of byTitle) rows.push(r);
+
+      const seen = new Set();
+      const out = [];
+      for (const r of rows) {
+        if (!r) continue;
+        const id = String(r.doc_id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+          targetType: docTargetType(type),
+          targetId: id,
+          docType: type,
+          label: `${type}: ${String(r.title ?? id)}`,
+        });
+      }
+      return out;
+    };
+
+    const findDocsAcrossAllTypes = async (value) => {
+      const v = String(value ?? '').trim();
+      if (!v) return [];
+      const out = [];
+      out.push(...(await findDocsByIdOrTitle('notes', v)));
+      out.push(...(await findDocsByIdOrTitle('stories', v)));
+      out.push(...(await findDocsByIdOrTitle('moodboard', v)));
+      // De-dupe by (targetType,targetId)
+      const seen = new Set();
+      return out.filter((c) => {
+        const k = `${c.targetType}::${c.targetId}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    };
+
+    if (prefix === 'img' || prefix === 'image') {
+      const imageId = String(rest ?? '').trim();
+      if (!imageId) return [];
+      const row = await get(this.db, `SELECT image_id, character_id FROM ImageAsset WHERE image_id = ?`, [imageId]);
+      if (!row) return [];
+      return [
+        {
+          targetType: 'image',
+          targetId: String(row.image_id),
+          characterId: String(row.character_id),
+          label: `image:${String(row.image_id)}`,
+        },
+      ];
+    }
+
+    if (prefix === 'tag' || prefix === 'imgtag') {
+      const tag = String(rest ?? '').trim();
+      if (!tag) return [];
+      return [{ targetType: 'tag', targetId: tag, label: `tag:${tag}` }];
+    }
+
+    if (prefix === 'doc') return findDocsAcrossAllTypes(rest);
+    if (prefix === 'notes' || prefix === 'note') return findDocsByIdOrTitle('notes', rest);
+    if (prefix === 'stories' || prefix === 'story') return findDocsByIdOrTitle('stories', rest);
+    if (prefix === 'moodboard' || prefix === 'mood') return findDocsByIdOrTitle('moodboard', rest);
+
+    if (prefix === 'char' || prefix === 'character' || prefix === 'id') return findCharactersByNameOrId(rest);
+
+    // Default: treat as character name/id (wikilink).
+    return findCharactersByNameOrId(rest);
+  }
+
+  async _reindexLinksForSource({ sourceType, sourceId, text } = {}) {
+    const st = String(sourceType ?? '').trim().toLowerCase();
+    const sid = String(sourceId ?? '').trim();
+    if (!st || !sid) return { ok: false };
+
+    const tokens = extractBracketLinks(text);
+    await run(this.db, `DELETE FROM LinkIndex WHERE source_type = ? AND source_id = ?`, [st, sid]);
+
+    for (const tok of tokens) {
+      const candidates = await this._resolveLinkTokenCandidates(tok);
+      if (!Array.isArray(candidates) || candidates.length !== 1) continue;
+      const c = candidates[0];
+      const tt = String(c.targetType ?? '').trim();
+      const tid = String(c.targetId ?? '').trim();
+      if (!tt || !tid) continue;
+      await run(
+        this.db,
+        `INSERT OR IGNORE INTO LinkIndex(source_type, source_id, target_type, target_id, raw_text)
+         VALUES(?, ?, ?, ?, ?)`,
+        [st, sid, tt, tid, String(tok)]
+      );
+    }
+
+    return { ok: true, tokenCount: tokens.length };
   }
 
   async listSavedSearches() {
@@ -2072,6 +2318,19 @@ class CKCLibrary {
 
     await this._createSheetVersion({ characterId, source, sheetPath: paths.sheetTxtPath, notes: versionNotes });
     await this._audit('character.save', characterId, { source, notes: versionNotes, issueCount: issues.length });
+
+    try {
+      const linkText = Object.values(normalizedValuesById || {})
+        .map((v) => String(v ?? ''))
+        .join('\n');
+      await this._reindexLinksForSource({ sourceType: 'sheet', sourceId: characterId, text: linkText });
+    } catch (err) {
+      await this._audit('linkIndex.reindexFailed', characterId, {
+        sourceType: 'sheet',
+        sourceId: characterId,
+        message: String(err?.message || err || 'Unknown error'),
+      });
+    }
 
     return { ok: true, issues };
   }

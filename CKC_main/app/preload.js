@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('ckc', {
     getDoc: (params) => ipcRenderer.invoke('ckc:getDoc', params),
     upsertDoc: (params) => ipcRenderer.invoke('ckc:upsertDoc', params),
     deleteDoc: (params) => ipcRenderer.invoke('ckc:deleteDoc', params),
+    resolveLinkToken: (token) => ipcRenderer.invoke('ckc:resolveLinkToken', token),
+    listBacklinks: (params) => ipcRenderer.invoke('ckc:listBacklinks', params),
 
     listSavedSearches: () => ipcRenderer.invoke('ckc:listSavedSearches'),
     createSavedSearch: (params) => ipcRenderer.invoke('ckc:createSavedSearch', params),

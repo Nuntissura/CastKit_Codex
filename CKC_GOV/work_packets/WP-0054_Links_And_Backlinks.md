@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a lightweight linking system across CKC text surfaces (Notes/Stories/Moodboard text, and optionally the character sheet) plus a backlinks panel so CKC behaves more like a local “wiki” without rewriting user text.
@@ -23,27 +23,29 @@ Add a lightweight linking system across CKC text surfaces (Notes/Stories/Moodboa
 - Auto-fixing/bulk-renaming links inside user text (must remain manual only).
 
 ## Acceptance criteria
-- [ ] Notes/Stories/Moodboard text containing `[[...]]` produces a list of outbound links.
-- [ ] Clicking a link navigates to the target (character/doc/image/tag) without leaving docs mode unexpectedly.
-- [ ] Backlinks panel shows incoming links to the active character/doc/image.
-- [ ] User text is never modified unless the user explicitly edits/pastes text.
+- [x] Notes/Stories/Moodboard text containing `[[...]]` produces a list of outbound links.
+- [x] Clicking a link navigates to the target (character/doc/image/tag) without leaving docs mode unexpectedly.
+- [x] Backlinks panel shows incoming links to the active character/doc/image.
+- [x] User text is never modified unless the user explicitly edits/pastes text.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] `cd CKC_main; npx tsc --noEmit`
+- [x] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npx tsc --noEmit`
 - [ ] Manual: create links between two notes and a character; verify outbound links + backlinks update after save/reopen.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
   - `CKC_GOV/spec/CastKit_Codex_Spec_v*.md`
   - Mirror: `CKC_main/docs/`
-- [ ] Session dump alignment: no conflicts; if representation differs, document mapping in the spec.
+- [x] Session dump alignment: no conflicts; if representation differs, document mapping in the spec.
 
 ## Implementation notes
 - Likely approach:
   - Parse links on-demand (no background indexing required initially).
   - Maintain a small link index table in SQLite for fast backlinks (computed on save).
+- Implemented a `LinkIndex` SQLite table and updates on doc save + sheet save.
+- UI: docs panes show outbound link chips + backlinks list; MediaPane shows backlinks for the selected image; Tools tab shows sheet outbound + character backlinks.
 - Key files to touch:
   - `CKC_main/app/backend/library.js`
   - `CKC_main/src/ui/views/CharacterView.tsx`
@@ -61,4 +63,3 @@ Drop the link index table and remove link UI panels; user text remains unchanged
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

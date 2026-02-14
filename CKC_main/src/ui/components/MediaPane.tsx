@@ -94,6 +94,7 @@ export function MediaPane({
   headerLeft = null,
   showCarouselToggleOnThumbs = false,
   allTags = [],
+  selectImageId = null,
   onSelectionChange,
   onOpenDiagnostics,
   onPatchImageMeta,
@@ -109,6 +110,7 @@ export function MediaPane({
   headerLeft?: React.ReactNode;
   showCarouselToggleOnThumbs?: boolean;
   allTags?: string[];
+  selectImageId?: string | null;
   onSelectionChange?: (selectedIds: string[], primaryId: string | null) => void;
   onOpenDiagnostics?: () => void;
   onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => void;
@@ -118,6 +120,9 @@ export function MediaPane({
   const [showThumbnails, setShowThumbnails] = React.useState<boolean>(defaultShowThumbnails);
   const [showControls, setShowControls] = React.useState<boolean>(defaultShowControls);
   const [busyImageId, setBusyImageId] = React.useState<string | null>(null);
+  const [imageBacklinks, setImageBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
+  const [imageBacklinksError, setImageBacklinksError] = React.useState<string | null>(null);
+  const [imageBacklinksBusy, setImageBacklinksBusy] = React.useState<boolean>(false);
   const [busyBatch, setBusyBatch] = React.useState<boolean>(false);
   const [filterFavoriteOnly, setFilterFavoriteOnly] = React.useState<boolean>(false);
   const [filterRatingOp, setFilterRatingOp] = React.useState<RatingOp>('any');
@@ -131,6 +136,7 @@ export function MediaPane({
   const [reloadToken, setReloadToken] = React.useState<number>(0);
   const altLeftDownRef = React.useRef<boolean>(false);
   const selectionAnchorRef = React.useRef<string | null>(images[0]?.id ?? null);
+  const externalSelectAppliedRef = React.useRef<string | null>(null);
   const tagsDatalistId = React.useId();
 
   React.useEffect(() => {
@@ -215,6 +221,26 @@ export function MediaPane({
     setFilterRatingValue(0);
   }, []);
 
+  React.useEffect(() => {
+    const want = String(selectImageId ?? '').trim();
+    if (!want) return;
+    if (externalSelectAppliedRef.current === want) return;
+
+    const existsInAll = images.some((img) => img.id === want);
+    if (!existsInAll) return;
+
+    if (filtersActive && !filteredImages.some((img) => img.id === want)) {
+      clearFilters();
+      return;
+    }
+
+    externalSelectAppliedRef.current = want;
+    selectionAnchorRef.current = want;
+    setPrimarySelectedId(want);
+    setSelectedIds([want]);
+    if (autoOpenControlsOnSelect) setShowControls(true);
+  }, [selectImageId, images, filteredImages, filtersActive, clearFilters, autoOpenControlsOnSelect]);
+
   const toggleSlideshow = React.useCallback(() => {
     didUserToggleSlideshowRef.current = true;
     setSlideshowOn((v) => !v);
@@ -247,6 +273,34 @@ export function MediaPane({
     }
     if (!showControls) setShowControls(true);
   }, [autoOpenControlsOnSelect, primarySelected?.id, showControls]);
+
+  const reloadImageBacklinks = React.useCallback(async () => {
+    const id = String(primarySelectedId ?? '').trim();
+    if (!id) {
+      setImageBacklinks([]);
+      return;
+    }
+    setImageBacklinksError(null);
+    setImageBacklinksBusy(true);
+    try {
+      const rows = await window.ckc.listBacklinks({ targetType: 'image', targetId: id, limit: 250 });
+      setImageBacklinks(Array.isArray(rows) ? rows : []);
+    } catch (err: unknown) {
+      setImageBacklinksError(err instanceof Error ? err.message : String(err));
+      setImageBacklinks([]);
+    } finally {
+      setImageBacklinksBusy(false);
+    }
+  }, [primarySelectedId]);
+
+  React.useEffect(() => {
+    if (!showControls) return;
+    if (!primarySelectedId) {
+      setImageBacklinks([]);
+      return;
+    }
+    void reloadImageBacklinks();
+  }, [showControls, primarySelectedId, reloadImageBacklinks]);
 
   const patchMetaSingle = React.useCallback(
     async (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => {
@@ -884,6 +938,40 @@ export function MediaPane({
                   ))}
                 </datalist>
               </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }} aria-label="Backlinks">
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontWeight: 800 }}>Backlinks ({imageBacklinks.length})</div>
+                <button
+                  className={styles.tagBtn}
+                  disabled={imageBacklinksBusy}
+                  onClick={() => void reloadImageBacklinks()}
+                  title="Refresh backlinks for this image"
+                >
+                  {imageBacklinksBusy ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+
+              {imageBacklinksError ? (
+                <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 6 }}>{imageBacklinksError}</div>
+              ) : null}
+
+              {!imageBacklinksBusy && imageBacklinks.length === 0 ? (
+                <div className={styles.tagsEmpty} style={{ marginTop: 6 }}>
+                  (none)
+                </div>
+              ) : null}
+
+              {imageBacklinks.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                  {imageBacklinks.map((b) => (
+                    <div key={`${b.sourceType}:${b.sourceId}:${b.rawText}`} style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }} title={b.rawText}>
+                      {b.label}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

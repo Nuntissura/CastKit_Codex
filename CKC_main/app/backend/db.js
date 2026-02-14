@@ -172,6 +172,25 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_moodboard_updated ON MoodboardDoc(updated_at DESC);
   `
   );
+
+  // Link index for [[...]] backlinks (computed on save; no text rewriting).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS LinkIndex (
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      raw_text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(source_type, source_id, target_type, target_id, raw_text)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_link_target ON LinkIndex(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS idx_link_source ON LinkIndex(source_type, source_id);
+  `
+  );
 }
 
 async function initSchema(db) {

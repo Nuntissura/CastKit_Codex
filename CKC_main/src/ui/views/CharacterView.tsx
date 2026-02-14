@@ -20,6 +20,19 @@ function tagsArrayToText(tags: string[]): string {
   return Array.isArray(tags) ? tags.join(', ') : '';
 }
 
+function extractBracketLinks(text: string): string[] {
+  const out = new Set<string>();
+  const raw = String(text ?? '');
+  const re = /\[\[([^\]]+?)\]\]/g;
+  let m: RegExpExecArray | null = null;
+  while ((m = re.exec(raw)) !== null) {
+    const token = String(m[1] ?? '').trim();
+    if (!token) continue;
+    out.add(token);
+  }
+  return Array.from(out);
+}
+
 function emptyMoodboard(): MoodboardState {
   return { version: 1, strokes: [], images: [] };
 }
@@ -137,12 +150,14 @@ function shortCharacterId(id: string): string {
 export function CharacterView({
   characterId,
   onBack,
+  onNavigateCharacter,
   onOpenLibraryDrawer,
   isLibraryDrawerOpen,
   onCloseLibraryDrawer,
 }: {
   characterId: string | null;
   onBack: () => void;
+  onNavigateCharacter: (characterId: string) => void;
   onOpenLibraryDrawer: () => void;
   isLibraryDrawerOpen: boolean;
   onCloseLibraryDrawer: () => void;
@@ -152,6 +167,14 @@ export function CharacterView({
   const [rightTab, setRightTab] = React.useState<'sheet' | 'photos' | 'tools'>('sheet');
   const [isDocsOpen, setIsDocsOpen] = React.useState<boolean>(false);
   const [mediaMode, setMediaMode] = React.useState<'carousel' | 'photos'>('carousel');
+  const [linksError, setLinksError] = React.useState<string | null>(null);
+  const [requestedImageId, setRequestedImageId] = React.useState<string | null>(null);
+
+  const [notesBacklinks, setNotesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
+  const [storiesBacklinks, setStoriesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
+  const [moodboardBacklinks, setMoodboardBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
+  const [characterBacklinks, setCharacterBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
+  const [backlinksError, setBacklinksError] = React.useState<string | null>(null);
 
   const splitterPx = 10;
   const minLeftPx2 = 360;
@@ -675,6 +698,45 @@ export function CharacterView({
       .catch((err: unknown) => setMoodboardError(err instanceof Error ? err.message : String(err)));
   }, [moodboardDocId]);
 
+  const reloadBacklinksForTarget = React.useCallback(
+    async (
+      targetType: string,
+      targetId: string | null,
+      setter: React.Dispatch<React.SetStateAction<CKCBacklinkEntry[]>>
+    ) => {
+      const tid = String(targetId ?? '').trim();
+      if (!tid) {
+        setter([]);
+        return;
+      }
+      setBacklinksError(null);
+      try {
+        const rows = await window.ckc.listBacklinks({ targetType: String(targetType), targetId: tid, limit: 250 });
+        setter(Array.isArray(rows) ? rows : []);
+      } catch (err: unknown) {
+        setBacklinksError(err instanceof Error ? err.message : String(err));
+        setter([]);
+      }
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    void reloadBacklinksForTarget('doc.notes', notesDocId, setNotesBacklinks);
+  }, [notesDocId, reloadBacklinksForTarget]);
+
+  React.useEffect(() => {
+    void reloadBacklinksForTarget('doc.stories', storiesDocId, setStoriesBacklinks);
+  }, [storiesDocId, reloadBacklinksForTarget]);
+
+  React.useEffect(() => {
+    void reloadBacklinksForTarget('doc.moodboard', moodboardDocId, setMoodboardBacklinks);
+  }, [moodboardDocId, reloadBacklinksForTarget]);
+
+  React.useEffect(() => {
+    void reloadBacklinksForTarget('character', characterId, setCharacterBacklinks);
+  }, [characterId, reloadBacklinksForTarget]);
+
   React.useEffect(() => {
     if (!isImagePickerOpen) return;
     if (imagePickerSource !== 'global') return;
@@ -690,6 +752,14 @@ export function CharacterView({
     const carousel = all.filter((i) => (i.tags || []).includes('carousel'));
     return carousel.length > 0 ? carousel : all;
   }, [character, mediaMode]);
+
+  const notesOutboundLinks = React.useMemo(() => extractBracketLinks(notesDraftContent), [notesDraftContent]);
+  const storiesOutboundLinks = React.useMemo(() => extractBracketLinks(storiesDraftContent), [storiesDraftContent]);
+  const moodboardOutboundLinks = React.useMemo(() => extractBracketLinks(JSON.stringify(moodboardDraft ?? {})), [moodboardDraft]);
+  const sheetOutboundLinks = React.useMemo(() => {
+    const vals = draftValuesById || {};
+    return extractBracketLinks(Object.values(vals).map((v) => String(v ?? '')).join('\n'));
+  }, [draftValuesById]);
 
   const docsDrawerSmartTags = React.useMemo(() => {
     if (!docsDrawerDocs) return [];
@@ -1152,6 +1222,121 @@ export function CharacterView({
     if (moodboardIsDirty) void saveMoodboard();
   }, [moodboardIsDirty, saveMoodboard]);
 
+  const openDocByTypeAndId = React.useCallback(
+    (docType: CKCDocType, docId: string) => {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      setIsDocsOpen(true);
+
+      if (docType === 'notes') {
+        flushNotesAutosave();
+        notesDocIdRef.current = id;
+        setNotesDocId(id);
+        return;
+      }
+
+      if (docType === 'stories') {
+        flushStoriesAutosave();
+        storiesDocIdRef.current = id;
+        setStoriesDocId(id);
+        setDocsLowerType('stories');
+        return;
+      }
+
+      if (docType === 'moodboard') {
+        flushMoodboardAutosave();
+        moodboardDocIdRef.current = id;
+        setMoodboardDocId(id);
+        setDocsLowerType('moodboard');
+        return;
+      }
+    },
+    [flushNotesAutosave, flushStoriesAutosave, flushMoodboardAutosave]
+  );
+
+  const openBacklinkSource = React.useCallback(
+    (b: CKCBacklinkEntry) => {
+      const st = String(b?.sourceType ?? '').trim().toLowerCase();
+      const sid = String(b?.sourceId ?? '').trim();
+      if (!st || !sid) return;
+      setLinksError(null);
+
+      if (st === 'sheet') {
+        onNavigateCharacter(sid);
+        return;
+      }
+
+      if (st === 'notes' || st === 'stories' || st === 'moodboard') {
+        openDocByTypeAndId(st as CKCDocType, sid);
+      }
+    },
+    [onNavigateCharacter, openDocByTypeAndId]
+  );
+
+  const navigateLinkToken = React.useCallback(
+    async (token: string) => {
+      const t = String(token ?? '').trim();
+      if (!t) return;
+      setLinksError(null);
+
+      try {
+        const candidates = await window.ckc.resolveLinkToken(t);
+        if (!Array.isArray(candidates) || candidates.length === 0) {
+          setLinksError(`No match for [[${t}]]`);
+          return;
+        }
+        if (candidates.length > 1) {
+          const sample = candidates
+            .slice(0, 6)
+            .map((c) => c.label)
+            .join(' | ');
+          setLinksError(`Ambiguous link [[${t}]] (${candidates.length} matches). Use a more explicit prefix. Matches: ${sample}`);
+          return;
+        }
+
+        const c = candidates[0] as any;
+        const tt = String(c.targetType ?? '').trim();
+        const tid = String(c.targetId ?? '').trim();
+        if (!tt || !tid) {
+          setLinksError(`Invalid link target for [[${t}]]`);
+          return;
+        }
+
+        if (tt === 'character') {
+          onNavigateCharacter(tid);
+          return;
+        }
+
+        if (tt === 'image') {
+          const owner = String(c.characterId ?? '').trim();
+          if (owner && owner !== String(characterId ?? '')) {
+            onNavigateCharacter(owner);
+          }
+          if (mediaMode !== 'photos') setMediaMode('photos');
+          setRequestedImageId(tid);
+          return;
+        }
+
+        if (tt === 'tag') {
+          setLinksError(`Tag links not wired yet: [[${t}]]`);
+          return;
+        }
+
+        if (tt.startsWith('doc.')) {
+          const dtRaw = String(c.docType ?? '').trim();
+          const dt = (dtRaw === 'notes' || dtRaw === 'stories' || dtRaw === 'moodboard' ? dtRaw : tt.slice(4)) as CKCDocType;
+          openDocByTypeAndId(dt, tid);
+          return;
+        }
+
+        setLinksError(`Unsupported link target type: ${tt}`);
+      } catch (err: unknown) {
+        setLinksError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [onNavigateCharacter, characterId, mediaMode, openDocByTypeAndId]
+  );
+
   React.useEffect(() => {
     if (!isDocsOpen) return;
     if (!notesIsDirty) return;
@@ -1574,6 +1759,7 @@ export function CharacterView({
           <div className={styles.leftBody}>
               <MediaPane
                 allTags={allTags}
+                selectImageId={requestedImageId}
                 headerLeft={
                   <div className={styles.leftHeader}>
                   <button
@@ -1698,6 +1884,73 @@ export function CharacterView({
                       onBlur={() => flushNotesAutosave()}
                       placeholder="Write a note…"
                     />
+
+                    <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }}>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontWeight: 800 }}>Links</div>
+                        <button
+                          className={styles.btnSecondary}
+                          disabled={!notesDocId}
+                          onClick={() => void reloadBacklinksForTarget('doc.notes', notesDocId, setNotesBacklinks)}
+                          title="Refresh backlinks for this note"
+                        >
+                          Refresh backlinks
+                        </button>
+                      </div>
+
+                      {linksError ? (
+                        <div
+                          style={{
+                            border: '1px solid rgba(255, 0, 0, 0.35)',
+                            background: 'rgba(255, 0, 0, 0.06)',
+                            padding: '8px 10px',
+                            marginTop: 8,
+                          }}
+                        >
+                          {linksError}
+                        </div>
+                      ) : null}
+                      {backlinksError ? (
+                        <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>Backlinks error: {backlinksError}</div>
+                      ) : null}
+
+                      <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Outbound ({notesOutboundLinks.length})</div>
+                      {notesOutboundLinks.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                          {notesOutboundLinks.map((t) => (
+                            <button
+                              key={t}
+                              className={styles.btnSecondary}
+                              onClick={() => void navigateLinkToken(t)}
+                              title={`[[${t}]]`}
+                            >
+                              [[{t}]]
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.muted}>(none)</div>
+                      )}
+
+                      <div style={{ marginTop: 12, color: 'var(--text-secondary)' }}>Backlinks ({notesBacklinks.length})</div>
+                      {notesBacklinks.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                          {notesBacklinks.map((b) => (
+                            <button
+                              key={`${b.sourceType}:${b.sourceId}:${b.rawText}`}
+                              className={styles.btnSecondary}
+                              onClick={() => openBacklinkSource(b)}
+                              title={b.rawText}
+                              style={{ textAlign: 'left' }}
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.muted}>(none)</div>
+                      )}
+                    </div>
                   </div>
 
                   <div className={styles.docsPane}>
@@ -1809,6 +2062,75 @@ export function CharacterView({
                           onBlur={() => flushStoriesAutosave()}
                           placeholder="Write a story…"
                         />
+
+                        <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }}>
+                          <div
+                            style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}
+                          >
+                            <div style={{ fontWeight: 800 }}>Links</div>
+                            <button
+                              className={styles.btnSecondary}
+                              disabled={!storiesDocId}
+                              onClick={() => void reloadBacklinksForTarget('doc.stories', storiesDocId, setStoriesBacklinks)}
+                              title="Refresh backlinks for this story"
+                            >
+                              Refresh backlinks
+                            </button>
+                          </div>
+
+                          {linksError ? (
+                            <div
+                              style={{
+                                border: '1px solid rgba(255, 0, 0, 0.35)',
+                                background: 'rgba(255, 0, 0, 0.06)',
+                                padding: '8px 10px',
+                                marginTop: 8,
+                              }}
+                            >
+                              {linksError}
+                            </div>
+                          ) : null}
+                          {backlinksError ? (
+                            <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>Backlinks error: {backlinksError}</div>
+                          ) : null}
+
+                          <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Outbound ({storiesOutboundLinks.length})</div>
+                          {storiesOutboundLinks.length > 0 ? (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                              {storiesOutboundLinks.map((t) => (
+                                <button
+                                  key={t}
+                                  className={styles.btnSecondary}
+                                  onClick={() => void navigateLinkToken(t)}
+                                  title={`[[${t}]]`}
+                                >
+                                  [[{t}]]
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={styles.muted}>(none)</div>
+                          )}
+
+                          <div style={{ marginTop: 12, color: 'var(--text-secondary)' }}>Backlinks ({storiesBacklinks.length})</div>
+                          {storiesBacklinks.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                              {storiesBacklinks.map((b) => (
+                                <button
+                                  key={`${b.sourceType}:${b.sourceId}:${b.rawText}`}
+                                  className={styles.btnSecondary}
+                                  onClick={() => openBacklinkSource(b)}
+                                  title={b.rawText}
+                                  style={{ textAlign: 'left' }}
+                                >
+                                  {b.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={styles.muted}>(none)</div>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <>
@@ -1892,6 +2214,75 @@ export function CharacterView({
                             </div>
                           </div>
                         ) : null}
+
+                        <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }}>
+                          <div
+                            style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}
+                          >
+                            <div style={{ fontWeight: 800 }}>Links</div>
+                            <button
+                              className={styles.btnSecondary}
+                              disabled={!moodboardDocId}
+                              onClick={() => void reloadBacklinksForTarget('doc.moodboard', moodboardDocId, setMoodboardBacklinks)}
+                              title="Refresh backlinks for this moodboard"
+                            >
+                              Refresh backlinks
+                            </button>
+                          </div>
+
+                          {linksError ? (
+                            <div
+                              style={{
+                                border: '1px solid rgba(255, 0, 0, 0.35)',
+                                background: 'rgba(255, 0, 0, 0.06)',
+                                padding: '8px 10px',
+                                marginTop: 8,
+                              }}
+                            >
+                              {linksError}
+                            </div>
+                          ) : null}
+                          {backlinksError ? (
+                            <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>Backlinks error: {backlinksError}</div>
+                          ) : null}
+
+                          <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Outbound ({moodboardOutboundLinks.length})</div>
+                          {moodboardOutboundLinks.length > 0 ? (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                              {moodboardOutboundLinks.map((t) => (
+                                <button
+                                  key={t}
+                                  className={styles.btnSecondary}
+                                  onClick={() => void navigateLinkToken(t)}
+                                  title={`[[${t}]]`}
+                                >
+                                  [[{t}]]
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={styles.muted}>(none)</div>
+                          )}
+
+                          <div style={{ marginTop: 12, color: 'var(--text-secondary)' }}>Backlinks ({moodboardBacklinks.length})</div>
+                          {moodboardBacklinks.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                              {moodboardBacklinks.map((b) => (
+                                <button
+                                  key={`${b.sourceType}:${b.sourceId}:${b.rawText}`}
+                                  className={styles.btnSecondary}
+                                  onClick={() => openBacklinkSource(b)}
+                                  title={b.rawText}
+                                  style={{ textAlign: 'left' }}
+                                >
+                                  {b.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={styles.muted}>(none)</div>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
@@ -2223,6 +2614,69 @@ export function CharacterView({
                         </div>
                       ) : null}
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div className={styles.sectionTitle}>Links</div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        className={styles.btnSecondary}
+                        disabled={!characterId}
+                        onClick={() => void reloadBacklinksForTarget('character', characterId, setCharacterBacklinks)}
+                        title="Refresh backlinks for this character"
+                      >
+                        Refresh backlinks
+                      </button>
+                    </div>
+
+                    {linksError ? (
+                      <div
+                        style={{
+                          border: '1px solid rgba(255, 0, 0, 0.35)',
+                          background: 'rgba(255, 0, 0, 0.06)',
+                          padding: '8px 10px',
+                          marginTop: 8,
+                        }}
+                      >
+                        {linksError}
+                      </div>
+                    ) : null}
+                    {backlinksError ? (
+                      <div style={{ color: 'var(--text-secondary)', marginTop: 8 }}>Backlinks error: {backlinksError}</div>
+                    ) : null}
+
+                    <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Outbound (sheet) ({sheetOutboundLinks.length})</div>
+                    {sheetOutboundLinks.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                        {sheetOutboundLinks.map((t) => (
+                          <button key={t} className={styles.btnSecondary} onClick={() => void navigateLinkToken(t)} title={`[[${t}]]`}>
+                            [[{t}]]
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.muted}>(none)</div>
+                    )}
+
+                    <div style={{ marginTop: 12, color: 'var(--text-secondary)' }}>Backlinks (to character) ({characterBacklinks.length})</div>
+                    {characterBacklinks.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                        {characterBacklinks.map((b) => (
+                          <button
+                            key={`${b.sourceType}:${b.sourceId}:${b.rawText}`}
+                            className={styles.btnSecondary}
+                            onClick={() => openBacklinkSource(b)}
+                            title={b.rawText}
+                            style={{ textAlign: 'left' }}
+                          >
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.muted}>(none)</div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 18 }}>

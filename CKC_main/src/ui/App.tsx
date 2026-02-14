@@ -55,6 +55,10 @@ export function App() {
           <CharacterView
             characterId={selectedCharacterId}
             onBack={() => setPage('library')}
+            onNavigateCharacter={(nextId) => {
+              setSelectedCharacterId(nextId);
+              setPage('character');
+            }}
             onOpenLibraryDrawer={() => setDrawerMode('library')}
             isLibraryDrawerOpen={drawerMode === 'library'}
             onCloseLibraryDrawer={() => setDrawerMode('none')}

@@ -554,6 +554,16 @@ function registerIpcHandlers() {
         return lib.deleteDoc(params || {});
     });
 
+    ipcMain.handle('ckc:resolveLinkToken', async (_evt, token) => {
+        const lib = await ensureLibrary();
+        return lib.resolveLinkToken(String(token ?? ''));
+    });
+
+    ipcMain.handle('ckc:listBacklinks', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listBacklinks(params || {});
+    });
+
     ipcMain.handle('ckc:listSavedSearches', async () => {
         const lib = await ensureLibrary();
         return lib.listSavedSearches();

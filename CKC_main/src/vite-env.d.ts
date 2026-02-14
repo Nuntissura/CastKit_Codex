@@ -31,6 +31,22 @@ type CKCInboxImage = {
   addedAt: string;
 };
 
+type CKCLinkCandidate = {
+  targetType: string;
+  targetId: string;
+  label: string;
+  docType?: CKCDocType;
+  characterId?: string;
+};
+
+type CKCBacklinkEntry = {
+  sourceType: string;
+  sourceId: string;
+  label: string;
+  rawText: string;
+  createdAt: string;
+};
+
 type CKCDocType = 'notes' | 'stories' | 'moodboard';
 
 type CKCDocListItem = {
@@ -332,6 +348,8 @@ interface Window {
     getDoc: (params?: unknown) => Promise<CKCDocDetail | null>;
     upsertDoc: (params?: unknown) => Promise<{ ok: true; docId: string; docType: CKCDocType }>;
     deleteDoc: (params?: unknown) => Promise<{ ok: true }>;
+    resolveLinkToken: (token: string) => Promise<CKCLinkCandidate[]>;
+    listBacklinks: (params: { targetType: string; targetId: string; limit?: number }) => Promise<CKCBacklinkEntry[]>;
     listSavedSearches: () => Promise<CKCSavedSearch[]>;
     createSavedSearch: (params?: unknown) => Promise<string>;
     updateSavedSearch: (params?: unknown) => Promise<{ ok: true }>;
