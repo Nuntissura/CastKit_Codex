@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Support pasting an image from the clipboard into CKC so screenshots can be captured and imported without touching the filesystem first.
@@ -24,20 +24,23 @@ Support pasting an image from the clipboard into CKC so screenshots can be captu
 - Multi-item clipboard galleries.
 
 ## Acceptance criteria
-- [ ] With an image in clipboard, pressing paste in CKC imports it and shows it in the UI.
-- [ ] Paste works in Character view and Library/Inbox view with the expected destination.
-- [ ] If clipboard has no image, CKC shows a clear “no image in clipboard” message.
+- [x] With an image in clipboard, pressing paste in CKC imports it and shows it in the UI.
+- [x] Paste works in Character view and Library/Inbox view with the expected destination.
+- [x] If clipboard has no image, CKC shows a clear “no image in clipboard” message.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npm test`
 - [ ] Manual: take a screenshot → copy → paste in CKC → verify stored image + thumbnail.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
 
 ## Implementation notes
 - Likely uses Electron `clipboard` (main process) and existing import pipeline.
+- Implemented `ckc:importClipboardImage` IPC + UI hotkeys:
+  - Library view: paste imports to Inbox.
+  - Character view: paste imports to current character.
 - Key files:
   - `CKC_main/app/main.js` (clipboard IPC)
   - `CKC_main/app/backend/library.js`
@@ -49,4 +52,3 @@ Remove clipboard IPC and paste affordances.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

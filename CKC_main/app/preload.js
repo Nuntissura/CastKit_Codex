@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('ckc', {
     exportFieldPack: (params) => ipcRenderer.invoke('ckc:exportFieldPack', params),
 
     importImages: (params) => ipcRenderer.invoke('ckc:importImages', params),
+    importClipboardImage: (params) => ipcRenderer.invoke('ckc:importClipboardImage', params),
     scanInbox: (params) => ipcRenderer.invoke('ckc:scanInbox', params),
     moveImagesToCharacter: (params) => ipcRenderer.invoke('ckc:moveImagesToCharacter', params),
     deleteImages: (params) => ipcRenderer.invoke('ckc:deleteImages', params),

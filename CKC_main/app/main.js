@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, clipboard } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const { CKCLibrary } = require('./backend/library');
@@ -861,6 +862,37 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:deleteImages', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.deleteImages(params || {});
+    });
+
+    ipcMain.handle('ckc:importClipboardImage', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params && typeof params === 'object' ? params : {};
+        const target = String(p.target ?? '').trim().toLowerCase();
+        let characterId = String(p.characterId ?? '').trim();
+        if (!characterId && target === 'inbox') {
+            characterId = await lib.ensureInboxCharacter();
+        }
+        if (!characterId) throw new Error('Missing characterId');
+
+        const img = clipboard.readImage();
+        if (!img || img.isEmpty()) return { ok: false, reason: 'no_image' };
+
+        const png = img.toPNG();
+        if (!png || png.length === 0) return { ok: false, reason: 'no_image' };
+
+        const tmpName = `ckc_clipboard_${Date.now()}_${Math.random().toString(16).slice(2)}.png`;
+        const tmpPath = path.join(os.tmpdir(), tmpName);
+        await fs.promises.writeFile(tmpPath, png);
+        try {
+            const res = await lib.importImages({ characterId, filePaths: [tmpPath], duplicatePolicy: 'skip' });
+            return { ok: true, imported: res.imported || [], duplicates: res.duplicates || [] };
+        } finally {
+            try {
+                await fs.promises.unlink(tmpPath);
+            } catch {
+                // ignore
+            }
+        }
     });
 
     ipcMain.handle('ckc:importImages', async (_evt, params) => {

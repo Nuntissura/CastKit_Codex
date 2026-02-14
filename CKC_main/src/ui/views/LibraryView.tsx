@@ -15,6 +15,15 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+function isEditableActiveElement(): boolean {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (!(active instanceof HTMLElement)) return false;
+  if (active.isContentEditable) return true;
+  const tag = active.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
 function tagsTextToArray(text: string): string[] {
   const parts = String(text || '')
     .split(/[,\n\r\t]+/)
@@ -346,6 +355,31 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
     [repairScanDir, repairIncludeSubdirs, reloadDiagnostics, reloadCarousel]
   );
 
+  const pasteClipboardToInbox = React.useCallback(async () => {
+    setInboxError(null);
+    setInboxBusy(true);
+    try {
+      const res = await window.ckc.importClipboardImage({ target: 'inbox' });
+      if ((res as any)?.ok === false && (res as any)?.reason === 'no_image') {
+        setInboxError('No image in clipboard.');
+        return;
+      }
+      const importedCount = Array.isArray((res as any)?.imported) ? (res as any).imported.length : 0;
+      const duplicateCount = Array.isArray((res as any)?.duplicates) ? (res as any).duplicates.length : 0;
+      if (importedCount === 0 && duplicateCount > 0) {
+        setInboxError('Clipboard image appears to be a duplicate (skipped).');
+      }
+      reloadInbox();
+      setLeftMode('inbox');
+      setShowInboxBar(true);
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setInboxError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInboxBusy(false);
+    }
+  }, [reloadInbox]);
+
   const scanInbox = React.useCallback(async () => {
     const dir = String(inboxDir || '').trim();
     if (!dir) {
@@ -416,6 +450,20 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       setInboxBusy(false);
     }
   }, [inboxSelectedIds, reloadInbox, reloadCarousel]);
+
+  React.useEffect(() => {
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.repeat) return;
+      if (!(evt.ctrlKey || evt.metaKey)) return;
+      if (evt.key !== 'v' && evt.key !== 'V') return;
+      if (isEditableActiveElement()) return;
+      if (inboxBusy) return;
+      evt.preventDefault();
+      void pasteClipboardToInbox();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pasteClipboardToInbox, inboxBusy]);
 
   React.useEffect(() => {
     if (!showLibraryBar) return;
@@ -881,6 +929,9 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
             </label>
             <button disabled={inboxBusy || !inboxDir} onClick={() => void scanInbox()}>
               {inboxBusy ? 'Working…' : 'Scan Inbox'}
+            </button>
+            <button disabled={inboxBusy} onClick={() => void pasteClipboardToInbox()} title="Ctrl+V / Cmd+V also works (when not typing)">
+              Paste image
             </button>
             {inboxLastScan ? (
               <span style={{ color: 'var(--text-secondary)' }}>

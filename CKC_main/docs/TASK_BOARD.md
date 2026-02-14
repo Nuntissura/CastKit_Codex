@@ -71,7 +71,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0053 | Moodboard zoom/pan + grid/snap | DONE | Codex | Zoom/pan navigation; grid overlay + snap-to-grid for move/transform. |
 | WP-0054 | Links + backlinks | BACKLOG | Codex | `[[...]]` links across docs/sheets + backlinks panel; no rewriting. |
 | WP-0055 | Inbox / watch-folder import | DONE | Codex | Scan an Inbox folder, ingest screenshots, triage + assign to characters. |
-| WP-0056 | Clipboard image paste import | BACKLOG | Codex | Paste clipboard image into Character or Inbox/Library. |
+| WP-0056 | Clipboard image paste import | DONE | Codex | Paste clipboard image into Character or Inbox/Library. |
 | WP-0057 | Multi-select + batch image metadata | DONE | Codex | Ctrl/Shift multi-select + batch rating/favorite/tags + tag chips/input; backend batch IPC. |
 | WP-0058 | Duplicate detection (exact hash) + safe cleanup | BACKLOG | Codex | Group duplicates by hash; remove redundant DB entries safely. |
 | WP-0059 | Tag manager | BACKLOG | Codex | Rename/merge tags globally; show counts; pin tags. |

@@ -29,6 +29,15 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+function isEditableActiveElement(): boolean {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (!(active instanceof HTMLElement)) return false;
+  if (active.isContentEditable) return true;
+  const tag = active.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
 function clampFrac2WithMin(
   frac: number,
   containerWidthPx: number,
@@ -1230,6 +1239,46 @@ export function CharacterView({
     }
   };
 
+  const pasteClipboardImageForCharacter = React.useCallback(async () => {
+    if (!characterId) return;
+    setIsImportingImages(true);
+    setError(null);
+    try {
+      const res = await window.ckc.importClipboardImage({ characterId });
+      if ((res as any)?.ok === false && (res as any)?.reason === 'no_image') {
+        setError('No image in clipboard.');
+        return;
+      }
+      const importedCount = Array.isArray((res as any)?.imported) ? (res as any).imported.length : 0;
+      const duplicateCount = Array.isArray((res as any)?.duplicates) ? (res as any).duplicates.length : 0;
+      if (importedCount === 0 && duplicateCount > 0) {
+        setError('Clipboard image appears to be a duplicate (skipped).');
+      }
+      const c = await window.ckc.getCharacter(characterId);
+      setCharacter(c);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImportingImages(false);
+    }
+  }, [characterId]);
+
+  React.useEffect(() => {
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.repeat) return;
+      if (!(evt.ctrlKey || evt.metaKey)) return;
+      if (evt.key !== 'v' && evt.key !== 'V') return;
+      if (isEditableActiveElement()) return;
+      if (!characterId) return;
+      if (isImportingImages) return;
+      evt.preventDefault();
+      void pasteClipboardImageForCharacter();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pasteClipboardImageForCharacter, characterId, isImportingImages]);
+
   const copyCurrentCharacterId = React.useCallback(() => {
     if (!characterId) return;
     try {
@@ -1920,6 +1969,14 @@ export function CharacterView({
                 title="Import images into this character"
               >
                 {isImportingImages ? 'Importing...' : 'Import images...'}
+              </button>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => void pasteClipboardImageForCharacter()}
+                disabled={!characterId || isImportingImages}
+                title="Paste clipboard image into this character (Ctrl+V / Cmd+V)"
+              >
+                Paste image
               </button>
               <button className={styles.btnSecondary} onClick={onBack}>
                 Library

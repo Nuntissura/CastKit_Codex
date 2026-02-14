@@ -231,6 +231,10 @@ type CKCInboxScanResult = {
   }>;
 };
 
+type CKCClipboardImageImportResult =
+  | { ok: true; imported: CKCInboxScanResult['imported']; duplicates: CKCInboxScanResult['duplicates'] }
+  | { ok: false; reason: 'no_image' };
+
 type CKCMoveImagesResult = {
   ok: true;
   moved: Array<{ imageId: string; fromCharacterId: string; toCharacterId: string; relativePath: string }>;
@@ -373,6 +377,7 @@ interface Window {
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
+    importClipboardImage: (params: { target?: 'inbox'; characterId?: string } | unknown) => Promise<CKCClipboardImageImportResult>;
     scanInbox: (params?: { inboxDir?: string; includeSubdirs?: boolean } | null) => Promise<CKCInboxScanResult>;
     moveImagesToCharacter: (params: { imageIds: string[]; targetCharacterId: string }) => Promise<CKCMoveImagesResult>;
     deleteImages: (params: { imageIds: string[]; deleteFiles?: boolean }) => Promise<CKCDeleteImagesResult>;
