@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-02-13
+Last updated: 2026-02-14
 
 This is the single source of truth for work status.
 
@@ -61,6 +61,14 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0043 | Reusable fail log system + UI style guide | DONE | Codex | Make mistakes + UI patterns repeatable across projects (CKC + Handshake). |
 | WP-0044 | Portable data root + folder settings | DONE | Codex | Default data near portable exe; easy UI reset/change; avoid D: by accident. |
 | WP-0045 | Photo mode metadata panel + image dropzone | DONE | Codex | Auto-show per-image meta in photo mode; group controls; drag-drop import near header. |
+| WP-0046 | Character ID UX + spec sync | DONE | Codex | Copyable Character ID chip; enforce `CHAR-ID-001`; spec bumped to v00.035. |
+| WP-0047 | Carousel slideshow behavior | DONE | Codex | Carousel auto-advances in normal viewer with a Slideshow toggle; pauses while Controls is open; spec bumped to v00.036. |
+| WP-0048 | Moodboard layers | DONE | Codex | Layers panel; reorder/hide/lock images; ink layer hide/lock. |
+| WP-0049 | Moodboard transform tool (resize/rotate) | DONE | Codex | Resize handles + modifiers (Shift/Alt); rotation deferred. |
+| WP-0050 | Moodboard undo/redo history | DONE | Codex | Undo/redo stack + hotkeys; coalesced gestures. |
+| WP-0051 | Moodboard text / sticky notes | DONE | Codex | Add text items; edit + move/resize; basic styling panel. |
+| WP-0052 | Moodboard gradient tool upgrade | DONE | Codex | Drag-to-set direction + live preview; radial mode option. |
+| WP-0053 | Moodboard zoom/pan + grid/snap | DONE | Codex | Zoom/pan navigation; grid overlay + snap-to-grid for move/transform. |
 
 ## Current focus
 - Current: Release build + manual UX verification.

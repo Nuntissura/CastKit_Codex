@@ -71,6 +71,9 @@ export function MediaPane({
   defaultShowThumbnails = false,
   defaultShowControls = false,
   autoOpenControlsOnSelect = false,
+  enableViewerSlideshow = false,
+  autoStartSlideshow = false,
+  slideshowIntervalMs = 2500,
   emptyLabel = 'No images.',
   headerLeft = null,
   showCarouselToggleOnThumbs = false,
@@ -81,6 +84,9 @@ export function MediaPane({
   defaultShowThumbnails?: boolean;
   defaultShowControls?: boolean;
   autoOpenControlsOnSelect?: boolean;
+  enableViewerSlideshow?: boolean;
+  autoStartSlideshow?: boolean;
+  slideshowIntervalMs?: number;
   emptyLabel?: string;
   headerLeft?: React.ReactNode;
   showCarouselToggleOnThumbs?: boolean;
@@ -96,6 +102,7 @@ export function MediaPane({
   const [filterRatingValue, setFilterRatingValue] = React.useState<number>(0);
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState<boolean>(false);
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
+  const didUserToggleSlideshowRef = React.useRef<boolean>(false);
   const [draftNotes, setDraftNotes] = React.useState<string>('');
   const [viewerError, setViewerError] = React.useState<boolean>(false);
   const [reloadToken, setReloadToken] = React.useState<number>(0);
@@ -156,6 +163,19 @@ export function MediaPane({
     setFilterRatingOp('any');
     setFilterRatingValue(0);
   }, []);
+
+  const toggleSlideshow = React.useCallback(() => {
+    didUserToggleSlideshowRef.current = true;
+    setSlideshowOn((v) => !v);
+  }, []);
+
+  React.useEffect(() => {
+    if (!autoStartSlideshow) return;
+    if (!enableViewerSlideshow) return;
+    if (didUserToggleSlideshowRef.current) return;
+    if (filteredImages.length <= 1) return;
+    setSlideshowOn(true);
+  }, [autoStartSlideshow, enableViewerSlideshow, filteredImages.length]);
 
   React.useEffect(() => {
     if (!selected) {
@@ -267,16 +287,41 @@ export function MediaPane({
     if (!isFullscreenOpen || !slideshowOn) return;
     if (filteredImages.length <= 1) return;
 
+    const ms = Math.max(800, Math.min(60_000, Number(slideshowIntervalMs) || 2500));
     const id = window.setInterval(() => {
       setSelectedId((cur) => {
         const idx = cur ? filteredImages.findIndex((i) => i.id === cur) : -1;
         const nextIdx = idx >= 0 ? (idx + 1) % filteredImages.length : 0;
         return filteredImages[nextIdx]?.id ?? cur;
       });
-    }, 2500);
+    }, ms);
 
     return () => window.clearInterval(id);
-  }, [isFullscreenOpen, slideshowOn, filteredImages]);
+  }, [isFullscreenOpen, slideshowOn, filteredImages, slideshowIntervalMs]);
+
+  React.useEffect(() => {
+    const canRunViewer = enableViewerSlideshow && !showControls && !isFullscreenOpen;
+    if (!canRunViewer || !slideshowOn) return;
+    if (filteredImages.length <= 1) return;
+
+    const ms = Math.max(800, Math.min(60_000, Number(slideshowIntervalMs) || 2500));
+    const id = window.setInterval(() => {
+      setSelectedId((cur) => {
+        const idx = cur ? filteredImages.findIndex((i) => i.id === cur) : -1;
+        const nextIdx = idx >= 0 ? (idx + 1) % filteredImages.length : 0;
+        return filteredImages[nextIdx]?.id ?? cur;
+      });
+    }, ms);
+
+    return () => window.clearInterval(id);
+  }, [enableViewerSlideshow, showControls, isFullscreenOpen, slideshowOn, filteredImages, slideshowIntervalMs]);
+
+  React.useEffect(() => {
+    if (enableViewerSlideshow) return;
+    if (isFullscreenOpen) return;
+    if (!slideshowOn) return;
+    setSlideshowOn(false);
+  }, [enableViewerSlideshow, isFullscreenOpen, slideshowOn]);
 
   const toggleCarouselTag = React.useCallback(
     (img: MediaImage) => {
@@ -293,6 +338,17 @@ export function MediaPane({
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>{headerLeft}</div>
         <div className={styles.topBarRight}>
+          {enableViewerSlideshow ? (
+            <button
+              className={styles.topBtn}
+              data-active={slideshowOn ? '1' : '0'}
+              onClick={toggleSlideshow}
+              disabled={filteredImages.length <= 1}
+              title="Auto-advance images"
+            >
+              {slideshowOn ? 'Stop' : 'Slideshow'}
+            </button>
+          ) : null}
           <button
             className={styles.topBtn}
             data-active={showControls ? '1' : '0'}
@@ -544,7 +600,7 @@ export function MediaPane({
               {filteredImages.length ? `${filteredImages.findIndex((i) => i.id === selectedId) + 1} / ${filteredImages.length}` : ''}
             </div>
             <div className={styles.fullscreenActions}>
-              <button className={styles.overlayBtn} onClick={() => setSlideshowOn((v) => !v)} disabled={filteredImages.length <= 1}>
+              <button className={styles.overlayBtn} onClick={toggleSlideshow} disabled={filteredImages.length <= 1}>
                 {slideshowOn ? 'Stop' : 'Slideshow'}
               </button>
               <button className={styles.overlayBtn} onClick={() => setIsFullscreenOpen(false)}>

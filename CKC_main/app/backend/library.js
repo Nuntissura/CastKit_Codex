@@ -27,6 +27,21 @@ function sanitizeFileName(name, fallback) {
   return cleaned.length ? cleaned.slice(0, 180) : 'export.txt';
 }
 
+function shortStableIdForPath(id, maxBodyChars = 12) {
+  const raw = String(id ?? '').trim();
+  if (!raw) return 'id';
+
+  const m = raw.match(/^([A-Za-z]+_)([0-9a-fA-F]+)$/);
+  if (m) {
+    const prefix = m[1];
+    const body = m[2].toLowerCase();
+    return `${prefix}${body.slice(0, Math.max(4, Math.min(Number(maxBodyChars) || 12, body.length)))}`;
+  }
+
+  const safe = raw.replaceAll(/[^A-Za-z0-9_-]+/g, '_');
+  return safe.length > 16 ? safe.slice(0, 16) : safe;
+}
+
 function uniquePath(dir, fileName) {
   const base = String(fileName || 'export.txt');
   const ext = path.extname(base);
@@ -1653,8 +1668,26 @@ class CKCLibrary {
     ensureDir(paths.extrasDir);
     ensureDir(paths.packsDir);
 
-    // Preserve bytes exactly (round-trip gate for canonical imports).
-    fs.writeFileSync(paths.sheetTxtPath, bytes);
+    // Preserve bytes exactly when possible; only rewrite when the imported Character ID doesn't match our chosen internal id.
+    // This avoids ending up with a sheet that claims a different Character ID than the folder/DB identity.
+    let sheetBytesToWrite = bytes;
+    const incomingMetaId = String(meta.CHARACTER_ID ?? '').trim();
+    const incomingFieldId = String(extraction.assignments.get('CHAR-ID-001') ?? '').trim();
+    const shouldRewriteCharacterId =
+      incomingMetaId !== characterId || (incomingFieldId && incomingFieldId !== characterId) || (!incomingMetaId && !incomingFieldId);
+    if (shouldRewriteCharacterId) {
+      let rewrittenText = text;
+      if (incomingMetaId) rewrittenText = rewrittenText.replace(/^CHARACTER_ID:\\s*.*$/m, `CHARACTER_ID: ${characterId}`);
+
+      const parsedSheet = parseSheetText(rewrittenText);
+      if (parsedSheet.fieldSpans.has('CHAR-ID-001')) {
+        rewrittenText = applyFieldUpdatesToParsedSheet(parsedSheet, { 'CHAR-ID-001': characterId });
+      }
+
+      sheetBytesToWrite = Buffer.from(rewrittenText, 'utf8');
+    }
+
+    fs.writeFileSync(paths.sheetTxtPath, sheetBytesToWrite);
 
     await run(
       this.db,
@@ -1670,6 +1703,9 @@ class CKCLibrary {
         valuesById[field.id] = extraction.assignments.has(field.id) ? String(extraction.assignments.get(field.id) ?? '') : '';
       }
     }
+
+    // Ensure Character_ID field reflects our internal id if present.
+    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = characterId;
 
     await run(this.db, 'BEGIN');
     try {
@@ -1805,6 +1841,10 @@ class CKCLibrary {
     if (!existing) throw new Error('Character not found');
     const templateAst = await this.getTemplateAst(existing.templateId);
 
+    const mergedValuesById = { ...(valuesById || {}) };
+    const hasCharId = templateAst.sections.some((s) => s.fields.some((f) => f.id === 'CHAR-ID-001'));
+    if (hasCharId) mergedValuesById['CHAR-ID-001'] = characterId;
+
     const paths = this.getCharacterPaths(characterId);
     if (!fs.existsSync(paths.sheetTxtPath)) {
       // Repair missing sheet file.
@@ -1826,7 +1866,7 @@ class CKCLibrary {
     const raw = fs.readFileSync(paths.sheetTxtPath, 'utf8');
     const parsed = parseSheetText(raw);
 
-    const { issues, normalizedValuesById } = validateCharacterValues(templateAst, valuesById, validationMode);
+    const { issues, normalizedValuesById } = validateCharacterValues(templateAst, mergedValuesById, validationMode);
     const hasErrors = issues.some((i) => i.severity === 'error');
     if (hasErrors && !allowSaveWithErrors) {
       return { ok: false, issues };
@@ -2183,7 +2223,7 @@ class CKCLibrary {
 
     const paths = this.getCharacterPaths(characterId);
     const exportDir = outDir
-      ? path.join(String(outDir), 'characters', sanitizeFileName(null, `${character.displayName}__${characterId}`))
+      ? path.join(String(outDir), 'characters', sanitizeFileName(null, `${character.displayName}__${shortStableIdForPath(characterId)}`))
       : paths.exportsDir;
     ensureDir(exportDir);
 
@@ -2868,7 +2908,7 @@ class CKCLibrary {
     const paths = this.getCharacterPaths(characterId);
 
     const packRoot = outDir
-      ? path.join(String(outDir), 'packs', sanitizeFileName(null, `${character.displayName}__${characterId}`))
+      ? path.join(String(outDir), 'packs', sanitizeFileName(null, `${character.displayName}__${shortStableIdForPath(characterId)}`))
       : paths.packsDir;
     const packDir = path.join(packRoot, sanitizeFileName(null, packName.replaceAll('/', '_')));
     ensureDir(packDir);

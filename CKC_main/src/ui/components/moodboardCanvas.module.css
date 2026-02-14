@@ -38,6 +38,7 @@
   background: var(--glass);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  position: relative;
 }
 
 .canvas {
@@ -47,3 +48,144 @@
   touch-action: none;
 }
 
+.layersPanel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 340px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  padding: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 2;
+}
+
+.layersHeader {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.layersList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.layerRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+}
+
+.layerRow[data-selected='1'] {
+  border-color: var(--accent-color);
+}
+
+.layerName {
+  font-weight: 700;
+}
+
+.layerPick {
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.layerPick:hover {
+  background: var(--bg-accent);
+}
+
+.layerNameInput {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+.layerActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.layerBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.layerBtn:hover {
+  background: var(--bg-accent);
+}
+
+.layerBtn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.layerBtn[data-active='1'] {
+  border-color: var(--accent-color);
+}
+
+.textPanel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 360px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  padding: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 2;
+}
+
+.textHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.textArea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px;
+  color: var(--text);
+  font: inherit;
+}
+
+.textRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.textField {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.textSize {
+  width: 140px;
+}

@@ -74,6 +74,27 @@
   font-size: 1.1rem;
 }
 
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.idChip {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.idChip:hover {
+  background: var(--bg-accent);
+}
+
 .sub {
   margin-top: 4px;
   font-size: 0.9rem;

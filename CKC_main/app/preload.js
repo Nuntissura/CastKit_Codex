@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, clipboard } = require('electron');
 
 contextBridge.exposeInMainWorld('ckc', {
     initialize: () => ipcRenderer.invoke('ckc:initialize'),
@@ -92,4 +92,5 @@ contextBridge.exposeInMainWorld('ckc', {
     setImageMeta: (params) => ipcRenderer.invoke('ckc:setImageMeta', params),
 
     openPath: (filePath) => ipcRenderer.invoke('ckc:openPath', filePath),
+    copyText: (text) => clipboard.writeText(String(text ?? '')),
 });

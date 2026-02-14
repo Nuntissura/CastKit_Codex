@@ -4,6 +4,8 @@ import styles from './sheetEditor.module.css';
 type Field = CKCTemplateAstField;
 type Section = { title: string; fields: Field[] };
 
+const HIDDEN_FIELD_IDS = new Set(['CHAR-ID-001']);
+
 function initialCollapsed(title: string): boolean {
   const t = String(title || '').toLowerCase();
   if (t.includes('data quality')) return true;
@@ -95,7 +97,7 @@ export function SheetEditor({
 
             {!isCollapsed ? (
               <div className={styles.fields}>
-                {section.fields.map((field) => {
+                {section.fields.filter((field) => !HIDDEN_FIELD_IDS.has(field.id)).map((field) => {
                   const value = valuesById[field.id] ?? '';
                   const isRule = field.type === 'rule';
                   const rows = inputRowsForField(field);

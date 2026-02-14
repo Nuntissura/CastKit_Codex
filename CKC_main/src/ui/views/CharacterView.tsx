@@ -1,7 +1,7 @@
 import React from 'react';
 import { LibraryDrawer } from '../components/LibraryDrawer';
 import { MediaPane } from '../components/MediaPane';
-import { MoodboardCanvas, type MoodboardState } from '../components/MoodboardCanvas';
+import { MoodboardCanvas, makeMoodId, type MoodboardState } from '../components/MoodboardCanvas';
 import { SheetIngestMergeTools } from '../components/SheetIngestMergeTools';
 import { SheetEditor } from '../components/SheetEditor';
 import { SheetVersionTools } from '../components/SheetVersionTools';
@@ -111,6 +111,18 @@ function dirName(p: string): string {
   const s = String(p || '');
   const idx = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
   return idx >= 0 ? s.slice(0, idx) : s;
+}
+
+function shortCharacterId(id: string): string {
+  const raw = String(id || '').trim();
+  if (!raw) return '';
+  if (raw.length <= 18) return raw;
+
+  const prefix = raw.startsWith('char_') ? 'char_' : '';
+  const body = prefix ? raw.slice(prefix.length) : raw;
+  const start = body.slice(0, 8);
+  const end = body.slice(-4);
+  return `${prefix}${start}...${end}`;
 }
 
 export function CharacterView({
@@ -227,6 +239,8 @@ export function CharacterView({
 
   const [isImportingImages, setIsImportingImages] = React.useState<boolean>(false);
   const [isHeaderDropActive, setIsHeaderDropActive] = React.useState<boolean>(false);
+  const [isCharacterIdCopied, setIsCharacterIdCopied] = React.useState<boolean>(false);
+  const characterIdCopyTimerRef = React.useRef<number | null>(null);
 
   const [llmBaseUrl, setLlmBaseUrl] = React.useState<string>('http://127.0.0.1:11434/v1');
   const [llmModel, setLlmModel] = React.useState<string>('');
@@ -241,6 +255,12 @@ export function CharacterView({
   const defaultExportsDir = React.useMemo(() => {
     return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
   }, [libraryRoot]);
+
+  React.useEffect(() => {
+    return () => {
+      if (characterIdCopyTimerRef.current) window.clearTimeout(characterIdCopyTimerRef.current);
+    };
+  }, []);
 
   React.useEffect(() => {
     characterLeftFrac2Ref.current = characterLeftFrac2;
@@ -1210,6 +1230,18 @@ export function CharacterView({
     }
   };
 
+  const copyCurrentCharacterId = React.useCallback(() => {
+    if (!characterId) return;
+    try {
+      window.ckc.copyText(characterId);
+      setIsCharacterIdCopied(true);
+      if (characterIdCopyTimerRef.current) window.clearTimeout(characterIdCopyTimerRef.current);
+      characterIdCopyTimerRef.current = window.setTimeout(() => setIsCharacterIdCopied(false), 1200);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [characterId]);
+
   const chooseCharacterExportDir = async () => {
     setExportError(null);
     try {
@@ -1265,6 +1297,7 @@ export function CharacterView({
       images: [
         ...(prev.images || []),
         {
+          id: makeMoodId('mbi_'),
           imageId,
           x: 0.5,
           y: 0.5,
@@ -1509,6 +1542,8 @@ export function CharacterView({
                   </button>
                 </div>
                 }
+                enableViewerSlideshow={mediaMode === 'carousel'}
+                autoStartSlideshow={mediaMode === 'carousel'}
                 showCarouselToggleOnThumbs={mediaMode === 'photos'}
                 autoOpenControlsOnSelect={mediaMode === 'photos'}
                 images={images}
@@ -1752,6 +1787,7 @@ export function CharacterView({
 
                         <div className={styles.moodboardBox}>
                           <MoodboardCanvas
+                            key={moodboardDocId ?? 'moodboard'}
                             value={moodboardDraft}
                             onChange={setMoodboardDraft}
                             onRequestAddImage={() => {
@@ -1855,7 +1891,19 @@ export function CharacterView({
               }}
               title="Drop image files here to import into this character"
             >
-              <div className={styles.name}>{character?.displayName ?? 'Character'}</div>
+              <div className={styles.nameRow}>
+                <div className={styles.name}>{character?.displayName ?? 'Character'}</div>
+                {characterId ? (
+                  <button
+                    className={styles.idChip}
+                    type="button"
+                    onClick={copyCurrentCharacterId}
+                    title={`Click to copy full Character ID: ${characterId}`}
+                  >
+                    {isCharacterIdCopied ? 'Copied!' : `ID: ${shortCharacterId(characterId)}`}
+                  </button>
+                ) : null}
+              </div>
               <div className={styles.sub}>{isHeaderDropActive ? 'Drop to import images...' : 'Character Editor (rebuild)'}</div>
             </div>
             <div className={styles.headerRight}>

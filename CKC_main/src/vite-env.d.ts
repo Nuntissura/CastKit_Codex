@@ -330,6 +330,7 @@ interface Window {
     exportBundle: (params?: unknown) => Promise<{ txtPath: string; mdPath: string; pdfPath: string }>;
     exportFieldPack: (params?: unknown) => Promise<{ path: string; lineCount: number; spinoffId: string | null; name: string }>;
     openPath: (filePath: string) => Promise<{ ok: true }>;
+    copyText: (text: string) => void;
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;

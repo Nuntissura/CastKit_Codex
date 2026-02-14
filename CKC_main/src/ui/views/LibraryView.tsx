@@ -445,6 +445,8 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       <section className={styles.left}>
         <MediaPane
           images={filteredCarouselImages}
+          enableViewerSlideshow
+          autoStartSlideshow
           emptyLabel="No global carousel images yet (tag an image with: carousel)."
           onOpenDiagnostics={() => setShowLibraryBar(true)}
           onPatchImageMeta={(imageId, patch) => {
