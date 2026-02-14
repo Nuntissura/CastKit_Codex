@@ -69,7 +69,17 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0051 | Moodboard text / sticky notes | DONE | Codex | Add text items; edit + move/resize; basic styling panel. |
 | WP-0052 | Moodboard gradient tool upgrade | DONE | Codex | Drag-to-set direction + live preview; radial mode option. |
 | WP-0053 | Moodboard zoom/pan + grid/snap | DONE | Codex | Zoom/pan navigation; grid overlay + snap-to-grid for move/transform. |
+| WP-0054 | Links + backlinks | BACKLOG | Codex | `[[...]]` links across docs/sheets + backlinks panel; no rewriting. |
+| WP-0055 | Inbox / watch-folder import | BACKLOG | Codex | Scan an Inbox folder, ingest screenshots, triage + assign to characters. |
+| WP-0056 | Clipboard image paste import | BACKLOG | Codex | Paste clipboard image into Character or Inbox/Library. |
+| WP-0057 | Multi-select + batch image metadata | BACKLOG | Codex | Ctrl/Shift multi-select + batch rating/favorite/tags. |
+| WP-0058 | Duplicate detection (exact hash) + safe cleanup | BACKLOG | Codex | Group duplicates by hash; remove redundant DB entries safely. |
+| WP-0059 | Tag manager | BACKLOG | Codex | Rename/merge tags globally; show counts; pin tags. |
+| WP-0060 | Pop-out reference window (always-on-top) | BACKLOG | Codex | Separate viewer window synced to selection; always-on-top toggle. |
+| WP-0061 | Image annotations / pins (non-destructive) | BACKLOG | Codex | Text pins + simple overlays stored as JSON per image; show/hide. |
+| WP-0062 | Stories corkboard / outliner | BACKLOG | Codex | Story cards with drag reorder + links to chars/images. |
+| WP-0063 | Export hub (moodboards + image sets + share packs) | BACKLOG | Codex | Central export UI; moodboard PNG; image set export; share packs under `<libraryRoot>/exports/`. |
 
 ## Current focus
-- Current: Release build + manual UX verification.
-- Next: WP-0035, WP-0036, WP-0037 (tomorrow).
+- Current: High-ROI roadmap (WP-0054..WP-0063).
+- Next: WP-0035, WP-0036, WP-0037.
