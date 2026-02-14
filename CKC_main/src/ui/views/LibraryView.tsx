@@ -75,6 +75,7 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
   const [layoutRef, layoutWidth] = useElementWidth<HTMLDivElement>();
   const [libraryLeftFrac, setLibraryLeftFrac] = React.useState<number>(0.55);
   const libraryLeftFracRef = React.useRef<number>(libraryLeftFrac);
+  const reloadCarouselDebounceRef = React.useRef<number | null>(null);
   const libraryResizeRef = React.useRef<{ startX: number; startLeftPx: number } | null>(null);
   const [diagnostics, setDiagnostics] = React.useState<CKCLibraryDiagnostics | null>(null);
   const [diagnosticsError, setDiagnosticsError] = React.useState<string | null>(null);
@@ -445,13 +446,15 @@ export function LibraryView({ onOpenCharacter }: { onOpenCharacter: (characterId
       <section className={styles.left}>
         <MediaPane
           images={filteredCarouselImages}
+          allTags={allTags}
           enableViewerSlideshow
           autoStartSlideshow
           emptyLabel="No global carousel images yet (tag an image with: carousel)."
           onOpenDiagnostics={() => setShowLibraryBar(true)}
           onPatchImageMeta={(imageId, patch) => {
             // Re-fetch to respect the global selection rule (prefer frontpage when present).
-            void reloadCarousel();
+            if (reloadCarouselDebounceRef.current) window.clearTimeout(reloadCarouselDebounceRef.current);
+            reloadCarouselDebounceRef.current = window.setTimeout(() => void reloadCarousel(), 120);
           }}
         />
       </section>

@@ -274,8 +274,62 @@
 .metaTagsRow {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tagChipRow {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.tagActionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
   justify-content: flex-end;
+}
+
+.tagChip {
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.02);
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.tagsEmpty {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.tagInput {
+  width: 170px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.batchHint {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  padding: 2px 8px;
+}
+
+.batchNotesHint {
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.02);
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .thumbs {
@@ -300,6 +354,10 @@
 
 .thumbBtn[data-selected='1'] {
   border-color: var(--accent-color);
+}
+
+.thumbBtn[data-primary='1'] {
+  box-shadow: 0 0 0 2px rgba(255, 120, 120, 0.28) inset;
 }
 
 .thumbImg {

@@ -336,6 +336,7 @@ interface Window {
     importImages: (params: unknown) => Promise<unknown>;
     repairMissingImagesByHash: (params: { scanDir: string; includeSubdirs?: boolean; dryRun?: boolean }) => Promise<CKCRepairMissingImagesByHashResult>;
     setImageMeta: (params: unknown) => Promise<unknown>;
+    setImagesMetaBatch: (params: unknown) => Promise<unknown>;
     addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     listVersions: (characterId: string) => Promise<CKCSheetVersionListItem[]>;

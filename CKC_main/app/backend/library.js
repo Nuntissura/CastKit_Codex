@@ -2839,6 +2839,106 @@ class CKCLibrary {
     return { ok: true };
   }
 
+  async setImagesMetaBatch({ imageIds, favorite, rating, addTags = [], removeTags = [] } = {}) {
+    const rawIds = Array.isArray(imageIds) ? imageIds : [];
+    const ids = [];
+    const seenIds = new Set();
+    for (const id of rawIds) {
+      const s = String(id ?? '').trim();
+      if (!s) continue;
+      if (seenIds.has(s)) continue;
+      seenIds.add(s);
+      ids.push(s);
+    }
+    if (ids.length === 0) return { ok: true, updated: 0 };
+
+    const shouldSetFavorite = favorite !== undefined;
+    const shouldSetRating = rating !== undefined;
+    const cleanedAdd = this._cleanTags(addTags).filter((t) => !this._isSystemTag(t));
+    const cleanedRemove = this._cleanTags(removeTags).filter((t) => !this._isSystemTag(t));
+    const shouldPatchTags = cleanedAdd.length > 0 || cleanedRemove.length > 0;
+
+    if (!shouldSetFavorite && !shouldSetRating && !shouldPatchTags) return { ok: true, updated: 0 };
+
+    const favoriteVal = shouldSetFavorite ? (favorite ? 1 : 0) : null;
+    const ratingVal = shouldSetRating ? Math.max(0, Math.min(5, Number(rating) || 0)) : null;
+
+    const chunkSize = 800;
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+
+    await run(this.db, 'BEGIN');
+    try {
+      for (const chunk of chunks) {
+        const placeholders = chunk.map(() => '?').join(',');
+
+        if (shouldSetFavorite || shouldSetRating) {
+          await run(
+            this.db,
+            `UPDATE ImageAsset
+             SET favorite = COALESCE(?, favorite),
+                 rating = COALESCE(?, rating)
+             WHERE image_id IN (${placeholders})`,
+            [favoriteVal, ratingVal, ...chunk]
+          );
+        }
+
+        if (shouldPatchTags) {
+          const rows = await all(this.db, `SELECT image_id, tags_json FROM ImageAsset WHERE image_id IN (${placeholders})`, chunk);
+          const removeSet = new Set(cleanedRemove);
+          for (const r of rows) {
+            const imageId = String(r.image_id || '');
+            let tags = [];
+            try {
+              const parsed = JSON.parse(r.tags_json || '[]');
+              tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+            } catch {
+              tags = [];
+            }
+
+            const out = [];
+            const seen = new Set();
+            for (const t of tags) {
+              const s = String(t ?? '').trim();
+              if (!s) continue;
+              if (this._isSystemTag(s)) continue;
+              if (removeSet.has(s)) continue;
+              if (seen.has(s)) continue;
+              seen.add(s);
+              out.push(s);
+            }
+
+            for (const t of cleanedAdd) {
+              const s = String(t ?? '').trim();
+              if (!s) continue;
+              if (this._isSystemTag(s)) continue;
+              if (seen.has(s)) continue;
+              seen.add(s);
+              out.push(s);
+            }
+
+            await run(this.db, 'UPDATE ImageAsset SET tags_json = ? WHERE image_id = ?', [JSON.stringify(out), imageId]);
+          }
+        }
+      }
+
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._audit('gallery.setImagesMetaBatch', null, {
+      imageCount: ids.length,
+      favorite: shouldSetFavorite ? !!favorite : undefined,
+      rating: shouldSetRating ? ratingVal : undefined,
+      addTags: cleanedAdd,
+      removeTags: cleanedRemove,
+    });
+
+    return { ok: true, updated: ids.length };
+  }
+
   async exportFieldPack(params) {
     const characterId = params?.characterId;
     const spinoffId = params?.spinoffId ?? null;

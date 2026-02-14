@@ -896,6 +896,11 @@ function registerIpcHandlers() {
         return lib.setImageMeta(params);
     });
 
+    ipcMain.handle('ckc:setImagesMetaBatch', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setImagesMetaBatch(params || {});
+    });
+
     ipcMain.handle('ckc:exportFieldPack', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.exportFieldPack(params);

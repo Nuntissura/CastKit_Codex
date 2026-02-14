@@ -66,6 +66,22 @@ function passesRatingFilter(value: number, op: RatingOp, target: number): boolea
   }
 }
 
+function tagsTextToArray(text: string): string[] {
+  const parts = String(text || '')
+    .split(/[,\n\r\t]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of parts) {
+    const k = p.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
+  }
+  return out;
+}
+
 export function MediaPane({
   images,
   defaultShowThumbnails = false,
@@ -77,6 +93,8 @@ export function MediaPane({
   emptyLabel = 'No images.',
   headerLeft = null,
   showCarouselToggleOnThumbs = false,
+  allTags = [],
+  onSelectionChange,
   onOpenDiagnostics,
   onPatchImageMeta,
 }: {
@@ -90,13 +108,17 @@ export function MediaPane({
   emptyLabel?: string;
   headerLeft?: React.ReactNode;
   showCarouselToggleOnThumbs?: boolean;
+  allTags?: string[];
+  onSelectionChange?: (selectedIds: string[], primaryId: string | null) => void;
   onOpenDiagnostics?: () => void;
   onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => void;
 }) {
-  const [selectedId, setSelectedId] = React.useState<string | null>(images[0]?.id ?? null);
+  const [primarySelectedId, setPrimarySelectedId] = React.useState<string | null>(images[0]?.id ?? null);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>(() => (images[0]?.id ? [images[0].id] : []));
   const [showThumbnails, setShowThumbnails] = React.useState<boolean>(defaultShowThumbnails);
   const [showControls, setShowControls] = React.useState<boolean>(defaultShowControls);
   const [busyImageId, setBusyImageId] = React.useState<string | null>(null);
+  const [busyBatch, setBusyBatch] = React.useState<boolean>(false);
   const [filterFavoriteOnly, setFilterFavoriteOnly] = React.useState<boolean>(false);
   const [filterRatingOp, setFilterRatingOp] = React.useState<RatingOp>('any');
   const [filterRatingValue, setFilterRatingValue] = React.useState<number>(0);
@@ -104,9 +126,12 @@ export function MediaPane({
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
   const didUserToggleSlideshowRef = React.useRef<boolean>(false);
   const [draftNotes, setDraftNotes] = React.useState<string>('');
+  const [tagDraft, setTagDraft] = React.useState<string>('');
   const [viewerError, setViewerError] = React.useState<boolean>(false);
   const [reloadToken, setReloadToken] = React.useState<number>(0);
   const altLeftDownRef = React.useRef<boolean>(false);
+  const selectionAnchorRef = React.useRef<string | null>(images[0]?.id ?? null);
+  const tagsDatalistId = React.useId();
 
   React.useEffect(() => {
     const onKeyDown = (evt: KeyboardEvent) => {
@@ -129,11 +154,6 @@ export function MediaPane({
     };
   }, []);
 
-  React.useEffect(() => {
-    // Keep selection valid when the underlying image list changes.
-    if (!images.some((i) => i.id === selectedId)) setSelectedId(images[0]?.id ?? null);
-  }, [images, selectedId]);
-
   const filteredImages = React.useMemo(() => {
     return images.filter((img) => {
       if (filterFavoriteOnly && !img.favorite) return false;
@@ -147,15 +167,46 @@ export function MediaPane({
   const noMatches = hasAnyImages && filteredImages.length === 0;
 
   React.useEffect(() => {
-    // Keep selection valid when filters change.
-    if (!filteredImages.some((i) => i.id === selectedId)) {
-      setSelectedId(filteredImages[0]?.id ?? null);
-    }
-  }, [filteredImages, selectedId]);
+    // Keep selection valid when the filtered image list changes.
+    const available = new Set(filteredImages.map((i) => i.id));
+    let nextSelected = selectedIds.filter((id) => available.has(id));
+    let nextPrimary = primarySelectedId && available.has(primarySelectedId) ? primarySelectedId : null;
 
-  const selected = selectedId ? filteredImages.find((i) => i.id === selectedId) ?? null : null;
-  const isBusy = !!busyImageId && busyImageId === selected?.id;
-  const notesIsDirty = !!selected && String(draftNotes ?? '') !== String(selected.notes ?? '');
+    if (filteredImages.length === 0) {
+      if (primarySelectedId !== null) setPrimarySelectedId(null);
+      if (selectedIds.length !== 0) setSelectedIds([]);
+      return;
+    }
+
+    if (nextSelected.length === 0) {
+      const first = filteredImages[0].id;
+      selectionAnchorRef.current = first;
+      nextSelected = [first];
+      nextPrimary = first;
+    }
+
+    if (!nextPrimary || !nextSelected.includes(nextPrimary)) nextPrimary = nextSelected[0] ?? null;
+
+    const nextSet = new Set(nextSelected);
+    nextSelected = filteredImages.filter((i) => nextSet.has(i.id)).map((i) => i.id);
+
+    if (nextPrimary !== primarySelectedId) setPrimarySelectedId(nextPrimary);
+    if (nextSelected.length !== selectedIds.length || nextSelected.some((id, idx) => id !== selectedIds[idx])) {
+      setSelectedIds(nextSelected);
+    }
+  }, [filteredImages, primarySelectedId, selectedIds]);
+
+  React.useEffect(() => {
+    onSelectionChange?.(selectedIds, primarySelectedId);
+  }, [onSelectionChange, selectedIds, primarySelectedId]);
+
+  const primarySelected = primarySelectedId ? filteredImages.find((i) => i.id === primarySelectedId) ?? null : null;
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedImages = React.useMemo(() => filteredImages.filter((i) => selectedSet.has(i.id)), [filteredImages, selectedSet]);
+  const selectionCount = selectedImages.length;
+
+  const isBusy = busyBatch || !!busyImageId;
+  const notesIsDirty = selectionCount === 1 && !!primarySelected && String(draftNotes ?? '') !== String(primarySelected.notes ?? '');
   const didInitialSelectionRef = React.useRef<boolean>(false);
 
   const clearFilters = React.useCallback(() => {
@@ -178,41 +229,95 @@ export function MediaPane({
   }, [autoStartSlideshow, enableViewerSlideshow, filteredImages.length]);
 
   React.useEffect(() => {
-    if (!selected) {
+    if (selectionCount !== 1 || !primarySelected) {
       setDraftNotes('');
       setViewerError(false);
       return;
     }
-    setDraftNotes(String(selected.notes ?? ''));
+    setDraftNotes(String(primarySelected.notes ?? ''));
     setViewerError(false);
-  }, [selected?.id, selected?.notes]);
+  }, [selectionCount, primarySelected?.id, primarySelected?.notes]);
 
   React.useEffect(() => {
     if (!autoOpenControlsOnSelect) return;
-    if (!selected) return;
+    if (!primarySelected) return;
     if (!didInitialSelectionRef.current) {
       didInitialSelectionRef.current = true;
       return;
     }
     if (!showControls) setShowControls(true);
-  }, [autoOpenControlsOnSelect, selected?.id, showControls]);
+  }, [autoOpenControlsOnSelect, primarySelected?.id, showControls]);
 
-  const patchMeta = async (
-    imageId: string,
-    patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>
-  ) => {
-    setBusyImageId(imageId);
-    try {
-      await window.ckc.setImageMeta({ imageId, ...patch });
-      onPatchImageMeta?.(imageId, patch);
-    } finally {
-      setBusyImageId(null);
-    }
-  };
+  const patchMetaSingle = React.useCallback(
+    async (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => {
+      setBusyImageId(imageId);
+      try {
+        await window.ckc.setImageMeta({ imageId, ...patch });
+        onPatchImageMeta?.(imageId, patch);
+      } finally {
+        setBusyImageId(null);
+      }
+    },
+    [onPatchImageMeta]
+  );
+
+  const patchMetaBatch = React.useCallback(
+    async (params: { imageIds: string[]; favorite?: boolean; rating?: number; addTags?: string[]; removeTags?: string[] }) => {
+      const ids = Array.isArray(params.imageIds) ? params.imageIds : [];
+      if (ids.length === 0) return;
+
+      setBusyBatch(true);
+      try {
+        await window.ckc.setImagesMetaBatch(params);
+
+        const byId = new Map<string, MediaImage>();
+        for (const img of images) byId.set(img.id, img);
+
+        if (params.favorite !== undefined) {
+          for (const id of ids) onPatchImageMeta?.(id, { favorite: !!params.favorite });
+        }
+
+        if (params.rating !== undefined) {
+          for (const id of ids) onPatchImageMeta?.(id, { rating: Math.max(0, Math.min(5, Number(params.rating) || 0)) });
+        }
+
+        const add = Array.isArray(params.addTags) ? params.addTags : [];
+        const remove = Array.isArray(params.removeTags) ? params.removeTags : [];
+        if (add.length > 0 || remove.length > 0) {
+          const addSet = new Set(add.map((t) => String(t ?? '').trim()).filter(Boolean));
+          const removeSet = new Set(remove.map((t) => String(t ?? '').trim()).filter(Boolean));
+          for (const id of ids) {
+            const cur = byId.get(id);
+            const base = Array.isArray(cur?.tags) ? cur.tags : [];
+            const next = [];
+            const seen = new Set<string>();
+            for (const t of base) {
+              const s = String(t ?? '').trim();
+              if (!s) continue;
+              if (removeSet.has(s)) continue;
+              if (seen.has(s)) continue;
+              seen.add(s);
+              next.push(s);
+            }
+            for (const t of Array.from(addSet)) {
+              if (seen.has(t)) continue;
+              seen.add(t);
+              next.push(t);
+            }
+            onPatchImageMeta?.(id, { tags: next });
+          }
+        }
+      } finally {
+        setBusyBatch(false);
+      }
+    },
+    [images, onPatchImageMeta]
+  );
 
   React.useEffect(() => {
     const onKeyDown = (evt: KeyboardEvent) => {
-      if (!selected || isBusy) return;
+      if (selectionCount === 0 || !primarySelected) return;
+      if (isBusy) return;
       if (evt.repeat) return;
       if (isEditableActiveElement()) return;
 
@@ -224,12 +329,16 @@ export function MediaPane({
       if (rating === null) return;
 
       evt.preventDefault();
-      void patchMeta(selected.id, { rating });
+      if (selectionCount === 1) {
+        void patchMetaSingle(primarySelected.id, { rating });
+      } else {
+        void patchMetaBatch({ imageIds: selectedIds, rating });
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selected, isBusy, patchMeta]);
+  }, [primarySelected, selectionCount, selectedIds, isBusy, patchMetaSingle, patchMetaBatch]);
 
   React.useEffect(() => {
     if (isFullscreenOpen) return;
@@ -240,21 +349,31 @@ export function MediaPane({
 
       if (evt.key === 'ArrowLeft') {
         evt.preventDefault();
-        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
-        if (idx > 0) setSelectedId(filteredImages[idx - 1].id);
+        const idx = primarySelectedId ? filteredImages.findIndex((i) => i.id === primarySelectedId) : -1;
+        if (idx > 0) {
+          const next = filteredImages[idx - 1].id;
+          selectionAnchorRef.current = next;
+          setPrimarySelectedId(next);
+          setSelectedIds([next]);
+        }
         return;
       }
       if (evt.key === 'ArrowRight') {
         evt.preventDefault();
-        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
-        if (idx >= 0 && idx < filteredImages.length - 1) setSelectedId(filteredImages[idx + 1].id);
+        const idx = primarySelectedId ? filteredImages.findIndex((i) => i.id === primarySelectedId) : -1;
+        if (idx >= 0 && idx < filteredImages.length - 1) {
+          const next = filteredImages[idx + 1].id;
+          selectionAnchorRef.current = next;
+          setPrimarySelectedId(next);
+          setSelectedIds([next]);
+        }
         return;
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isFullscreenOpen, filteredImages, selected]);
+  }, [isFullscreenOpen, filteredImages, primarySelectedId]);
 
   React.useEffect(() => {
     if (!isFullscreenOpen) return;
@@ -267,21 +386,31 @@ export function MediaPane({
       }
       if (evt.key === 'ArrowLeft') {
         evt.preventDefault();
-        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
-        if (idx > 0) setSelectedId(filteredImages[idx - 1].id);
+        const idx = primarySelectedId ? filteredImages.findIndex((i) => i.id === primarySelectedId) : -1;
+        if (idx > 0) {
+          const next = filteredImages[idx - 1].id;
+          selectionAnchorRef.current = next;
+          setPrimarySelectedId(next);
+          setSelectedIds([next]);
+        }
         return;
       }
       if (evt.key === 'ArrowRight' || evt.key === ' ') {
         evt.preventDefault();
-        const idx = selected ? filteredImages.findIndex((i) => i.id === selected.id) : -1;
-        if (idx >= 0 && idx < filteredImages.length - 1) setSelectedId(filteredImages[idx + 1].id);
+        const idx = primarySelectedId ? filteredImages.findIndex((i) => i.id === primarySelectedId) : -1;
+        if (idx >= 0 && idx < filteredImages.length - 1) {
+          const next = filteredImages[idx + 1].id;
+          selectionAnchorRef.current = next;
+          setPrimarySelectedId(next);
+          setSelectedIds([next]);
+        }
         return;
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isFullscreenOpen, filteredImages, selected]);
+  }, [isFullscreenOpen, filteredImages, primarySelectedId]);
 
   React.useEffect(() => {
     if (!isFullscreenOpen || !slideshowOn) return;
@@ -289,10 +418,15 @@ export function MediaPane({
 
     const ms = Math.max(800, Math.min(60_000, Number(slideshowIntervalMs) || 2500));
     const id = window.setInterval(() => {
-      setSelectedId((cur) => {
+      setPrimarySelectedId((cur) => {
         const idx = cur ? filteredImages.findIndex((i) => i.id === cur) : -1;
         const nextIdx = idx >= 0 ? (idx + 1) % filteredImages.length : 0;
-        return filteredImages[nextIdx]?.id ?? cur;
+        const next = filteredImages[nextIdx]?.id ?? cur;
+        if (next && next !== cur) {
+          selectionAnchorRef.current = next;
+          setSelectedIds([next]);
+        }
+        return next;
       });
     }, ms);
 
@@ -306,10 +440,15 @@ export function MediaPane({
 
     const ms = Math.max(800, Math.min(60_000, Number(slideshowIntervalMs) || 2500));
     const id = window.setInterval(() => {
-      setSelectedId((cur) => {
+      setPrimarySelectedId((cur) => {
         const idx = cur ? filteredImages.findIndex((i) => i.id === cur) : -1;
         const nextIdx = idx >= 0 ? (idx + 1) % filteredImages.length : 0;
-        return filteredImages[nextIdx]?.id ?? cur;
+        const next = filteredImages[nextIdx]?.id ?? cur;
+        if (next && next !== cur) {
+          selectionAnchorRef.current = next;
+          setSelectedIds([next]);
+        }
+        return next;
       });
     }, ms);
 
@@ -328,9 +467,163 @@ export function MediaPane({
       const base = Array.isArray(img.tags) ? img.tags : [];
       const active = base.includes('carousel');
       const next = active ? base.filter((t) => t !== 'carousel') : Array.from(new Set([...base, 'carousel']));
-      void patchMeta(img.id, { tags: next });
+      void patchMetaSingle(img.id, { tags: next });
     },
-    [patchMeta]
+    [patchMetaSingle]
+  );
+
+  const allFavorite = selectionCount > 0 && selectedImages.every((img) => !!img.favorite);
+  const anyFavorite = selectionCount > 0 && selectedImages.some((img) => !!img.favorite);
+
+  const commonTags = React.useMemo(() => {
+    if (selectionCount === 0) return [];
+    if (selectionCount === 1) return Array.isArray(primarySelected?.tags) ? primarySelected?.tags ?? [] : [];
+
+    let common: Set<string> | null = null;
+    for (const img of selectedImages) {
+      const set = new Set<string>((img.tags || []).map((t) => String(t ?? '').trim()).filter(Boolean));
+      if (common === null) {
+        common = set;
+        continue;
+      }
+      const next = new Set<string>();
+      for (const t of common) {
+        if (set.has(t)) next.add(t);
+      }
+      common = next;
+    }
+    return common ? Array.from(common).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })) : [];
+  }, [selectionCount, selectedImages, primarySelected?.tags]);
+
+  const applyFavoriteToggle = React.useCallback(() => {
+    if (isBusy) return;
+    if (selectionCount === 0) return;
+    const next = !allFavorite;
+    if (selectionCount === 1 && primarySelected) {
+      void patchMetaSingle(primarySelected.id, { favorite: next });
+      return;
+    }
+    void patchMetaBatch({ imageIds: selectedIds, favorite: next });
+  }, [isBusy, selectionCount, allFavorite, primarySelected, selectedIds, patchMetaSingle, patchMetaBatch]);
+
+  const applyRating = React.useCallback(
+    (nextRating: number) => {
+      if (isBusy) return;
+      if (selectionCount === 0) return;
+      if (selectionCount === 1 && primarySelected) {
+        void patchMetaSingle(primarySelected.id, { rating: nextRating });
+        return;
+      }
+      void patchMetaBatch({ imageIds: selectedIds, rating: nextRating });
+    },
+    [isBusy, selectionCount, primarySelected, selectedIds, patchMetaSingle, patchMetaBatch]
+  );
+
+  const toggleTagForSelection = React.useCallback(
+    (tag: string) => {
+      if (isBusy) return;
+      const t = String(tag ?? '').trim();
+      if (!t) return;
+      if (selectionCount === 0) return;
+
+      const allHave = selectedImages.every((img) => (img.tags || []).includes(t));
+      if (selectionCount === 1 && primarySelected) {
+        const base = Array.isArray(primarySelected.tags) ? primarySelected.tags : [];
+        const next = allHave ? base.filter((x) => x !== t) : Array.from(new Set([...base, t]));
+        void patchMetaSingle(primarySelected.id, { tags: next });
+        return;
+      }
+
+      if (allHave) void patchMetaBatch({ imageIds: selectedIds, removeTags: [t] });
+      else void patchMetaBatch({ imageIds: selectedIds, addTags: [t] });
+    },
+    [isBusy, selectionCount, selectedImages, primarySelected, selectedIds, patchMetaSingle, patchMetaBatch]
+  );
+
+  const removeTagFromSelection = React.useCallback(
+    (tag: string) => {
+      if (isBusy) return;
+      const t = String(tag ?? '').trim();
+      if (!t) return;
+      if (selectionCount === 0) return;
+
+      if (selectionCount === 1 && primarySelected) {
+        const base = Array.isArray(primarySelected.tags) ? primarySelected.tags : [];
+        const next = base.filter((x) => x !== t);
+        void patchMetaSingle(primarySelected.id, { tags: next });
+        return;
+      }
+
+      void patchMetaBatch({ imageIds: selectedIds, removeTags: [t] });
+    },
+    [isBusy, selectionCount, primarySelected, selectedIds, patchMetaSingle, patchMetaBatch]
+  );
+
+  const addTagsFromDraft = React.useCallback(() => {
+    if (isBusy) return;
+    const toAdd = tagsTextToArray(tagDraft);
+    if (toAdd.length === 0) return;
+    setTagDraft('');
+
+    if (selectionCount === 0) return;
+    if (selectionCount === 1 && primarySelected) {
+      const base = Array.isArray(primarySelected.tags) ? primarySelected.tags : [];
+      const next = Array.from(new Set([...base, ...toAdd]));
+      void patchMetaSingle(primarySelected.id, { tags: next });
+      return;
+    }
+    void patchMetaBatch({ imageIds: selectedIds, addTags: toAdd });
+  }, [isBusy, tagDraft, selectionCount, primarySelected, selectedIds, patchMetaSingle, patchMetaBatch]);
+
+  const onThumbClick = React.useCallback(
+    (evt: React.MouseEvent, imageId: string) => {
+      if (isBusy) return;
+      const clicked = String(imageId || '');
+      if (!clicked) return;
+
+      if (evt.shiftKey) {
+        const anchor = selectionAnchorRef.current ?? primarySelectedId ?? clicked;
+        const start = filteredImages.findIndex((i) => i.id === anchor);
+        const end = filteredImages.findIndex((i) => i.id === clicked);
+        if (start < 0 || end < 0) {
+          selectionAnchorRef.current = clicked;
+          setPrimarySelectedId(clicked);
+          setSelectedIds([clicked]);
+          return;
+        }
+
+        const a = Math.min(start, end);
+        const b = Math.max(start, end);
+        const range = filteredImages.slice(a, b + 1).map((i) => i.id);
+        const base = evt.ctrlKey || evt.metaKey ? selectedIds : [];
+        const set = new Set<string>(base);
+        for (const id of range) set.add(id);
+        const ordered = filteredImages.filter((i) => set.has(i.id)).map((i) => i.id);
+        setSelectedIds(ordered);
+        setPrimarySelectedId(clicked);
+        return;
+      }
+
+      if (evt.ctrlKey || evt.metaKey) {
+        const set = new Set(selectedIds);
+        if (set.has(clicked)) {
+          if (set.size > 1) set.delete(clicked);
+        } else {
+          set.add(clicked);
+        }
+        const ordered = filteredImages.filter((i) => set.has(i.id)).map((i) => i.id);
+        const nextPrimary = ordered.includes(clicked) ? clicked : ordered[ordered.length - 1] ?? ordered[0] ?? null;
+        setSelectedIds(ordered.length ? ordered : [clicked]);
+        setPrimarySelectedId(nextPrimary);
+        if (nextPrimary) selectionAnchorRef.current = nextPrimary;
+        return;
+      }
+
+      selectionAnchorRef.current = clicked;
+      setPrimarySelectedId(clicked);
+      setSelectedIds([clicked]);
+    },
+    [isBusy, filteredImages, primarySelectedId, selectedIds]
   );
 
   return (
@@ -363,7 +656,7 @@ export function MediaPane({
           >
             Thumbs
           </button>
-          <button className={styles.topBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!selected}>
+          <button className={styles.topBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!primarySelected}>
             Fullscreen
           </button>
         </div>
@@ -412,10 +705,10 @@ export function MediaPane({
               Clear filters
             </button>
           </div>
-        ) : selected && !viewerError ? (
+        ) : primarySelected && !viewerError ? (
           <img
             className={styles.viewerImg}
-            src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
+            src={`ckc://image/${encodeURIComponent(primarySelected.id)}?r=${reloadToken}`}
             alt=""
             onClick={() => {
               if (!autoOpenControlsOnSelect) return;
@@ -424,7 +717,7 @@ export function MediaPane({
             }}
             onError={() => setViewerError(true)}
           />
-        ) : selected && viewerError ? (
+        ) : primarySelected && viewerError ? (
           <div className={styles.missing}>
             <div className={styles.missingTitle}>Missing image file</div>
             <div className={styles.missingHint}>
@@ -463,21 +756,33 @@ export function MediaPane({
           <div className={styles.empty}>{emptyLabel}</div>
         )}
 
-        {selected && showControls ? (
+        {selectionCount > 0 && showControls ? (
           <div className={styles.bottomBar} aria-label="Image metadata">
             <div className={styles.notesRow}>
-              <div className={styles.notesTitle}>Notes</div>
+              <div className={styles.notesTitle}>{selectionCount === 1 ? 'Notes' : `Selection: ${selectionCount}`}</div>
 
               <div className={styles.notesRight}>
                 <div className={styles.metaControls} aria-label="Controls">
                   <button
                     className={styles.tagBtn}
-                    data-active={selected.favorite ? '1' : '0'}
+                    data-active={allFavorite ? '1' : '0'}
                     disabled={isBusy}
-                    onClick={() => patchMeta(selected.id, { favorite: !selected.favorite })}
+                    onClick={applyFavoriteToggle}
                     title="Favorite"
                   >
-                    {selected.favorite ? '★ Favorite' : '☆ Favorite'}
+                    {selectionCount === 1 ? (
+                      primarySelected?.favorite ? (
+                        '★ Favorite'
+                      ) : (
+                        '☆ Favorite'
+                      )
+                    ) : allFavorite ? (
+                      '★ Favorite (all)'
+                    ) : anyFavorite ? (
+                      '☆ Favorite (mixed)'
+                    ) : (
+                      '☆ Favorite'
+                    )}
                   </button>
 
                   <div className={styles.stars} aria-label="Rating">
@@ -486,66 +791,99 @@ export function MediaPane({
                         key={n}
                         className={styles.starBtn}
                         disabled={isBusy}
-                        onClick={() => patchMeta(selected.id, { rating: n })}
+                        onClick={() => applyRating(n)}
                         title={`${n} star`}
                       >
-                        {selected.rating >= n ? '★' : '☆'}
+                        {selectionCount === 1 && (primarySelected?.rating ?? 0) >= n ? '★' : '☆'}
                       </button>
                     ))}
-                    <button
-                      className={styles.clearBtn}
-                      disabled={isBusy}
-                      onClick={() => patchMeta(selected.id, { rating: 0 })}
-                      title="Clear rating"
-                    >
+                    <button className={styles.clearBtn} disabled={isBusy} onClick={() => applyRating(0)} title="Clear rating">
                       Clear
                     </button>
                   </div>
                 </div>
 
-                <button
-                  className={styles.notesSave}
-                  disabled={isBusy || !notesIsDirty}
-                  onClick={() => void patchMeta(selected.id, { notes: String(draftNotes ?? '') })}
-                  title="Save notes"
-                >
-                  {isBusy ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
-                </button>
+                {selectionCount === 1 && primarySelected ? (
+                  <button
+                    className={styles.notesSave}
+                    disabled={isBusy || !notesIsDirty}
+                    onClick={() => void patchMetaSingle(primarySelected.id, { notes: String(draftNotes ?? '') })}
+                    title="Save notes"
+                  >
+                    {isBusy ? 'Saving…' : notesIsDirty ? 'Save' : 'Saved'}
+                  </button>
+                ) : (
+                  <div className={styles.batchHint}>Batch edit</div>
+                )}
               </div>
             </div>
 
-            <textarea
-              className={styles.notesInput}
-              value={draftNotes}
-              onChange={(e) => setDraftNotes(e.target.value)}
-              onBlur={() => {
-                if (!selected) return;
-                if (!notesIsDirty) return;
-                void patchMeta(selected.id, { notes: String(draftNotes ?? '') });
-              }}
-              placeholder="Notes…"
-            />
+            {selectionCount === 1 && primarySelected ? (
+              <textarea
+                className={styles.notesInput}
+                value={draftNotes}
+                onChange={(e) => setDraftNotes(e.target.value)}
+                onBlur={() => {
+                  if (!notesIsDirty) return;
+                  void patchMetaSingle(primarySelected.id, { notes: String(draftNotes ?? '') });
+                }}
+                placeholder="Notes…"
+                disabled={isBusy}
+              />
+            ) : (
+              <div className={styles.batchNotesHint}>Notes are per-image. Select 1 image to edit notes.</div>
+            )}
 
             <div className={styles.metaTagsRow} aria-label="Tags">
-              {(['carousel', 'frontpage'] as const).map((tag) => {
-                const active = (selected.tags || []).includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    className={styles.tagBtn}
-                    data-active={active ? '1' : '0'}
-                    disabled={isBusy}
-                    onClick={() => {
-                      const base = Array.isArray(selected.tags) ? selected.tags : [];
-                      const next = active ? base.filter((t) => t !== tag) : Array.from(new Set([...base, tag]));
-                      void patchMeta(selected.id, { tags: next });
-                    }}
-                    title={`Toggle tag: ${tag}`}
-                  >
-                    {tag}
+              <div className={styles.tagChipRow} aria-label="Current tags">
+                {commonTags.map((t) => (
+                  <button key={t} className={styles.tagChip} disabled={isBusy} onClick={() => removeTagFromSelection(t)} title="Remove tag">
+                    {t} ×
                   </button>
-                );
-              })}
+                ))}
+                {commonTags.length === 0 ? <span className={styles.tagsEmpty}>(no tags)</span> : null}
+              </div>
+
+              <div className={styles.tagActionsRow} aria-label="Tag actions">
+                {(['carousel', 'frontpage'] as const).map((tag) => {
+                  const active = selectedImages.every((img) => (img.tags || []).includes(tag));
+                  return (
+                    <button
+                      key={tag}
+                      className={styles.tagBtn}
+                      data-active={active ? '1' : '0'}
+                      disabled={isBusy}
+                      onClick={() => toggleTagForSelection(tag)}
+                      title={`Toggle tag: ${tag}`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+
+                <input
+                  className={styles.tagInput}
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTagsFromDraft();
+                    }
+                  }}
+                  list={tagsDatalistId}
+                  placeholder="Add tag…"
+                  disabled={isBusy}
+                />
+                <button className={styles.tagBtn} onClick={addTagsFromDraft} disabled={isBusy || tagsTextToArray(tagDraft).length === 0}>
+                  Add
+                </button>
+                <datalist id={tagsDatalistId}>
+                  {(allTags || []).slice(0, 500).map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
             </div>
           </div>
         ) : null}
@@ -561,14 +899,13 @@ export function MediaPane({
         >
           {filteredImages.map((img) => {
             const carouselActive = (img.tags || []).includes('carousel');
-            const thumbBusy = busyImageId === img.id;
             return (
               <div key={img.id} className={styles.thumbItem}>
                 {showCarouselToggleOnThumbs ? (
                   <button
                     className={styles.thumbCarouselBtn}
                     data-active={carouselActive ? '1' : '0'}
-                    disabled={thumbBusy}
+                    disabled={isBusy}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleCarouselTag(img);
@@ -581,9 +918,11 @@ export function MediaPane({
 
                 <button
                   className={styles.thumbBtn}
-                  data-selected={img.id === selectedId ? '1' : '0'}
-                  onClick={() => setSelectedId(img.id)}
+                  data-selected={selectedSet.has(img.id) ? '1' : '0'}
+                  data-primary={img.id === primarySelectedId ? '1' : '0'}
+                  onClick={(e) => onThumbClick(e, img.id)}
                   title={img.tags?.length ? img.tags.join(', ') : undefined}
+                  disabled={isBusy}
                 >
                   <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`} alt="" />
                 </button>
@@ -597,7 +936,9 @@ export function MediaPane({
         <div className={styles.fullscreen} role="dialog" aria-label="Fullscreen viewer">
           <div className={styles.fullscreenTop}>
             <div className={styles.fullscreenTitle}>
-              {filteredImages.length ? `${filteredImages.findIndex((i) => i.id === selectedId) + 1} / ${filteredImages.length}` : ''}
+              {filteredImages.length && primarySelectedId
+                ? `${filteredImages.findIndex((i) => i.id === primarySelectedId) + 1} / ${filteredImages.length}`
+                : ''}
             </div>
             <div className={styles.fullscreenActions}>
               <button className={styles.overlayBtn} onClick={toggleSlideshow} disabled={filteredImages.length <= 1}>
@@ -610,10 +951,10 @@ export function MediaPane({
           </div>
 
           <div className={styles.fullscreenBody} onClick={() => setIsFullscreenOpen(false)}>
-            {selected ? (
+            {primarySelected ? (
               <img
                 className={styles.fullscreenImg}
-                src={`ckc://image/${encodeURIComponent(selected.id)}?r=${reloadToken}`}
+                src={`ckc://image/${encodeURIComponent(primarySelected.id)}?r=${reloadToken}`}
                 alt=""
                 onClick={(e) => e.stopPropagation()}
               />

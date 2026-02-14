@@ -1524,6 +1524,7 @@ export function CharacterView({
         <section className={styles.left}>
           <div className={styles.leftBody}>
               <MediaPane
+                allTags={allTags}
                 headerLeft={
                   <div className={styles.leftHeader}>
                   <button
