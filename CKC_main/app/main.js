@@ -1142,6 +1142,16 @@ function registerIpcHandlers() {
         return lib.setImageMeta(params);
     });
 
+    ipcMain.handle('ckc:getImagePalette', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getImagePalette(params || {});
+    });
+
+    ipcMain.handle('ckc:ensureImagePalettes', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.ensureImagePalettes(params || {});
+    });
+
     ipcMain.handle('ckc:getImageAnnotations', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.getImageAnnotations(params || {});

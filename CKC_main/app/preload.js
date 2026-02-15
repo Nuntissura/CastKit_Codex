@@ -125,6 +125,8 @@ contextBridge.exposeInMainWorld('ckc', {
     repairMissingImagesByHash: (params) => ipcRenderer.invoke('ckc:repairMissingImagesByHash', params),
     repairThumbnails: (characterId) => ipcRenderer.invoke('ckc:repairThumbnails', characterId),
     setImageMeta: (params) => ipcRenderer.invoke('ckc:setImageMeta', params),
+    getImagePalette: (params) => ipcRenderer.invoke('ckc:getImagePalette', params),
+    ensureImagePalettes: (params) => ipcRenderer.invoke('ckc:ensureImagePalettes', params),
     getImageAnnotations: (params) => ipcRenderer.invoke('ckc:getImageAnnotations', params),
     setImageAnnotations: (params) => ipcRenderer.invoke('ckc:setImageAnnotations', params),
     setImagesMetaBatch: (params) => ipcRenderer.invoke('ckc:setImagesMetaBatch', params),

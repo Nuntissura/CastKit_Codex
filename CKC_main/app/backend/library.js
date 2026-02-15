@@ -14,6 +14,7 @@ const {
   generateCanonicalSheetText,
 } = require('./sheet');
 const { validateCharacterValues, classifyChangeType } = require('./validation');
+const { extractDominantPaletteFromBitmap } = require('./palette');
 
 const INBOX_CHARACTER_ID = '__ckc_inbox';
 const INBOX_CHARACTER_NAME = 'Inbox';
@@ -4503,6 +4504,105 @@ class CKCLibrary {
 
     await this._audit('gallery.setImageMeta', row?.character_id ?? null, { imageId });
     return { ok: true };
+  }
+
+  async getImagePalette({ imageId, colorCount = 6 } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const row = await get(
+      this.db,
+      `SELECT image_id, character_id, relative_path, storage_mode, source_path, palette_json
+       FROM ImageAsset
+       WHERE image_id = ?`,
+      [id]
+    );
+    if (!row) throw new Error('Image not found');
+
+    const existing = (() => {
+      if (!row.palette_json) return null;
+      try {
+        const parsed = JSON.parse(row.palette_json);
+        if (!Array.isArray(parsed)) return null;
+        return parsed.map((c) => String(c)).filter(Boolean);
+      } catch {
+        return null;
+      }
+    })();
+
+    if (existing) return { ok: true, imageId: id, palette: existing };
+    if (!this.electronNativeImage) return { ok: true, imageId: id, palette: [] };
+
+    const characterId = String(row.character_id ?? '').trim();
+    const relRaw = String(row.relative_path ?? '');
+    const mode = String(row.storage_mode ?? 'copy');
+    const sourcePath = row.source_path != null ? String(row.source_path) : null;
+
+    const paths = this.getCharacterPaths(characterId);
+    const fileName = path.basename(relRaw.replaceAll('/', path.sep));
+    const stem = fileName.replace(path.extname(fileName), '');
+    const thumbAbs = stem ? path.join(paths.imagesThumbDir, `${stem}.png`) : null;
+
+    const originalAbs =
+      mode === 'reference' && sourcePath ? sourcePath : path.join(paths.base, relRaw.replaceAll('/', path.sep));
+
+    const pickedAbs = thumbAbs && fs.existsSync(thumbAbs) ? thumbAbs : originalAbs;
+    if (!pickedAbs || !fs.existsSync(pickedAbs)) return { ok: true, imageId: id, palette: [] };
+
+    const cc = Math.max(1, Math.min(12, Number(colorCount) || 6));
+
+    let palette = [];
+    try {
+      const img = this.electronNativeImage.createFromPath(pickedAbs);
+      const resized = img.resize({ width: 96 });
+      const size = resized.getSize();
+      const bytes = resized.toBitmap();
+      palette = extractDominantPaletteFromBitmap({
+        width: size.width,
+        height: size.height,
+        bytes,
+        colorCount: cc,
+        channelOrder: 'bgra',
+      });
+    } catch {
+      palette = [];
+    }
+
+    await run(this.db, `UPDATE ImageAsset SET palette_json = ? WHERE image_id = ?`, [JSON.stringify(palette), id]);
+    await this._audit('image.palette.compute', characterId || null, {
+      imageId: id,
+      colorCount: cc,
+      paletteCount: palette.length,
+      source: thumbAbs && fs.existsSync(thumbAbs) ? 'thumb' : 'original',
+    });
+
+    return { ok: true, imageId: id, palette };
+  }
+
+  async ensureImagePalettes({ imageIds, colorCount = 6, maxImages = 2000 } = {}) {
+    const rawIds = Array.isArray(imageIds) ? imageIds : [];
+    const ids = [];
+    const seen = new Set();
+    for (const id of rawIds) {
+      const s = String(id ?? '').trim();
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      ids.push(s);
+      if (ids.length >= Math.max(1, Math.min(100_000, Number(maxImages) || 2000))) break;
+    }
+
+    const palettes = {};
+    for (const id of ids) {
+      try {
+        const res = await this.getImagePalette({ imageId: id, colorCount });
+        palettes[id] = Array.isArray(res?.palette) ? res.palette : [];
+      } catch {
+        palettes[id] = [];
+      }
+    }
+
+    return { ok: true, palettes };
   }
 
   async getImageAnnotations({ imageId } = {}) {

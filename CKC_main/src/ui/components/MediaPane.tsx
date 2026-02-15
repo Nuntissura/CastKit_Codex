@@ -13,6 +13,34 @@ type MediaImage = {
 
 type RatingOp = 'any' | '=' | '<' | '<=' | '>' | '>=';
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const s = String(hex ?? '').trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(s);
+  if (!m) return null;
+  const raw = m[1];
+  const n = parseInt(raw, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function distRgb(a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }): number {
+  const dr = Number(a.r) - Number(b.r);
+  const dg = Number(a.g) - Number(b.g);
+  const db = Number(a.b) - Number(b.b);
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function paletteMatchesColor(palette: string[], targetHex: string, threshold: number): boolean {
+  const target = hexToRgb(targetHex);
+  if (!target) return false;
+  const t = Math.max(0, Math.min(442, Number(threshold) || 0));
+  for (const c of palette) {
+    const rgb = hexToRgb(c);
+    if (!rgb) continue;
+    if (distRgb(rgb, target) <= t) return true;
+  }
+  return false;
+}
+
 function ratingFromKeyCode(code: string): number | null {
   switch (code) {
     case 'Digit0':
@@ -134,6 +162,14 @@ export function MediaPane({
   const [filterFavoriteOnly, setFilterFavoriteOnly] = React.useState<boolean>(false);
   const [filterRatingOp, setFilterRatingOp] = React.useState<RatingOp>('any');
   const [filterRatingValue, setFilterRatingValue] = React.useState<number>(0);
+  const [filterColorEnabled, setFilterColorEnabled] = React.useState<boolean>(false);
+  const [filterColorHex, setFilterColorHex] = React.useState<string>('#ff3b3b');
+  const [filterColorThreshold, setFilterColorThreshold] = React.useState<number>(70);
+  const [paletteById, setPaletteById] = React.useState<Record<string, string[]>>({});
+  const [paletteLoadBusy, setPaletteLoadBusy] = React.useState<boolean>(false);
+  const [paletteLoadError, setPaletteLoadError] = React.useState<string | null>(null);
+  const [paletteScanBusy, setPaletteScanBusy] = React.useState<boolean>(false);
+  const [paletteScanError, setPaletteScanError] = React.useState<string | null>(null);
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState<boolean>(false);
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
   const didUserToggleSlideshowRef = React.useRef<boolean>(false);
@@ -206,13 +242,50 @@ export function MediaPane({
     return images.filter((img) => {
       if (filterFavoriteOnly && !img.favorite) return false;
       if (!passesRatingFilter(img.rating, filterRatingOp, filterRatingValue)) return false;
+      if (filterColorEnabled) {
+        const pal = paletteById[String(img.id ?? '')] || [];
+        if (!pal.length) return false;
+        if (!paletteMatchesColor(pal, filterColorHex, filterColorThreshold)) return false;
+      }
       return true;
     });
-  }, [images, filterFavoriteOnly, filterRatingOp, filterRatingValue]);
+  }, [images, filterFavoriteOnly, filterRatingOp, filterRatingValue, filterColorEnabled, filterColorHex, filterColorThreshold, paletteById]);
 
-  const filtersActive = filterFavoriteOnly || filterRatingOp !== 'any';
+  const filtersActive = filterFavoriteOnly || filterRatingOp !== 'any' || filterColorEnabled;
   const hasAnyImages = images.length > 0;
   const noMatches = hasAnyImages && filteredImages.length === 0;
+
+  const imageIdsKey = React.useMemo(() => images.map((i) => String(i.id ?? '')).join('|'), [images]);
+
+  React.useEffect(() => {
+    if (!filterColorEnabled) return;
+    const ids = images.map((i) => String(i.id ?? '')).filter(Boolean);
+    if (ids.length === 0) return;
+
+    let cancelled = false;
+    setPaletteScanBusy(true);
+    setPaletteScanError(null);
+    window.ckc
+      .ensureImagePalettes({ imageIds: ids, colorCount: 6, maxImages: ids.length })
+      .then((res: any) => {
+        if (cancelled) return;
+        const next = res && typeof res === 'object' ? (res.palettes as Record<string, string[]>) : {};
+        if (!next || typeof next !== 'object') return;
+        setPaletteById((prev) => ({ ...prev, ...next }));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPaletteScanError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPaletteScanBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filterColorEnabled, imageIdsKey]);
 
   React.useEffect(() => {
     // Keep selection valid when the filtered image list changes.
@@ -252,6 +325,34 @@ export function MediaPane({
   const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedImages = React.useMemo(() => filteredImages.filter((i) => selectedSet.has(i.id)), [filteredImages, selectedSet]);
   const selectionCount = selectedImages.length;
+
+  React.useEffect(() => {
+    if (selectionCount !== 1 || !primarySelectedId) return;
+    if (paletteById[primarySelectedId]) return;
+
+    let cancelled = false;
+    setPaletteLoadBusy(true);
+    setPaletteLoadError(null);
+    window.ckc
+      .getImagePalette({ imageId: primarySelectedId, colorCount: 6 })
+      .then((res: any) => {
+        if (cancelled) return;
+        const pal = Array.isArray(res?.palette) ? res.palette.map((c: any) => String(c)).filter(Boolean) : [];
+        setPaletteById((prev) => ({ ...prev, [primarySelectedId]: pal }));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPaletteLoadError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPaletteLoadBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectionCount, primarySelectedId, paletteById]);
 
   React.useEffect(() => {
     void window.ckc.setReferenceSelection({ imageId: primarySelectedId });
@@ -330,6 +431,7 @@ export function MediaPane({
     setFilterFavoriteOnly(false);
     setFilterRatingOp('any');
     setFilterRatingValue(0);
+    setFilterColorEnabled(false);
   }, []);
 
   React.useEffect(() => {
@@ -869,6 +971,36 @@ export function MediaPane({
               </select>
             </label>
 
+            <div className={styles.filterItem} aria-label="Color filter">
+              <label className={styles.filterToggle}>
+                <input type="checkbox" checked={filterColorEnabled} onChange={(e) => setFilterColorEnabled(e.target.checked)} /> Color
+              </label>
+              <input
+                type="color"
+                value={filterColorHex}
+                onChange={(e) => {
+                  setFilterColorHex(e.target.value);
+                  if (!filterColorEnabled) setFilterColorEnabled(true);
+                }}
+                title="Pick a color"
+              />
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>±</span>
+              <input
+                type="range"
+                min={0}
+                max={220}
+                step={1}
+                value={String(filterColorThreshold)}
+                onChange={(e) => setFilterColorThreshold(Number(e.target.value) || 0)}
+                disabled={!filterColorEnabled}
+                title="Color distance threshold"
+              />
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', minWidth: 34, textAlign: 'right' }}>
+                {Math.max(0, Math.min(220, Number(filterColorThreshold) || 0))}
+              </span>
+              {filterColorEnabled && paletteScanBusy ? <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Scanningâ€¦</span> : null}
+            </div>
+
             {filtersActive ? (
               <button className={styles.clearFiltersBtn} onClick={clearFilters}>
                 Clear filters
@@ -912,10 +1044,24 @@ export function MediaPane({
       >
         {noMatches ? (
           <div className={styles.noMatches}>
-            <div className={styles.noMatchesTitle}>No images match filters.</div>
-            <button className={styles.noMatchesBtn} onClick={clearFilters} disabled={!filtersActive}>
-              Clear filters
-            </button>
+            {filterColorEnabled && paletteScanBusy ? (
+              <>
+                <div className={styles.noMatchesTitle}>Computing palettesâ€¦</div>
+                <div style={{ maxWidth: 560, textAlign: 'center', lineHeight: 1.4 }}>
+                  This runs once per image and caches in the Library DB. When it finishes, the color filter will apply.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={styles.noMatchesTitle}>No images match filters.</div>
+                <button className={styles.noMatchesBtn} onClick={clearFilters} disabled={!filtersActive}>
+                  Clear filters
+                </button>
+              </>
+            )}
+            {filterColorEnabled && paletteScanError ? (
+              <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 6, maxWidth: 640, textAlign: 'center' }}>{paletteScanError}</div>
+            ) : null}
           </div>
         ) : primarySelected && !viewerError ? (
           <img
@@ -1162,6 +1308,39 @@ export function MediaPane({
                 </datalist>
               </div>
             </div>
+
+            {selectionCount === 1 && primarySelected ? (
+              <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10, marginTop: 10 }} aria-label="Palette">
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ fontWeight: 800 }}>Palette</div>
+                  {paletteLoadBusy ? <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Computingâ€¦</div> : null}
+                </div>
+                {paletteLoadError ? <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 6 }}>{paletteLoadError}</div> : null}
+                <div className={styles.paletteRow} aria-label="Palette chips">
+                  {(paletteById[primarySelected.id] || []).map((c) => {
+                    const hex = String(c);
+                    const active = filterColorEnabled && hex.toLowerCase() === String(filterColorHex || '').toLowerCase();
+                    return (
+                      <button
+                        key={hex}
+                        type="button"
+                        className={styles.paletteChip}
+                        data-active={active ? '1' : '0'}
+                        style={{ background: hex }}
+                        title={`Filter by ${hex}`}
+                        onClick={(evt) => {
+                          evt.preventDefault();
+                          evt.stopPropagation();
+                          setFilterColorHex(hex);
+                          setFilterColorEnabled(true);
+                        }}
+                      />
+                    );
+                  })}
+                  {(paletteById[primarySelected.id] || []).length === 0 && !paletteLoadBusy ? <span className={styles.tagsEmpty}>(none)</span> : null}
+                </div>
+              </div>
+            ) : null}
 
             {showPins && pinsError ? <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 10 }}>{pinsError}</div> : null}
 

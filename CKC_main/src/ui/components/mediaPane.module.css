@@ -230,6 +230,33 @@
   gap: 8px;
 }
 
+.filterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paletteRow {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.paletteChip {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+}
+
+.paletteChip[data-active='1'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px rgba(255, 120, 120, 0.45) inset;
+}
+
 .noMatches {
   color: var(--text-secondary);
   padding: 24px;

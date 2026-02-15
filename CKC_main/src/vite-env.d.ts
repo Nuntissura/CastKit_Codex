@@ -505,6 +505,11 @@ interface Window {
     deleteImages: (params: { imageIds: string[]; deleteFiles?: boolean }) => Promise<CKCDeleteImagesResult>;
     repairMissingImagesByHash: (params: { scanDir: string; includeSubdirs?: boolean; dryRun?: boolean }) => Promise<CKCRepairMissingImagesByHashResult>;
     setImageMeta: (params: unknown) => Promise<unknown>;
+    getImagePalette: (params: { imageId: string; colorCount?: number } | unknown) => Promise<{ ok: true; imageId: string; palette: string[] }>;
+    ensureImagePalettes: (params: { imageIds: string[]; colorCount?: number; maxImages?: number } | unknown) => Promise<{
+      ok: true;
+      palettes: Record<string, string[]>;
+    }>;
     getImageAnnotations: (params: { imageId: string }) => Promise<{ ok: true; imageId: string; annotations: CKCImageAnnotations }>;
     setImageAnnotations: (params: { imageId: string; annotations: CKCImageAnnotations }) => Promise<{ ok: true }>;
     setImagesMetaBatch: (params: unknown) => Promise<unknown>;
