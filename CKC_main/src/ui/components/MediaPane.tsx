@@ -6,6 +6,8 @@ type MediaImage = {
   favorite: boolean;
   rating: number;
   notes: string;
+  sourceUrl?: string | null;
+  sourceNote?: string;
   tags: string[];
 };
 
@@ -113,7 +115,7 @@ export function MediaPane({
   selectImageId?: string | null;
   onSelectionChange?: (selectedIds: string[], primaryId: string | null) => void;
   onOpenDiagnostics?: () => void;
-  onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => void;
+  onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags' | 'sourceNote'>>) => void;
 }) {
   const [primarySelectedId, setPrimarySelectedId] = React.useState<string | null>(images[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>(() => (images[0]?.id ? [images[0].id] : []));
@@ -136,6 +138,7 @@ export function MediaPane({
   const [slideshowOn, setSlideshowOn] = React.useState<boolean>(false);
   const didUserToggleSlideshowRef = React.useRef<boolean>(false);
   const [draftNotes, setDraftNotes] = React.useState<string>('');
+  const [draftSourceNote, setDraftSourceNote] = React.useState<string>('');
   const [tagDraft, setTagDraft] = React.useState<string>('');
   const [viewerError, setViewerError] = React.useState<boolean>(false);
   const [reloadToken, setReloadToken] = React.useState<number>(0);
@@ -301,6 +304,8 @@ export function MediaPane({
 
   const isBusy = busyBatch || !!busyImageId || pinsBusy;
   const notesIsDirty = selectionCount === 1 && !!primarySelected && String(draftNotes ?? '') !== String(primarySelected.notes ?? '');
+  const sourceNoteIsDirty =
+    selectionCount === 1 && !!primarySelected && String(draftSourceNote ?? '') !== String(primarySelected.sourceNote ?? '');
   const didInitialSelectionRef = React.useRef<boolean>(false);
 
   const savePins = React.useCallback(
@@ -363,12 +368,14 @@ export function MediaPane({
   React.useEffect(() => {
     if (selectionCount !== 1 || !primarySelected) {
       setDraftNotes('');
+      setDraftSourceNote('');
       setViewerError(false);
       return;
     }
     setDraftNotes(String(primarySelected.notes ?? ''));
+    setDraftSourceNote(String(primarySelected.sourceNote ?? ''));
     setViewerError(false);
-  }, [selectionCount, primarySelected?.id, primarySelected?.notes]);
+  }, [selectionCount, primarySelected?.id, primarySelected?.notes, primarySelected?.sourceNote]);
 
   React.useEffect(() => {
     if (!autoOpenControlsOnSelect) return;
@@ -409,7 +416,7 @@ export function MediaPane({
   }, [showControls, primarySelectedId, reloadImageBacklinks]);
 
   const patchMetaSingle = React.useCallback(
-    async (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags'>>) => {
+    async (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags' | 'sourceNote'>>) => {
       setBusyImageId(imageId);
       try {
         await window.ckc.setImageMeta({ imageId, ...patch });
@@ -1157,6 +1164,65 @@ export function MediaPane({
             </div>
 
             {showPins && pinsError ? <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 10 }}>{pinsError}</div> : null}
+
+            {selectionCount === 1 && primarySelected ? (
+              <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10, marginTop: 10 }} aria-label="Provenance">
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Source URL</div>
+                  {String(primarySelected.sourceUrl ?? '').trim() ? (
+                    <>
+                      <code
+                        style={{
+                          fontSize: '0.85rem',
+                          maxWidth: '64ch',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          display: 'inline-block',
+                        }}
+                        title={String(primarySelected.sourceUrl ?? '')}
+                      >
+                        {String(primarySelected.sourceUrl ?? '')}
+                      </code>
+                      <button
+                        className={styles.tagBtn}
+                        disabled={isBusy}
+                        onClick={() => window.ckc.copyText(String(primarySelected.sourceUrl ?? ''))}
+                        title="Copy source URL"
+                      >
+                        Copy
+                      </button>
+                    </>
+                  ) : (
+                    <span className={styles.tagsEmpty}>(none)</span>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Source note</div>
+                  <input
+                    className={styles.tagInput}
+                    style={{ flex: 1, minWidth: 260 }}
+                    value={draftSourceNote}
+                    onChange={(e) => setDraftSourceNote(e.target.value)}
+                    onBlur={() => {
+                      if (!sourceNoteIsDirty) return;
+                      void patchMetaSingle(primarySelected.id, { sourceNote: String(draftSourceNote ?? '') });
+                    }}
+                    placeholder="(optional)"
+                    disabled={isBusy}
+                  />
+                  <button
+                    className={styles.notesSave}
+                    disabled={isBusy || !sourceNoteIsDirty}
+                    onClick={() => void patchMetaSingle(primarySelected.id, { sourceNote: String(draftSourceNote ?? '') })}
+                    title="Save source note"
+                  >
+                    {isBusy ? 'Saving…' : sourceNoteIsDirty ? 'Save' : 'Saved'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }} aria-label="Backlinks">
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>

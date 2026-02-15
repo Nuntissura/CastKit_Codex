@@ -1596,6 +1596,31 @@ export function CharacterView({
     }
   };
 
+  const importUrlForCharacter = async () => {
+    if (!characterId) return;
+    const proposed = window.prompt('Import image from URL:', '');
+    if (proposed == null) return;
+    const url = String(proposed || '').trim();
+    if (!url) return;
+
+    setIsImportingImages(true);
+    setError(null);
+    try {
+      const res = await window.ckc.importFromUrl({ characterId, url });
+      const importedCount = Array.isArray((res as any)?.imported) ? (res as any).imported.length : 0;
+      const duplicateCount = Array.isArray((res as any)?.duplicates) ? (res as any).duplicates.length : 0;
+      if (importedCount === 0 && duplicateCount > 0) {
+        setError('URL appears to be a duplicate (skipped).');
+      }
+      const c = await window.ckc.getCharacter(characterId);
+      setCharacter(c);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImportingImages(false);
+    }
+  };
+
   const pasteClipboardImageForCharacter = React.useCallback(async () => {
     if (!characterId) return;
     setIsImportingImages(true);
@@ -2664,6 +2689,14 @@ export function CharacterView({
                 title="Import images into this character"
               >
                 {isImportingImages ? 'Importing...' : 'Import images...'}
+              </button>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => void importUrlForCharacter()}
+                disabled={!characterId || isImportingImages}
+                title="Import an image from a URL into this character"
+              >
+                Import URL...
               </button>
               <button
                 className={styles.btnSecondary}

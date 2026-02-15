@@ -553,6 +553,32 @@ export function LibraryView({
     }
   }, [reloadInbox]);
 
+  const importUrlToInbox = React.useCallback(async () => {
+    const proposed = window.prompt('Import image from URL to Inbox:', '');
+    if (proposed == null) return;
+    const url = String(proposed || '').trim();
+    if (!url) return;
+
+    setInboxError(null);
+    setInboxBusy(true);
+    try {
+      const res = await window.ckc.importFromUrl({ target: 'inbox', url });
+      const importedCount = Array.isArray((res as any)?.imported) ? (res as any).imported.length : 0;
+      const duplicateCount = Array.isArray((res as any)?.duplicates) ? (res as any).duplicates.length : 0;
+      if (importedCount === 0 && duplicateCount > 0) {
+        setInboxError('URL appears to be a duplicate (skipped).');
+      }
+      reloadInbox();
+      setLeftMode('inbox');
+      setShowInboxBar(true);
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setInboxError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInboxBusy(false);
+    }
+  }, [reloadInbox]);
+
   const scanInbox = React.useCallback(async () => {
     const dir = String(inboxDir || '').trim();
     if (!dir) {
@@ -1322,6 +1348,9 @@ export function LibraryView({
             </label>
             <button disabled={inboxBusy || !inboxDir} onClick={() => void scanInbox()}>
               {inboxBusy ? 'Working…' : 'Scan Inbox'}
+            </button>
+            <button disabled={inboxBusy} onClick={() => void importUrlToInbox()} title="Import an image from a URL into the Inbox">
+              Import URL...
             </button>
             <button disabled={inboxBusy} onClick={() => void pasteClipboardToInbox()} title="Ctrl+V / Cmd+V also works (when not typing)">
               Paste image

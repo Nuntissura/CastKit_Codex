@@ -1062,6 +1062,28 @@ function registerIpcHandlers() {
         }
     });
 
+    ipcMain.handle('ckc:importFromUrl', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params && typeof params === 'object' ? params : {};
+        const target = String(p.target ?? '').trim().toLowerCase();
+        let characterId = String(p.characterId ?? '').trim();
+        if (!characterId && target === 'inbox') {
+            characterId = await lib.ensureInboxCharacter();
+        }
+        if (!characterId) throw new Error('Missing characterId');
+
+        const url = String(p.url ?? '').trim();
+        if (!url) throw new Error('Missing url');
+
+        const res = await lib.importFromUrl({
+            characterId,
+            url,
+            sourceNote: p.sourceNote !== undefined ? String(p.sourceNote ?? '') : undefined,
+        });
+
+        return { ok: true, imported: res.imported || [], duplicates: res.duplicates || [] };
+    });
+
     ipcMain.handle('ckc:importImages', async (_evt, params) => {
         const lib = await ensureLibrary();
         const characterId = params && typeof params === 'object' ? params.characterId : null;

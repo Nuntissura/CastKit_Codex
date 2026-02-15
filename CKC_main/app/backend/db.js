@@ -96,6 +96,8 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', 'tags_json', "TEXT NOT NULL DEFAULT '[]'");
   await ensureColumn(db, 'ImageAsset', 'storage_mode', "TEXT NOT NULL DEFAULT 'copy'");
   await ensureColumn(db, 'ImageAsset', 'source_path', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'source_url', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'source_note', 'TEXT');
 
   // Tag rules can optionally be template-scoped.
   await ensureColumn(db, 'TagRule', 'template_id', 'TEXT');

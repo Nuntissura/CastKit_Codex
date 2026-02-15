@@ -19,6 +19,8 @@ type CKCGlobalImage = {
   favorite: boolean;
   rating: number;
   notes: string;
+  sourceUrl: string | null;
+  sourceNote: string;
   tags: string[];
   addedAt: string;
 };
@@ -28,6 +30,8 @@ type CKCInboxImage = {
   favorite: boolean;
   rating: number;
   notes: string;
+  sourceUrl: string | null;
+  sourceNote: string;
   tags: string[];
   addedAt: string;
 };
@@ -88,6 +92,8 @@ type CKCCharacter = {
     tags: string[];
     storageMode: 'copy' | 'reference';
     sourcePath: string | null;
+    sourceUrl: string | null;
+    sourceNote: string;
     addedAt: string;
   }>;
 };
@@ -490,6 +496,7 @@ interface Window {
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
+    importFromUrl: (params: unknown) => Promise<unknown>;
     importClipboardImage: (params: { target?: 'inbox'; characterId?: string } | unknown) => Promise<CKCClipboardImageImportResult>;
     scanInbox: (params?: { inboxDir?: string; includeSubdirs?: boolean } | null) => Promise<CKCInboxScanResult>;
     moveImagesToCharacter: (params: { imageIds: string[]; targetCharacterId: string }) => Promise<CKCMoveImagesResult>;

@@ -1,5 +1,8 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { Readable, Transform } = require('stream');
+const { pipeline } = require('stream/promises');
 
 const { randomId, sha256Hex } = require('./crypto');
 const { openDb, initSchema, run, get, all } = require('./db');
@@ -399,7 +402,7 @@ class CKCLibrary {
     const inboxId = await this.ensureInboxCharacter();
     const rows = await all(
       this.db,
-      `SELECT image_id, favorite, rating, notes, tags_json, added_at
+      `SELECT image_id, favorite, rating, notes, tags_json, source_url, source_note, added_at
        FROM ImageAsset
        WHERE character_id = ?
        ORDER BY added_at DESC`,
@@ -410,6 +413,8 @@ class CKCLibrary {
       favorite: !!img.favorite,
       rating: img.rating,
       notes: img.notes ?? '',
+      sourceUrl: img.source_url ?? null,
+      sourceNote: img.source_note ?? '',
       tags: (() => {
         try {
           const parsed = JSON.parse(img.tags_json ?? '[]');
@@ -1367,7 +1372,7 @@ class CKCLibrary {
   async listGlobalCarouselImages({ preferFrontpage = true } = {}) {
     const rows = await all(
       this.db,
-      `SELECT image_id, character_id, favorite, rating, notes, tags_json, added_at
+      `SELECT image_id, character_id, favorite, rating, notes, tags_json, source_url, source_note, added_at
        FROM ImageAsset
        ORDER BY favorite DESC, rating DESC, added_at DESC`
     );
@@ -1378,6 +1383,8 @@ class CKCLibrary {
       favorite: !!r.favorite,
       rating: Number(r.rating) || 0,
       notes: r.notes ?? '',
+      sourceUrl: r.source_url ?? null,
+      sourceNote: r.source_note ?? '',
       tags: (() => {
         try {
           const raw = r.tags_json ?? '[]';
@@ -2371,7 +2378,7 @@ class CKCLibrary {
     );
     const images = await all(
       this.db,
-      `SELECT image_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path, added_at
+      `SELECT image_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note, added_at
        FROM ImageAsset WHERE character_id = ?
        ORDER BY favorite DESC, rating DESC, added_at DESC`,
       [characterId]
@@ -2413,6 +2420,8 @@ class CKCLibrary {
         })(),
         storageMode: img.storage_mode ?? 'copy',
         sourcePath: img.source_path ?? null,
+        sourceUrl: img.source_url ?? null,
+        sourceNote: img.source_note ?? '',
         addedAt: img.added_at,
       })),
     };
@@ -3655,13 +3664,17 @@ class CKCLibrary {
     return { ok: true, issues: res.issues };
   }
 
-  async importImages({ characterId, filePaths, duplicatePolicy = 'skip' }) {
+  async importImages({ characterId, filePaths, duplicatePolicy = 'skip', sourceUrl, sourceNote, sourcePath } = {}) {
     const paths = this.getCharacterPaths(characterId);
     ensureDir(paths.imagesOriginalDir);
     ensureDir(paths.imagesThumbDir);
 
     const imported = [];
     const duplicates = [];
+
+    const sourceUrlText = sourceUrl !== undefined ? String(sourceUrl || '').trim() || null : null;
+    const sourceNoteText = sourceNote !== undefined ? String(sourceNote ?? '') : null;
+    const sourcePathOverride = sourcePath !== undefined ? (sourcePath == null ? null : String(sourcePath)) : undefined;
 
     // fileHash -> { existing: number, imported: number }
     const counts = new Map();
@@ -3706,6 +3719,8 @@ class CKCLibrary {
       // Thumbnail generation (best-effort).
       let thumbRel = null;
       const imageId = randomId('img_');
+      const sourcePathText = sourcePathOverride !== undefined ? sourcePathOverride : srcPath;
+
       if (this.electronNativeImage) {
         try {
           const img = this.electronNativeImage.createFromPath(dest);
@@ -3717,24 +3732,24 @@ class CKCLibrary {
 
           await run(
             this.db,
-            `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, width, height, favorite, rating, notes, tags_json, storage_mode, source_path)
-             VALUES(?, ?, ?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?)`,
-            [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, size.width, size.height, srcPath]
+            `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, width, height, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note)
+             VALUES(?, ?, ?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?, ?, ?)`,
+            [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, size.width, size.height, sourcePathText, sourceUrlText, sourceNoteText]
           );
         } catch {
           await run(
             this.db,
-            `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path)
-             VALUES(?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?)`,
-            [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, srcPath]
+            `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note)
+             VALUES(?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?, ?, ?)`,
+            [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, sourcePathText, sourceUrlText, sourceNoteText]
           );
         }
       } else {
         await run(
           this.db,
-          `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path)
-           VALUES(?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?)`,
-          [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, srcPath]
+          `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note)
+           VALUES(?, ?, ?, ?, 0, 0, '', '[]', 'copy', ?, ?, ?)`,
+          [imageId, characterId, rel.replaceAll('\\', '/'), fileHash, sourcePathText, sourceUrlText, sourceNoteText]
         );
       }
 
@@ -3754,6 +3769,123 @@ class CKCLibrary {
     });
 
     return { imported, duplicates };
+  }
+
+  async importFromUrl({ characterId, url, sourceNote } = {}) {
+    const targetId = String(characterId || '').trim();
+    if (!targetId) throw new Error('characterId is required');
+
+    const rawUrl = String(url || '').trim();
+    if (!rawUrl) throw new Error('url is required');
+
+    let parsed = null;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      throw new Error('Invalid URL');
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Only http(s) URLs are supported');
+    }
+
+    const maxBytes = 100 * 1024 * 1024;
+    const timeoutMs = 5 * 60_000;
+
+    const allowedExt = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+    const extByContentType = new Map([
+      ['image/png', '.png'],
+      ['image/jpeg', '.jpg'],
+      ['image/jpg', '.jpg'],
+      ['image/webp', '.webp'],
+      ['image/gif', '.gif'],
+      ['image/bmp', '.bmp'],
+    ]);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error('Timed out downloading URL')), timeoutMs);
+
+    let tmpPath = null;
+    let finalUrl = rawUrl;
+
+    try {
+      const res = await fetch(parsed.toString(), { redirect: 'follow', signal: controller.signal });
+      finalUrl = String(res?.url || rawUrl);
+
+      if (!res.ok) {
+        throw new Error(`Download failed (HTTP ${res.status})`);
+      }
+
+      const contentTypeRaw = String(res.headers.get('content-type') || '').toLowerCase();
+      const contentType = contentTypeRaw.split(';')[0].trim();
+
+      let extFromUrl = null;
+      try {
+        extFromUrl = path.extname(new URL(finalUrl).pathname).toLowerCase();
+      } catch {
+        extFromUrl = path.extname(parsed.pathname).toLowerCase();
+      }
+      const urlExt = allowedExt.has(extFromUrl) ? extFromUrl : null;
+
+      const isImageContentType = contentType.startsWith('image/');
+      const isAllowedGenericContentType = !contentType || contentType === 'application/octet-stream';
+      if (!isImageContentType && !isAllowedGenericContentType) {
+        throw new Error(`Unsupported content-type: ${contentTypeRaw || '(missing)'}`);
+      }
+
+      const ext = extByContentType.get(contentType) || urlExt;
+      if (!ext || !allowedExt.has(ext)) {
+        throw new Error(`Unsupported or unknown image type (content-type: ${contentTypeRaw || '(missing)'})`);
+      }
+
+      const contentLength = Number(res.headers.get('content-length') || 0);
+      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+        throw new Error('File is too large (> 100 MB)');
+      }
+
+      if (!res.body) throw new Error('Download failed (empty body)');
+
+      const tmpName = `ckc_urlimport_${Date.now()}_${Math.random().toString(16).slice(2)}${ext}`;
+      tmpPath = path.join(os.tmpdir(), tmpName);
+
+      let downloaded = 0;
+      const limiter = new Transform({
+        transform(chunk, _enc, cb) {
+          downloaded += chunk.length;
+          if (downloaded > maxBytes) return cb(new Error('File is too large (> 100 MB)'));
+          cb(null, chunk);
+        },
+      });
+
+      await pipeline(Readable.fromWeb(res.body), limiter, fs.createWriteStream(tmpPath));
+
+      const out = await this.importImages({
+        characterId: targetId,
+        filePaths: [tmpPath],
+        duplicatePolicy: 'skip',
+        sourceUrl: finalUrl,
+        sourceNote: sourceNote !== undefined ? String(sourceNote ?? '') : null,
+        sourcePath: null,
+      });
+
+      await this._audit('web.importFromUrl', targetId, {
+        url: rawUrl,
+        finalUrl,
+        importedCount: out.imported?.length ?? 0,
+        duplicateCount: out.duplicates?.length ?? 0,
+      });
+
+      return out;
+    } finally {
+      clearTimeout(timer);
+      if (tmpPath) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {
+          // ignore best-effort cleanup
+        }
+      }
+    }
   }
 
   async moveImagesToCharacter({ imageIds, targetCharacterId }) {
@@ -4232,7 +4364,7 @@ class CKCLibrary {
     return { ok: true, reportPath, ...report };
   }
 
-  async setImageMeta({ imageId, favorite, rating, notes, tags }) {
+  async setImageMeta({ imageId, favorite, rating, notes, tags, sourceNote }) {
     const row = await get(this.db, 'SELECT character_id FROM ImageAsset WHERE image_id = ?', [imageId]);
 
     let tagsJson = null;
@@ -4256,13 +4388,15 @@ class CKCLibrary {
        SET favorite = COALESCE(?, favorite),
            rating = COALESCE(?, rating),
            notes = COALESCE(?, notes),
-           tags_json = COALESCE(?, tags_json)
+           tags_json = COALESCE(?, tags_json),
+           source_note = COALESCE(?, source_note)
        WHERE image_id = ?`,
       [
         favorite !== undefined ? (favorite ? 1 : 0) : null,
         rating !== undefined ? Math.max(0, Math.min(5, Number(rating) || 0)) : null,
         notes !== undefined ? String(notes ?? '') : null,
         tagsJson,
+        sourceNote !== undefined ? String(sourceNote ?? '') : null,
         imageId,
       ]
     );
