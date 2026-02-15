@@ -86,7 +86,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0068 | Reference window power modes | DONE | Codex | Persisted opacity + click-through + hotkey toggle. |
 | WP-0069 | Collections / playlists | DONE | Codex | Collections CRUD + slideshow + export (Export Hub + Character action). |
 | WP-0070 | Character relationship map | DONE | Codex | Structured edges + graph view (Character → Tools editor + Library graph). |
-| WP-0071 | Moodboard arrange tools | BACKLOG | Codex | Align/distribute/group/tidy (undoable). |
+| WP-0071 | Moodboard arrange tools | IN_PROGRESS | Codex | Align/distribute/group/tidy (undoable). |
 | WP-0072 | Command palette (Ctrl+K) | BACKLOG | Codex | Keyboard-first navigation + actions. |
 | WP-0073 | Backup/restore wizard | BACKLOG | Codex | Snapshot + restore with manifest/checksums. |
 

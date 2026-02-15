@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add basic arrange tools for moodboard selections: align, distribute, group/ungroup, and a simple auto-pack “tidy” action.
@@ -10,7 +10,7 @@ Add basic arrange tools for moodboard selections: align, distribute, group/ungro
 ## Why
 - Huge UX win once boards get busy (Milanote-like productivity).
 - Complements existing layers + transform tools.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.18.
+- Spec: `CastKit_Codex_Spec_v00.047.md` §11.18.
 
 ## Scope
 ### In
@@ -33,4 +33,3 @@ Add basic arrange tools for moodboard selections: align, distribute, group/ungro
 
 ## Notes
 - Do NOT touch `D:`.
-
