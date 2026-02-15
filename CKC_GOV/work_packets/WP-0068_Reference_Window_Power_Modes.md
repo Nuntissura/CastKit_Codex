@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Enhance the pop-out reference window with opacity and click-through, plus quick toggles/hotkeys.
@@ -10,7 +10,7 @@ Enhance the pop-out reference window with opacity and click-through, plus quick 
 ## Why
 - PureRef-like “overlay” workflows (trace/compare while working elsewhere).
 - High ROI for artist/reference use without adding heavy UI.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.15.
+- Spec: `CastKit_Codex_Spec_v00.044.md` §11.15.
 
 ## Scope
 ### In
@@ -30,4 +30,3 @@ Enhance the pop-out reference window with opacity and click-through, plus quick 
 
 ## Notes
 - Do NOT touch `D:`.
-
