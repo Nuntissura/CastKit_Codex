@@ -12,6 +12,7 @@ type MoodboardTool =
   | 'transform'
   | 'text'
   | 'shape'
+  | 'connector'
   | 'bucket'
   | 'gradient';
 type MoodboardDrawTool = 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'eraser';
@@ -91,6 +92,22 @@ export type MoodboardShape = {
   locked?: boolean;
 };
 
+export type MoodboardConnector = {
+  id: string;
+  kind: 'line' | 'arrow';
+  ax: number; // normalized endpoint A x
+  ay: number; // normalized endpoint A y
+  bx: number; // normalized endpoint B x
+  by: number; // normalized endpoint B y
+  z?: number; // z-order (higher draws on top)
+  color?: string; // CSS color (prefer #RRGGBB)
+  width?: number; // px
+  name?: string;
+  groupId?: string;
+  hidden?: boolean;
+  locked?: boolean;
+};
+
 export type MoodboardState = {
   version: 1;
   background?:
@@ -99,6 +116,7 @@ export type MoodboardState = {
     | { kind: 'gradient'; from: string; to: string; angle: number; mode?: 'linear' | 'radial' };
   strokes: MoodboardStroke[];
   shapes?: MoodboardShape[];
+  connectors?: MoodboardConnector[];
   images: MoodboardImage[];
   texts?: MoodboardText[];
   strokesHidden?: boolean;
@@ -106,12 +124,13 @@ export type MoodboardState = {
 };
 
 type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
-type MoodboardItemKind = 'image' | 'text' | 'shape';
+type MoodboardItemKind = 'image' | 'text' | 'shape' | 'connector';
 type SelectedItem = { kind: MoodboardItemKind; id: string };
 type Selection = SelectedItem[];
 
 const KIND_Z_BASE: Record<MoodboardItemKind, number> = {
   shape: 0,
+  connector: 500,
   image: 1000,
   text: 2000,
 };
@@ -164,6 +183,8 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   const texts = Array.isArray(value.texts) ? value.texts : [];
   const rawShapes = (value as any)?.shapes;
   const shapes = Array.isArray(rawShapes) ? (rawShapes as MoodboardShape[]) : [];
+  const rawConnectors = (value as any)?.connectors;
+  const connectors = Array.isArray(rawConnectors) ? (rawConnectors as MoodboardConnector[]) : [];
   let changed = false;
   const nextImages = images.map((img) => {
     if (img && typeof img.id === 'string' && img.id.trim().length) return img;
@@ -179,6 +200,14 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
     return { ...(s as any), id: hasId ? String(s.id) : makeMoodId('mbs_'), shape } as MoodboardShape;
   });
 
+  const nextConnectors = connectors.map((c: any) => {
+    const hasId = !!(c && typeof c.id === 'string' && c.id.trim().length);
+    const kind = c?.kind === 'arrow' ? 'arrow' : 'line';
+    if (hasId && (c?.kind === 'line' || c?.kind === 'arrow')) return c as MoodboardConnector;
+    changed = true;
+    return { ...(c as any), id: hasId ? String(c.id) : makeMoodId('mbc_'), kind } as MoodboardConnector;
+  });
+
   const nextTexts = texts.map((t) => {
     const hasId = !!(t && typeof t.id === 'string' && t.id.trim().length);
     const nextText = typeof (t as any)?.text === 'string' ? String((t as any).text) : '';
@@ -188,9 +217,11 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   });
 
   if (rawShapes !== undefined && !Array.isArray(rawShapes)) changed = true;
+  if (rawConnectors !== undefined && !Array.isArray(rawConnectors)) changed = true;
   if (!changed) return value;
   const next: MoodboardState = { ...value, images: nextImages };
   if (shapes.length || rawShapes !== undefined) next.shapes = nextShapes;
+  if (connectors.length || rawConnectors !== undefined) next.connectors = nextConnectors;
   if (texts.length || value.texts) next.texts = nextTexts;
   return next;
 }
@@ -221,7 +252,10 @@ export function MoodboardCanvas({
           kind: 'group' | 'item';
           groupId?: string;
           bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
-          items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }>;
+          items: Array<
+            | { kind: 'connector'; id: string; startAX: number; startAY: number; startBX: number; startBY: number }
+            | { kind: Exclude<MoodboardItemKind, 'connector'>; id: string; startX: number; startY: number }
+          >;
         }>;
         moved: boolean;
       }
@@ -230,7 +264,7 @@ export function MoodboardCanvas({
     | null
     | {
         kind: 'item';
-        itemKind: MoodboardItemKind;
+        itemKind: Exclude<MoodboardItemKind, 'connector'>;
         id: string;
         handle: ResizeHandle;
         startItem: MoodboardImage | MoodboardText | MoodboardShape;
@@ -242,7 +276,10 @@ export function MoodboardCanvas({
         groupId: string;
         handle: ResizeHandle;
         startBounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
-        startItems: Array<{ kind: MoodboardItemKind; id: string; x: number; y: number; w: number; h: number; locked?: boolean }>;
+        startItems: Array<
+          | { kind: 'connector'; id: string; ax: number; ay: number; bx: number; by: number; locked?: boolean }
+          | { kind: Exclude<MoodboardItemKind, 'connector'>; id: string; x: number; y: number; w: number; h: number; locked?: boolean }
+        >;
         startState: MoodboardState;
         moved: boolean;
       }
@@ -252,6 +289,7 @@ export function MoodboardCanvas({
   const sizeRef = React.useRef<number>(3);
   const colorRef = React.useRef<string>('#111111');
   const shapeKindRef = React.useRef<'rect' | 'ellipse'>('rect');
+  const connectorKindRef = React.useRef<'line' | 'arrow'>('line');
   const gradientToRef = React.useRef<string>('#ffffff');
   const gradientAngleRef = React.useRef<number>(0);
   const gradientModeRef = React.useRef<'linear' | 'radial'>('linear');
@@ -272,6 +310,12 @@ export function MoodboardCanvas({
   const shapeDragRef = React.useRef<
     null | { startPt: { x: number; y: number }; startState: MoodboardState; shapeId: string; shape: 'rect' | 'ellipse'; moved: boolean }
   >(null);
+  const connectorDragRef = React.useRef<
+    null | { startPt: { x: number; y: number }; startState: MoodboardState; connectorId: string; moved: boolean }
+  >(null);
+  const connectorEditRef = React.useRef<
+    null | { startState: MoodboardState; connectorId: string; endpoint: 'a' | 'b'; moved: boolean }
+  >(null);
   const viewRef = React.useRef<ViewTransform>({ zoom: 1, panX: 0, panY: 0 });
   const panDragRef = React.useRef<null | { startSX: number; startSY: number; startPanX: number; startPanY: number }>(null);
   const isSpaceDownRef = React.useRef<boolean>(false);
@@ -282,6 +326,7 @@ export function MoodboardCanvas({
   const [size, setSize] = React.useState<number>(3);
   const [color, setColor] = React.useState<string>('#111111');
   const [shapeKind, setShapeKind] = React.useState<'rect' | 'ellipse'>('rect');
+  const [connectorKind, setConnectorKind] = React.useState<'line' | 'arrow'>('line');
   const [gradientTo, setGradientTo] = React.useState<string>('#ffffff');
   const [gradientAngle, setGradientAngle] = React.useState<number>(0);
   const [gradientMode, setGradientMode] = React.useState<'linear' | 'radial'>('linear');
@@ -320,8 +365,10 @@ export function MoodboardCanvas({
     toolRef.current = tool;
     if (tool !== 'move' && tool !== 'transform') dragRef.current = null;
     if (tool !== 'transform') resizeRef.current = null;
+    if (tool !== 'transform') connectorEditRef.current = null;
     if (tool !== 'gradient') gradientDragRef.current = null;
     if (tool !== 'shape') shapeDragRef.current = null;
+    if (tool !== 'connector') connectorDragRef.current = null;
   }, [tool]);
 
   React.useEffect(() => {
@@ -335,6 +382,10 @@ export function MoodboardCanvas({
   React.useEffect(() => {
     shapeKindRef.current = shapeKind;
   }, [shapeKind]);
+
+  React.useEffect(() => {
+    connectorKindRef.current = connectorKind;
+  }, [connectorKind]);
 
   React.useEffect(() => {
     gradientToRef.current = gradientTo;
@@ -353,18 +404,21 @@ export function MoodboardCanvas({
     const images = Array.isArray(value.images) ? value.images : [];
     const texts = Array.isArray(value.texts) ? value.texts : [];
     const shapes = Array.isArray(value.shapes) ? value.shapes : [];
+    const connectors = Array.isArray(value.connectors) ? value.connectors : [];
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
     const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const next = selection.filter((sel) => {
       if (sel.kind === 'image') return !!imageById.get(sel.id) && !imageById.get(sel.id)?.hidden;
       if (sel.kind === 'text') return !!textById.get(sel.id) && !textById.get(sel.id)?.hidden;
-      return !!shapeById.get(sel.id) && !shapeById.get(sel.id)?.hidden;
+      if (sel.kind === 'shape') return !!shapeById.get(sel.id) && !shapeById.get(sel.id)?.hidden;
+      return !!connectorById.get(sel.id) && !connectorById.get(sel.id)?.hidden;
     });
     if (next.length === selection.length && next.every((x, i) => x.kind === selection[i].kind && x.id === selection[i].id)) return;
     selectionRef.current = next;
     setSelection(next);
-  }, [selection, value.images, value.texts, value.shapes]);
+  }, [selection, value.images, value.texts, value.shapes, value.connectors]);
 
   const redraw = React.useCallback(() => {
     const canvas = canvasRef.current;
@@ -374,10 +428,12 @@ export function MoodboardCanvas({
 
     const current = valueRef.current;
     const shapes = Array.isArray(current.shapes) ? current.shapes : [];
+    const connectors = Array.isArray(current.connectors) ? current.connectors : [];
     const images = Array.isArray(current.images) ? current.images : [];
     const texts = Array.isArray(current.texts) ? current.texts : [];
     const strokes = Array.isArray(current.strokes) ? current.strokes : [];
     const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
 
@@ -385,14 +441,21 @@ export function MoodboardCanvas({
     const groupIds = new Set<string>();
     for (const sel of selection) {
       const item =
-        sel.kind === 'image' ? imageById.get(sel.id) : sel.kind === 'text' ? textById.get(sel.id) : shapeById.get(sel.id);
+        sel.kind === 'image'
+          ? imageById.get(sel.id)
+          : sel.kind === 'text'
+            ? textById.get(sel.id)
+            : sel.kind === 'shape'
+              ? shapeById.get(sel.id)
+              : connectorById.get(sel.id);
       const gid = String((item as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
 
     const selectionUnits: Array<{ kind: 'group' | 'item'; key: string; bounds: { left: number; top: number; right: number; bottom: number } }> = [];
     for (const gid of groupIds) {
-      const members: Array<MoodboardImage | MoodboardText | MoodboardShape> = [];
+      const members: Array<MoodboardImage | MoodboardText | MoodboardShape | MoodboardConnector> = [];
+      for (const c of connectors) if (c && !c.hidden && String((c as any).groupId ?? '') === gid) members.push(c);
       for (const s of shapes) if (s && !s.hidden && String((s as any).groupId ?? '') === gid) members.push(s);
       for (const img of images) if (img && !img.hidden && String((img as any).groupId ?? '') === gid) members.push(img);
       for (const t of texts) if (t && !t.hidden && String((t as any).groupId ?? '') === gid) members.push(t);
@@ -402,29 +465,62 @@ export function MoodboardCanvas({
       let right = -Infinity;
       let bottom = -Infinity;
       for (const m of members) {
-        const cx = Number((m as any).x) || 0;
-        const cy = Number((m as any).y) || 0;
-        const w = Number((m as any).w) || 0;
-        const h = Number((m as any).h) || 0;
-        left = Math.min(left, cx - w / 2);
-        top = Math.min(top, cy - h / 2);
-        right = Math.max(right, cx + w / 2);
-        bottom = Math.max(bottom, cy + h / 2);
+        if ((m as any).ax !== undefined && (m as any).bx !== undefined) {
+          const ax = Number((m as any).ax) || 0;
+          const ay = Number((m as any).ay) || 0;
+          const bx = Number((m as any).bx) || 0;
+          const by = Number((m as any).by) || 0;
+          left = Math.min(left, Math.min(ax, bx));
+          top = Math.min(top, Math.min(ay, by));
+          right = Math.max(right, Math.max(ax, bx));
+          bottom = Math.max(bottom, Math.max(ay, by));
+        } else {
+          const cx = Number((m as any).x) || 0;
+          const cy = Number((m as any).y) || 0;
+          const w = Number((m as any).w) || 0;
+          const h = Number((m as any).h) || 0;
+          left = Math.min(left, cx - w / 2);
+          top = Math.min(top, cy - h / 2);
+          right = Math.max(right, cx + w / 2);
+          bottom = Math.max(bottom, cy + h / 2);
+        }
       }
       selectionUnits.push({ kind: 'group', key: `g:${gid}`, bounds: { left, top, right, bottom } });
     }
 
     for (const sel of selection) {
       const item =
-        sel.kind === 'image' ? imageById.get(sel.id) : sel.kind === 'text' ? textById.get(sel.id) : shapeById.get(sel.id);
+        sel.kind === 'image'
+          ? imageById.get(sel.id)
+          : sel.kind === 'text'
+            ? textById.get(sel.id)
+            : sel.kind === 'shape'
+              ? shapeById.get(sel.id)
+              : connectorById.get(sel.id);
       if (!item || (item as any).hidden) continue;
       const gid = String((item as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue; // covered by group unit
-      const cx = Number((item as any).x) || 0;
-      const cy = Number((item as any).y) || 0;
-      const w = Number((item as any).w) || 0;
-      const h = Number((item as any).h) || 0;
-      selectionUnits.push({ kind: 'item', key: `${sel.kind}:${sel.id}`, bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2 } });
+      if (sel.kind === 'connector') {
+        const ax = Number((item as any).ax) || 0;
+        const ay = Number((item as any).ay) || 0;
+        const bx = Number((item as any).bx) || 0;
+        const by = Number((item as any).by) || 0;
+        selectionUnits.push({
+          kind: 'item',
+          key: `${sel.kind}:${sel.id}`,
+          bounds: { left: Math.min(ax, bx), top: Math.min(ay, by), right: Math.max(ax, bx), bottom: Math.max(ay, by) },
+        });
+      } else {
+        const cx = Number((item as any).x) || 0;
+        const cy = Number((item as any).y) || 0;
+        const w = Number((item as any).w) || 0;
+        const h = Number((item as any).h) || 0;
+        selectionUnits.push({
+          kind: 'item',
+          key: `${sel.kind}:${sel.id}`,
+          bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2 },
+        });
+      }
     }
 
     const dpr = window.devicePixelRatio || 1;
@@ -562,6 +658,46 @@ export function MoodboardCanvas({
       ctx.restore();
     };
 
+    const drawConnectorItem = (c: MoodboardConnector) => {
+      if (!c) return;
+      if (c.hidden) return;
+      const ax = (Number(c.ax) || 0) * rect.width;
+      const ay = (Number(c.ay) || 0) * rect.height;
+      const bx = (Number(c.bx) || 0) * rect.width;
+      const by = (Number(c.by) || 0) * rect.height;
+      const widthPx = Math.max(1, Number(c.width) || 3);
+
+      ctx.save();
+      ctx.strokeStyle = c.color || '#111111';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = widthPx * invZoom;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      if (c.kind === 'arrow') {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0.001) {
+          const angle = Math.atan2(dy, dx);
+          const headLen = Math.max(10, widthPx * 4) * invZoom;
+          const a1 = angle + Math.PI * 0.82;
+          const a2 = angle - Math.PI * 0.82;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + Math.cos(a1) * headLen, by + Math.sin(a1) * headLen);
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + Math.cos(a2) * headLen, by + Math.sin(a2) * headLen);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    };
+
     const drawImageItem = (img: MoodboardImage) => {
       if (!img?.imageId) return;
       if (img.hidden) return;
@@ -661,11 +797,21 @@ export function MoodboardCanvas({
       ctx.restore();
     };
 
-    const drawItems: Array<{ kind: MoodboardItemKind; index: number; z: number; item: MoodboardShape | MoodboardImage | MoodboardText }> = [];
+    const drawItems: Array<{
+      kind: MoodboardItemKind;
+      index: number;
+      z: number;
+      item: MoodboardShape | MoodboardConnector | MoodboardImage | MoodboardText;
+    }> = [];
     for (let i = 0; i < shapes.length; i++) {
       const s = shapes[i];
       if (!s || s.hidden) continue;
       drawItems.push({ kind: 'shape', index: i, z: zFor('shape', i, (s as any).z), item: s });
+    }
+    for (let i = 0; i < connectors.length; i++) {
+      const c = connectors[i];
+      if (!c || c.hidden) continue;
+      drawItems.push({ kind: 'connector', index: i, z: zFor('connector', i, (c as any).z), item: c });
     }
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
@@ -681,6 +827,7 @@ export function MoodboardCanvas({
     drawItems.sort(compareZAsc);
     for (const it of drawItems) {
       if (it.kind === 'shape') drawShapeItem(it.item as MoodboardShape);
+      else if (it.kind === 'connector') drawConnectorItem(it.item as MoodboardConnector);
       else if (it.kind === 'image') drawImageItem(it.item as MoodboardImage);
       else drawTextItem(it.item as MoodboardText);
     }
@@ -802,12 +949,25 @@ export function MoodboardCanvas({
 
         const handleSize = 10 * invZoom;
         const half = handleSize / 2;
-        const handles: Array<{ x: number; y: number }> = [
-          { x: left, y: top },
-          { x: right, y: top },
-          { x: right, y: bottom },
-          { x: left, y: bottom },
-        ];
+        const handles: Array<{ x: number; y: number }> = [];
+        const only = selection.length === 1 ? selection[0] : null;
+        if (only?.kind === 'connector') {
+          const conn = connectorById.get(only.id);
+          if (conn && !conn.hidden) {
+            handles.push(
+              { x: (Number(conn.ax) || 0) * rect.width, y: (Number(conn.ay) || 0) * rect.height },
+              { x: (Number(conn.bx) || 0) * rect.width, y: (Number(conn.by) || 0) * rect.height }
+            );
+          }
+        }
+        if (!handles.length) {
+          handles.push(
+            { x: left, y: top },
+            { x: right, y: top },
+            { x: right, y: bottom },
+            { x: left, y: bottom }
+          );
+        }
 
         ctx.save();
         ctx.fillStyle = 'rgba(253, 245, 230, 0.96)';
@@ -859,6 +1019,8 @@ export function MoodboardCanvas({
     resizeRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
+    connectorDragRef.current = null;
+    connectorEditRef.current = null;
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -878,6 +1040,8 @@ export function MoodboardCanvas({
     resizeRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
+    connectorDragRef.current = null;
+    connectorEditRef.current = null;
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -994,9 +1158,11 @@ export function MoodboardCanvas({
 
       if (currentTool === 'move' || currentTool === 'transform') {
         const shapes = Array.isArray(current.shapes) ? current.shapes : [];
+        const connectors = Array.isArray(current.connectors) ? current.connectors : [];
         const images = Array.isArray(current.images) ? current.images : [];
         const texts = Array.isArray(current.texts) ? current.texts : [];
         const shapeById = new Map(shapes.map((s) => [s.id, s]));
+        const connectorById = new Map(connectors.map((c) => [c.id, c]));
         const imageById = new Map(images.map((img) => [img.id, img]));
         const textById = new Map(texts.map((t) => [t.id, t]));
 
@@ -1004,6 +1170,10 @@ export function MoodboardCanvas({
 
         const membersForGroup = (gid: string): Selection => {
           const out: Selection = [];
+          for (const c of connectors) {
+            if (!c || c.hidden) continue;
+            if (String((c as any).groupId ?? '') === gid) out.push({ kind: 'connector', id: c.id });
+          }
           for (const s of shapes) {
             if (!s || s.hidden) continue;
             if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
@@ -1021,7 +1191,13 @@ export function MoodboardCanvas({
 
         const unitForHit = (hit: SelectedItem): Selection => {
           const item =
-            hit.kind === 'image' ? imageById.get(hit.id) : hit.kind === 'text' ? textById.get(hit.id) : shapeById.get(hit.id);
+            hit.kind === 'image'
+              ? imageById.get(hit.id)
+              : hit.kind === 'text'
+                ? textById.get(hit.id)
+                : hit.kind === 'shape'
+                  ? shapeById.get(hit.id)
+                  : connectorById.get(hit.id);
           const gid = String((item as any)?.groupId ?? '').trim();
           if (!gid) return [hit];
           const members = membersForGroup(gid);
@@ -1033,7 +1209,13 @@ export function MoodboardCanvas({
           const groupIds = new Set<string>();
           for (const s of selList) {
             const item =
-              s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
+              s.kind === 'image'
+                ? imageById.get(s.id)
+                : s.kind === 'text'
+                  ? textById.get(s.id)
+                  : s.kind === 'shape'
+                    ? shapeById.get(s.id)
+                    : connectorById.get(s.id);
             const gid = String((item as any)?.groupId ?? '').trim();
             if (gid) groupIds.add(gid);
           }
@@ -1055,16 +1237,34 @@ export function MoodboardCanvas({
             let right = -Infinity;
             let bottom = -Infinity;
             for (const m of members) {
-              const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
+              const it =
+                m.kind === 'image'
+                  ? imageById.get(m.id)
+                  : m.kind === 'text'
+                    ? textById.get(m.id)
+                    : m.kind === 'shape'
+                      ? shapeById.get(m.id)
+                      : connectorById.get(m.id);
               if (!it || (it as any).hidden) continue;
-              const cx = Number((it as any).x) || 0;
-              const cy = Number((it as any).y) || 0;
-              const w = Number((it as any).w) || 0;
-              const h = Number((it as any).h) || 0;
-              left = Math.min(left, cx - w / 2);
-              top = Math.min(top, cy - h / 2);
-              right = Math.max(right, cx + w / 2);
-              bottom = Math.max(bottom, cy + h / 2);
+              if (m.kind === 'connector') {
+                const ax = Number((it as any).ax) || 0;
+                const ay = Number((it as any).ay) || 0;
+                const bx = Number((it as any).bx) || 0;
+                const by = Number((it as any).by) || 0;
+                left = Math.min(left, Math.min(ax, bx));
+                top = Math.min(top, Math.min(ay, by));
+                right = Math.max(right, Math.max(ax, bx));
+                bottom = Math.max(bottom, Math.max(ay, by));
+              } else {
+                const cx = Number((it as any).x) || 0;
+                const cy = Number((it as any).y) || 0;
+                const w = Number((it as any).w) || 0;
+                const h = Number((it as any).h) || 0;
+                left = Math.min(left, cx - w / 2);
+                top = Math.min(top, cy - h / 2);
+                right = Math.max(right, cx + w / 2);
+                bottom = Math.max(bottom, cy + h / 2);
+              }
             }
             const w = right - left;
             const h = bottom - top;
@@ -1078,14 +1278,40 @@ export function MoodboardCanvas({
           }
 
           for (const s of selList) {
-            const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
+            const it =
+              s.kind === 'image'
+                ? imageById.get(s.id)
+                : s.kind === 'text'
+                  ? textById.get(s.id)
+                  : s.kind === 'shape'
+                    ? shapeById.get(s.id)
+                    : connectorById.get(s.id);
             if (!it || (it as any).hidden) continue;
             const gid = String((it as any).groupId ?? '').trim();
             if (gid && groupIds.has(gid)) continue;
-            const cx = Number((it as any).x) || 0;
-            const cy = Number((it as any).y) || 0;
-            const w = Number((it as any).w) || 0;
-            const h = Number((it as any).h) || 0;
+            let cx = 0;
+            let cy = 0;
+            let w = 0;
+            let h = 0;
+            if (s.kind === 'connector') {
+              const ax = Number((it as any).ax) || 0;
+              const ay = Number((it as any).ay) || 0;
+              const bx = Number((it as any).bx) || 0;
+              const by = Number((it as any).by) || 0;
+              const left = Math.min(ax, bx);
+              const right = Math.max(ax, bx);
+              const top = Math.min(ay, by);
+              const bottom = Math.max(ay, by);
+              w = right - left;
+              h = bottom - top;
+              cx = left + w / 2;
+              cy = top + h / 2;
+            } else {
+              cx = Number((it as any).x) || 0;
+              cy = Number((it as any).y) || 0;
+              w = Number((it as any).w) || 0;
+              h = Number((it as any).h) || 0;
+            }
             units.push({
               kind: 'item',
               key: `${s.kind}:${s.id}`,
@@ -1106,6 +1332,27 @@ export function MoodboardCanvas({
             const rect = canvas.getBoundingClientRect();
             const px = pt.x * rect.width;
             const py = pt.y * rect.height;
+
+            if (u.kind === 'item' && u.item?.kind === 'connector') {
+              const conn = connectorById.get(u.item.id);
+              if (conn && !conn.hidden && !conn.locked) {
+                const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+                const half = 9 / zoom;
+                const ax = (Number(conn.ax) || 0) * rect.width;
+                const ay = (Number(conn.ay) || 0) * rect.height;
+                const bx = (Number(conn.bx) || 0) * rect.width;
+                const by = (Number(conn.by) || 0) * rect.height;
+                const da = Math.hypot(px - ax, py - ay);
+                const db = Math.hypot(px - bx, py - by);
+                if (da <= half || db <= half) {
+                  connectorEditRef.current = { startState: current, connectorId: conn.id, endpoint: da <= db ? 'a' : 'b', moved: false };
+                  canvas.setPointerCapture(evt.pointerId);
+                  redraw();
+                  return;
+                }
+              }
+            }
+
             const left = u.bounds.left * rect.width;
             const right = u.bounds.right * rect.width;
             const top = u.bounds.top * rect.height;
@@ -1126,7 +1373,7 @@ export function MoodboardCanvas({
             })();
 
             if (hitHandle) {
-              if (u.kind === 'item' && u.item) {
+              if (u.kind === 'item' && u.item && u.item.kind !== 'connector') {
                 const it =
                   u.item.kind === 'image'
                     ? imageById.get(u.item.id)
@@ -1153,8 +1400,26 @@ export function MoodboardCanvas({
 
               if (u.kind === 'group' && u.groupId) {
                 const members = membersForGroup(u.groupId);
-                const startItems: Array<{ kind: MoodboardItemKind; id: string; x: number; y: number; w: number; h: number; locked?: boolean }> = [];
+                const startItems: Array<
+                  | { kind: 'connector'; id: string; ax: number; ay: number; bx: number; by: number; locked?: boolean }
+                  | { kind: Exclude<MoodboardItemKind, 'connector'>; id: string; x: number; y: number; w: number; h: number; locked?: boolean }
+                > = [];
                 for (const m of members) {
+                  if (m.kind === 'connector') {
+                    const c = connectorById.get(m.id);
+                    if (!c || c.hidden) continue;
+                    startItems.push({
+                      kind: 'connector',
+                      id: c.id,
+                      ax: Number(c.ax) || 0,
+                      ay: Number(c.ay) || 0,
+                      bx: Number(c.bx) || 0,
+                      by: Number(c.by) || 0,
+                      locked: !!c.locked,
+                    });
+                    continue;
+                  }
+
                   const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
                   if (!it || (it as any).hidden) continue;
                   startItems.push({
@@ -1195,6 +1460,11 @@ export function MoodboardCanvas({
             if (!s || s.hidden) continue;
             candidates.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
           }
+          for (let i = 0; i < connectors.length; i++) {
+            const c = connectors[i];
+            if (!c || c.hidden) continue;
+            candidates.push({ kind: 'connector', id: c.id, z: zFor('connector', i, (c as any).z), index: i });
+          }
           for (let i = 0; i < images.length; i++) {
             const img = images[i];
             if (!img || img.hidden) continue;
@@ -1205,6 +1475,11 @@ export function MoodboardCanvas({
             if (!t || t.hidden) continue;
             candidates.push({ kind: 'text', id: t.id, z: zFor('text', i, (t as any).z), index: i });
           }
+
+          const rect = canvas.getBoundingClientRect();
+          const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+          const px = pt.x * rect.width;
+          const py = pt.y * rect.height;
 
           candidates.sort(compareZAsc);
           for (let i = candidates.length - 1; i >= 0; i--) {
@@ -1234,6 +1509,40 @@ export function MoodboardCanvas({
               const top = (Number(img.y) || 0) - h / 2;
               const bottom = (Number(img.y) || 0) + h / 2;
               if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'image', id: img.id };
+              continue;
+            }
+
+            if (c.kind === 'connector') {
+              const conn = connectors[c.index];
+              if (!conn || conn.hidden) continue;
+              const ax = (Number(conn.ax) || 0) * rect.width;
+              const ay = (Number(conn.ay) || 0) * rect.height;
+              const bx = (Number(conn.bx) || 0) * rect.width;
+              const by = (Number(conn.by) || 0) * rect.height;
+              const widthPx = Math.max(1, Number(conn.width) || 3);
+              const tol = Math.max(8, widthPx * 2) / zoom;
+
+              const vx = bx - ax;
+              const vy = by - ay;
+              const wx = px - ax;
+              const wy = py - ay;
+              const c1 = vx * wx + vy * wy;
+              const c2 = vx * vx + vy * vy;
+              let dist = 0;
+              if (c2 <= 0.000001) {
+                dist = Math.hypot(px - ax, py - ay);
+              } else if (c1 <= 0) {
+                dist = Math.hypot(px - ax, py - ay);
+              } else if (c1 >= c2) {
+                dist = Math.hypot(px - bx, py - by);
+              } else {
+                const b = c1 / c2;
+                const projX = ax + b * vx;
+                const projY = ay + b * vy;
+                dist = Math.hypot(px - projX, py - projY);
+              }
+
+              if (dist <= tol) return { kind: 'connector', id: conn.id };
               continue;
             }
 
@@ -1309,7 +1618,13 @@ export function MoodboardCanvas({
         setSelection(nextSel);
 
         const hitItem =
-          hit.kind === 'image' ? imageById.get(hit.id) : hit.kind === 'text' ? textById.get(hit.id) : shapeById.get(hit.id);
+          hit.kind === 'image'
+            ? imageById.get(hit.id)
+            : hit.kind === 'text'
+              ? textById.get(hit.id)
+              : hit.kind === 'shape'
+                ? shapeById.get(hit.id)
+                : connectorById.get(hit.id);
         if (!hitItem || (hitItem as any).locked) {
           redraw();
           return;
@@ -1321,15 +1636,36 @@ export function MoodboardCanvas({
           kind: 'group' | 'item';
           groupId?: string;
           bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
-          items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }>;
+          items: Array<
+            | { kind: 'connector'; id: string; startAX: number; startAY: number; startBX: number; startBY: number }
+            | { kind: Exclude<MoodboardItemKind, 'connector'>; id: string; startX: number; startY: number }
+          >;
         }> = [];
         for (const u of units) {
-          const items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }> = [];
+          const items: Array<
+            | { kind: 'connector'; id: string; startAX: number; startAY: number; startBX: number; startBY: number }
+            | { kind: Exclude<MoodboardItemKind, 'connector'>; id: string; startX: number; startY: number }
+          > = [];
           let left = Infinity;
           let top = Infinity;
           let right = -Infinity;
           let bottom = -Infinity;
           for (const m of u.members) {
+            if (m.kind === 'connector') {
+              const conn = connectorById.get(m.id);
+              if (!conn || conn.hidden || conn.locked) continue;
+              const ax = Number(conn.ax) || 0;
+              const ay = Number(conn.ay) || 0;
+              const bx = Number(conn.bx) || 0;
+              const by = Number(conn.by) || 0;
+              left = Math.min(left, Math.min(ax, bx));
+              top = Math.min(top, Math.min(ay, by));
+              right = Math.max(right, Math.max(ax, bx));
+              bottom = Math.max(bottom, Math.max(ay, by));
+              items.push({ kind: 'connector', id: conn.id, startAX: ax, startAY: ay, startBX: bx, startBY: by });
+              continue;
+            }
+
             const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
             if (!it || (it as any).hidden || (it as any).locked) continue;
             const cx = Number((it as any).x) || 0;
@@ -1367,11 +1703,13 @@ export function MoodboardCanvas({
       if (currentTool === 'shape') {
         const cur = valueRef.current;
         const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
         const images = Array.isArray(cur.images) ? cur.images : [];
         const texts = Array.isArray(cur.texts) ? cur.texts : [];
         const maxZ = Math.max(
           0,
           ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+          ...connectors.map((c, i) => zFor('connector', i, (c as any).z)),
           ...images.map((img, i) => zFor('image', i, (img as any).z)),
           ...texts.map((t, i) => zFor('text', i, (t as any).z))
         );
@@ -1397,14 +1735,51 @@ export function MoodboardCanvas({
         return;
       }
 
-      if (currentTool === 'text') {
+      if (currentTool === 'connector') {
         const cur = valueRef.current;
         const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
         const images = Array.isArray(cur.images) ? cur.images : [];
         const texts = Array.isArray(cur.texts) ? cur.texts : [];
         const maxZ = Math.max(
           0,
           ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+          ...connectors.map((c, i) => zFor('connector', i, (c as any).z)),
+          ...images.map((img, i) => zFor('image', i, (img as any).z)),
+          ...texts.map((t, i) => zFor('text', i, (t as any).z))
+        );
+
+        const id = makeMoodId('mbc_');
+        const item: MoodboardConnector = {
+          id,
+          kind: connectorKindRef.current,
+          ax: pt.x,
+          ay: pt.y,
+          bx: pt.x,
+          by: pt.y,
+          z: maxZ + 1,
+          color: colorRef.current,
+          width: sizeRef.current,
+        };
+        valueRef.current = { ...cur, connectors: [...connectors, item] };
+        connectorDragRef.current = { startPt: pt, startState: cur, connectorId: id, moved: false };
+        selectionRef.current = [{ kind: 'connector', id }];
+        setSelection([{ kind: 'connector', id }]);
+        canvas.setPointerCapture(evt.pointerId);
+        redraw();
+        return;
+      }
+
+      if (currentTool === 'text') {
+        const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const images = Array.isArray(cur.images) ? cur.images : [];
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const maxZ = Math.max(
+          0,
+          ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+          ...connectors.map((c, i) => zFor('connector', i, (c as any).z)),
           ...images.map((img, i) => zFor('image', i, (img as any).z)),
           ...texts.map((t, i) => zFor('text', i, (t as any).z))
         );
@@ -1582,6 +1957,50 @@ export function MoodboardCanvas({
         const nextShapes = shapes.map((s, i) => (i === idx ? { ...s, x: cx, y: cy, w, h } : s));
         valueRef.current = { ...cur, shapes: nextShapes };
         shapeDrag.moved = true;
+        redraw();
+        return;
+      }
+
+      const connectorEdit = connectorEditRef.current;
+      if (connectorEdit) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const cur = valueRef.current;
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const idx = connectors.findIndex((c) => c && c.id === connectorEdit.connectorId);
+        if (idx < 0) return;
+        const basis = connectors[idx];
+        if (!basis || basis.hidden || basis.locked) return;
+        const nextConn =
+          connectorEdit.endpoint === 'a'
+            ? { ...basis, ax: pt.x, ay: pt.y }
+            : { ...basis, bx: pt.x, by: pt.y };
+        const nextConnectors = connectors.map((c, i) => (i === idx ? nextConn : c));
+        valueRef.current = { ...cur, connectors: nextConnectors };
+        connectorEdit.moved = true;
+        redraw();
+        return;
+      }
+
+      const connectorDrag = connectorDragRef.current;
+      if (connectorDrag) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const cur = valueRef.current;
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const idx = connectors.findIndex((c) => c && c.id === connectorDrag.connectorId);
+        if (idx < 0) return;
+        const basis = connectors[idx];
+        if (!basis || basis.hidden || basis.locked) return;
+        let bx = pt.x;
+        let by = pt.y;
+        if (evt.shiftKey) {
+          const dx = bx - connectorDrag.startPt.x;
+          const dy = by - connectorDrag.startPt.y;
+          if (Math.abs(dx) >= Math.abs(dy)) by = connectorDrag.startPt.y;
+          else bx = connectorDrag.startPt.x;
+        }
+        const nextConnectors = connectors.map((c, i) => (i === idx ? { ...c, bx, by } : c));
+        valueRef.current = { ...cur, connectors: nextConnectors };
+        connectorDrag.moved = true;
         redraw();
         return;
       }
@@ -1857,16 +2276,33 @@ export function MoodboardCanvas({
         const scaleX = start.w > 0 ? nextW / start.w : 1;
         const scaleY = start.h > 0 ? nextH / start.h : 1;
 
-        const updates = new Map<string, { x: number; y: number; w: number; h: number }>();
+        const updates = new Map<
+          string,
+          | { kind: 'box'; x: number; y: number; w: number; h: number }
+          | { kind: 'connector'; ax: number; ay: number; bx: number; by: number }
+        >();
         for (const it of resizing.startItems) {
           if (it.locked) continue;
+          if (it.kind === 'connector') {
+            const relAX = start.w > 0 ? (it.ax - start.cx) / start.w : 0;
+            const relAY = start.h > 0 ? (it.ay - start.cy) / start.h : 0;
+            const relBX = start.w > 0 ? (it.bx - start.cx) / start.w : 0;
+            const relBY = start.h > 0 ? (it.by - start.cy) / start.h : 0;
+            const ax = clamp01(nextCx + relAX * nextW);
+            const ay = clamp01(nextCy + relAY * nextH);
+            const bx = clamp01(nextCx + relBX * nextW);
+            const by = clamp01(nextCy + relBY * nextH);
+            updates.set(`connector:${it.id}`, { kind: 'connector', ax, ay, bx, by });
+            continue;
+          }
+
           const relX = start.w > 0 ? (it.x - start.cx) / start.w : 0;
           const relY = start.h > 0 ? (it.y - start.cy) / start.h : 0;
           const x = clamp01(nextCx + relX * nextW);
           const y = clamp01(nextCy + relY * nextH);
           const w = Math.min(1, Math.max(minSize, (Number(it.w) || 0) * scaleX));
           const h = Math.min(1, Math.max(minSize, (Number(it.h) || 0) * scaleY));
-          updates.set(`${it.kind}:${it.id}`, { x, y, w, h });
+          updates.set(`${it.kind}:${it.id}`, { kind: 'box', x, y, w, h });
         }
         if (!updates.size) return;
 
@@ -1874,18 +2310,24 @@ export function MoodboardCanvas({
         const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
         const nextShapes = shapes.map((s) => {
           const u = updates.get(`shape:${s.id}`);
-          return u ? { ...s, x: u.x, y: u.y, w: u.w, h: u.h } : s;
+          return u && u.kind === 'box' ? { ...s, x: u.x, y: u.y, w: u.w, h: u.h } : s;
+        });
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const nextConnectors = connectors.map((c) => {
+          const u = updates.get(`connector:${c.id}`);
+          return u && u.kind === 'connector' ? { ...c, ax: u.ax, ay: u.ay, bx: u.bx, by: u.by } : c;
         });
         const nextImages = (cur.images || []).map((img) => {
           const u = updates.get(`image:${img.id}`);
-          return u ? { ...img, x: u.x, y: u.y, w: u.w, h: u.h } : img;
+          return u && u.kind === 'box' ? { ...img, x: u.x, y: u.y, w: u.w, h: u.h } : img;
         });
         const nextTexts = (cur.texts || []).map((t) => {
           const u = updates.get(`text:${t.id}`);
-          return u ? { ...t, x: u.x, y: u.y, w: u.w, h: u.h } : t;
+          return u && u.kind === 'box' ? { ...t, x: u.x, y: u.y, w: u.w, h: u.h } : t;
         });
         const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
         if (shapes.length || cur.shapes) next.shapes = nextShapes;
+        if (connectors.length || cur.connectors) next.connectors = nextConnectors;
         valueRef.current = next;
         resizing.moved = true;
         redraw();
@@ -1900,7 +2342,11 @@ export function MoodboardCanvas({
         if (!Number.isFinite(dx0) || !Number.isFinite(dy0)) return;
 
         const cur = valueRef.current;
-        const updates = new Map<string, { x: number; y: number }>();
+        const updates = new Map<
+          string,
+          | { kind: 'pos'; x: number; y: number }
+          | { kind: 'connector'; ax: number; ay: number; bx: number; by: number }
+        >();
 
         for (const u of dragging.units) {
           let dx = dx0;
@@ -1926,9 +2372,17 @@ export function MoodboardCanvas({
           dy = Math.max(-u.bounds.top, Math.min(1 - u.bounds.bottom, dy));
 
           for (const it of u.items) {
-            const x = clamp01(it.startX + dx);
-            const y = clamp01(it.startY + dy);
-            updates.set(`${it.kind}:${it.id}`, { x, y });
+            if (it.kind === 'connector') {
+              const ax = clamp01(it.startAX + dx);
+              const ay = clamp01(it.startAY + dy);
+              const bx = clamp01(it.startBX + dx);
+              const by = clamp01(it.startBY + dy);
+              updates.set(`connector:${it.id}`, { kind: 'connector', ax, ay, bx, by });
+            } else {
+              const x = clamp01(it.startX + dx);
+              const y = clamp01(it.startY + dy);
+              updates.set(`${it.kind}:${it.id}`, { kind: 'pos', x, y });
+            }
           }
         }
 
@@ -1938,19 +2392,26 @@ export function MoodboardCanvas({
         const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
         const nextShapes = shapes.map((s) => {
           const u = updates.get(`shape:${s.id}`);
-          if (!u) return s;
+          if (!u || u.kind !== 'pos') return s;
           if (s.x !== u.x || s.y !== u.y) changed = true;
           return { ...s, x: u.x, y: u.y };
         });
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const nextConnectors = connectors.map((c) => {
+          const u = updates.get(`connector:${c.id}`);
+          if (!u || u.kind !== 'connector') return c;
+          if (c.ax !== u.ax || c.ay !== u.ay || c.bx !== u.bx || c.by !== u.by) changed = true;
+          return { ...c, ax: u.ax, ay: u.ay, bx: u.bx, by: u.by };
+        });
         const nextImages = (cur.images || []).map((img) => {
           const u = updates.get(`image:${img.id}`);
-          if (!u) return img;
+          if (!u || u.kind !== 'pos') return img;
           if (img.x !== u.x || img.y !== u.y) changed = true;
           return { ...img, x: u.x, y: u.y };
         });
         const nextTexts = (cur.texts || []).map((t) => {
           const u = updates.get(`text:${t.id}`);
-          if (!u) return t;
+          if (!u || u.kind !== 'pos') return t;
           if (t.x !== u.x || t.y !== u.y) changed = true;
           return { ...t, x: u.x, y: u.y };
         });
@@ -1958,6 +2419,7 @@ export function MoodboardCanvas({
 
         const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
         if (shapes.length || cur.shapes) next.shapes = nextShapes;
+        if (connectors.length || cur.connectors) next.connectors = nextConnectors;
         valueRef.current = next;
         dragging.moved = true;
         redraw();
@@ -2009,6 +2471,42 @@ export function MoodboardCanvas({
         }
 
         commit(valueRef.current, { historyPrev: shapeDrag.startState });
+        return;
+      }
+
+      const connectorEdit = connectorEditRef.current;
+      if (connectorEdit) {
+        connectorEditRef.current = null;
+        if (connectorEdit.moved) {
+          commit(valueRef.current, { historyPrev: connectorEdit.startState });
+          return;
+        }
+        redraw();
+        return;
+      }
+
+      const connectorDrag = connectorDragRef.current;
+      if (connectorDrag) {
+        connectorDragRef.current = null;
+        if (!connectorDrag.moved) {
+          const cur = valueRef.current;
+          const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+          const idx = connectors.findIndex((c) => c && c.id === connectorDrag.connectorId);
+          if (idx >= 0) {
+            const c = connectors[idx];
+            if (c && !c.locked) {
+              const defaultLen = 0.18;
+              const ax = clamp01(Number(c.ax) || connectorDrag.startPt.x);
+              const ay = clamp01(Number(c.ay) || connectorDrag.startPt.y);
+              const bx = clamp01(Math.max(0, Math.min(1, ax + defaultLen)));
+              const by = ay;
+              const nextConnectors = connectors.map((it, i) => (i === idx ? { ...it, ax, ay, bx, by } : it));
+              valueRef.current = { ...cur, connectors: nextConnectors };
+            }
+          }
+        }
+
+        commit(valueRef.current, { historyPrev: connectorDrag.startState });
         return;
       }
 
@@ -2152,14 +2650,20 @@ export function MoodboardCanvas({
 
   const buildSelectionUnitsForArrange = React.useCallback((state: MoodboardState, selList: Selection) => {
     const shapes = Array.isArray(state.shapes) ? state.shapes : [];
+    const connectors = Array.isArray(state.connectors) ? state.connectors : [];
     const images = Array.isArray(state.images) ? state.images : [];
     const texts = Array.isArray(state.texts) ? state.texts : [];
     const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
 
     const membersForGroup = (gid: string): Selection => {
       const out: Selection = [];
+      for (const c of connectors) {
+        if (!c || c.hidden) continue;
+        if (String((c as any).groupId ?? '') === gid) out.push({ kind: 'connector', id: c.id });
+      }
       for (const s of shapes) {
         if (!s || s.hidden) continue;
         if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
@@ -2177,7 +2681,14 @@ export function MoodboardCanvas({
 
     const groupIds = new Set<string>();
     for (const s of selList) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
+      const it =
+        s.kind === 'image'
+          ? imageById.get(s.id)
+          : s.kind === 'text'
+            ? textById.get(s.id)
+            : s.kind === 'connector'
+              ? connectorById.get(s.id)
+              : shapeById.get(s.id);
       const gid = String((it as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
@@ -2198,6 +2709,19 @@ export function MoodboardCanvas({
       let right = -Infinity;
       let bottom = -Infinity;
       for (const m of members) {
+        if (m.kind === 'connector') {
+          const it = connectorById.get(m.id);
+          if (!it || (it as any).hidden) continue;
+          const ax = Number((it as any).ax) || 0;
+          const ay = Number((it as any).ay) || 0;
+          const bx = Number((it as any).bx) || 0;
+          const by = Number((it as any).by) || 0;
+          left = Math.min(left, Math.min(ax, bx));
+          top = Math.min(top, Math.min(ay, by));
+          right = Math.max(right, Math.max(ax, bx));
+          bottom = Math.max(bottom, Math.max(ay, by));
+          continue;
+        }
         const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
         if (!it || (it as any).hidden) continue;
         const cx = Number((it as any).x) || 0;
@@ -2215,14 +2739,40 @@ export function MoodboardCanvas({
     }
 
     for (const s of selList) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
+      const it =
+        s.kind === 'image'
+          ? imageById.get(s.id)
+          : s.kind === 'text'
+            ? textById.get(s.id)
+            : s.kind === 'connector'
+              ? connectorById.get(s.id)
+              : shapeById.get(s.id);
       if (!it || (it as any).hidden) continue;
       const gid = String((it as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue;
-      const cx = Number((it as any).x) || 0;
-      const cy = Number((it as any).y) || 0;
-      const w = Number((it as any).w) || 0;
-      const h = Number((it as any).h) || 0;
+      let cx = 0;
+      let cy = 0;
+      let w = 0;
+      let h = 0;
+      if (s.kind === 'connector') {
+        const ax = Number((it as any).ax) || 0;
+        const ay = Number((it as any).ay) || 0;
+        const bx = Number((it as any).bx) || 0;
+        const by = Number((it as any).by) || 0;
+        const left = Math.min(ax, bx);
+        const right = Math.max(ax, bx);
+        const top = Math.min(ay, by);
+        const bottom = Math.max(ay, by);
+        w = right - left;
+        h = bottom - top;
+        cx = left + w / 2;
+        cy = top + h / 2;
+      } else {
+        cx = Number((it as any).x) || 0;
+        cy = Number((it as any).y) || 0;
+        w = Number((it as any).w) || 0;
+        h = Number((it as any).h) || 0;
+      }
       units.push({ kind: 'item', key: `${s.kind}:${s.id}`, members: [s], bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2, cx, cy, w, h } });
     }
 
@@ -2237,13 +2787,19 @@ export function MoodboardCanvas({
       const units = buildSelectionUnitsForArrange(cur, curSel);
       if (units.length < 2 && mode !== 'tidy') return;
 
-      const updates = new Map<string, { x: number; y: number }>();
+      const updates = new Map<
+        string,
+        | { kind: 'pos'; x: number; y: number }
+        | { kind: 'connector'; ax: number; ay: number; bx: number; by: number }
+      >();
       const getItem = (s: SelectedItem) =>
         s.kind === 'image'
           ? (cur.images || []).find((x) => x && x.id === s.id)
           : s.kind === 'text'
             ? (cur.texts || []).find((x) => x && x.id === s.id)
-            : (Array.isArray(cur.shapes) ? cur.shapes : []).find((x) => x && x.id === s.id);
+            : s.kind === 'connector'
+              ? (Array.isArray(cur.connectors) ? cur.connectors : []).find((x) => x && x.id === s.id)
+              : (Array.isArray(cur.shapes) ? cur.shapes : []).find((x) => x && x.id === s.id);
 
       const applyTranslate = (unit: (typeof units)[number], dx: number, dy: number) => {
         const clampedDx = Math.max(-unit.bounds.left, Math.min(1 - unit.bounds.right, dx));
@@ -2251,7 +2807,15 @@ export function MoodboardCanvas({
         for (const m of unit.members) {
           const it: any = getItem(m);
           if (!it || it.hidden || it.locked) continue;
-          updates.set(`${m.kind}:${m.id}`, { x: clamp01((Number(it.x) || 0) + clampedDx), y: clamp01((Number(it.y) || 0) + clampedDy) });
+          if (m.kind === 'connector') {
+            const ax = clamp01((Number(it.ax) || 0) + clampedDx);
+            const ay = clamp01((Number(it.ay) || 0) + clampedDy);
+            const bx = clamp01((Number(it.bx) || 0) + clampedDx);
+            const by = clamp01((Number(it.by) || 0) + clampedDy);
+            updates.set(`${m.kind}:${m.id}`, { kind: 'connector', ax, ay, bx, by });
+            continue;
+          }
+          updates.set(`${m.kind}:${m.id}`, { kind: 'pos', x: clamp01((Number(it.x) || 0) + clampedDx), y: clamp01((Number(it.y) || 0) + clampedDy) });
         }
       };
 
@@ -2313,18 +2877,24 @@ export function MoodboardCanvas({
       const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
       const nextShapes = shapes.map((s) => {
         const u = updates.get(`shape:${s.id}`);
-        return u ? { ...s, x: u.x, y: u.y } : s;
+        return u && u.kind === 'pos' ? { ...s, x: u.x, y: u.y } : s;
       });
       const nextImages = (cur.images || []).map((img) => {
         const u = updates.get(`image:${img.id}`);
-        return u ? { ...img, x: u.x, y: u.y } : img;
+        return u && u.kind === 'pos' ? { ...img, x: u.x, y: u.y } : img;
       });
       const nextTexts = (cur.texts || []).map((t) => {
         const u = updates.get(`text:${t.id}`);
-        return u ? { ...t, x: u.x, y: u.y } : t;
+        return u && u.kind === 'pos' ? { ...t, x: u.x, y: u.y } : t;
+      });
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+      const nextConnectors = connectors.map((c) => {
+        const u = updates.get(`connector:${c.id}`);
+        return u && u.kind === 'connector' ? { ...c, ax: u.ax, ay: u.ay, bx: u.bx, by: u.by } : c;
       });
       const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
       if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      if (connectors.length || cur.connectors) next.connectors = nextConnectors;
       commit(next);
     },
     [buildSelectionUnitsForArrange, commit]
@@ -2337,11 +2907,14 @@ export function MoodboardCanvas({
     const cur = valueRef.current;
     const keys = new Set(curSel.map((s) => `${s.kind}:${s.id}`));
     const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+    const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
     const nextShapes = shapes.map((s) => (keys.has(`shape:${s.id}`) ? { ...s, groupId: gid } : s));
+    const nextConnectors = connectors.map((c) => (keys.has(`connector:${c.id}`) ? { ...c, groupId: gid } : c));
     const nextImages = (cur.images || []).map((img) => (keys.has(`image:${img.id}`) ? { ...img, groupId: gid } : img));
     const nextTexts = (cur.texts || []).map((t) => (keys.has(`text:${t.id}`) ? { ...t, groupId: gid } : t));
     const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
     if (shapes.length || cur.shapes) next.shapes = nextShapes;
+    if (connectors.length || cur.connectors) next.connectors = nextConnectors;
     commit(next);
   }, [commit]);
 
@@ -2350,23 +2923,34 @@ export function MoodboardCanvas({
     if (!curSel.length) return;
     const cur = valueRef.current;
     const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+    const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
     const images = Array.isArray(cur.images) ? cur.images : [];
     const texts = Array.isArray(cur.texts) ? cur.texts : [];
     const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
     const groupIds = new Set<string>();
     for (const s of curSel) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
+      const it =
+        s.kind === 'image'
+          ? imageById.get(s.id)
+          : s.kind === 'text'
+            ? textById.get(s.id)
+            : s.kind === 'connector'
+              ? connectorById.get(s.id)
+              : shapeById.get(s.id);
       const gid = String((it as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
     if (!groupIds.size) return;
     const nextShapes = shapes.map((s) => (s && groupIds.has(String((s as any).groupId ?? '')) ? { ...s, groupId: undefined } : s));
+    const nextConnectors = connectors.map((c) => (c && groupIds.has(String((c as any).groupId ?? '')) ? { ...c, groupId: undefined } : c));
     const nextImages = images.map((img) => (img && groupIds.has(String((img as any).groupId ?? '')) ? { ...img, groupId: undefined } : img));
     const nextTexts = texts.map((t) => (t && groupIds.has(String((t as any).groupId ?? '')) ? { ...t, groupId: undefined } : t));
     const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
     if (shapes.length || cur.shapes) next.shapes = nextShapes;
+    if (connectors.length || cur.connectors) next.connectors = nextConnectors;
     commit(next);
   }, [commit]);
 
@@ -2378,6 +2962,7 @@ export function MoodboardCanvas({
 
   const layerOrderAsc = React.useMemo(() => {
     const shapes = Array.isArray(value.shapes) ? value.shapes : [];
+    const connectors = Array.isArray(value.connectors) ? value.connectors : [];
     const images = Array.isArray(value.images) ? value.images : [];
     const texts = Array.isArray(value.texts) ? value.texts : [];
     const refs: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
@@ -2385,6 +2970,11 @@ export function MoodboardCanvas({
       const s = shapes[i];
       if (!s) continue;
       refs.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
+    }
+    for (let i = 0; i < connectors.length; i++) {
+      const c = connectors[i];
+      if (!c) continue;
+      refs.push({ kind: 'connector', id: c.id, z: zFor('connector', i, (c as any).z), index: i });
     }
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
@@ -2398,7 +2988,7 @@ export function MoodboardCanvas({
     }
     refs.sort(compareZAsc);
     return refs;
-  }, [value.images, value.shapes, value.texts]);
+  }, [value.images, value.shapes, value.texts, value.connectors]);
 
   const layerPosByKey = React.useMemo(() => {
     return new Map(layerOrderAsc.map((r, i) => [`${r.kind}:${r.id}`, i]));
@@ -2408,6 +2998,7 @@ export function MoodboardCanvas({
     (target: SelectedItem, action: 'up' | 'down' | 'top' | 'bottom') => {
       const cur = valueRef.current;
       const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
       const images = Array.isArray(cur.images) ? cur.images : [];
       const texts = Array.isArray(cur.texts) ? cur.texts : [];
       const refs: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
@@ -2415,6 +3006,11 @@ export function MoodboardCanvas({
         const s = shapes[i];
         if (!s) continue;
         refs.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
+      }
+      for (let i = 0; i < connectors.length; i++) {
+        const c = connectors[i];
+        if (!c) continue;
+        refs.push({ kind: 'connector', id: c.id, z: zFor('connector', i, (c as any).z), index: i });
       }
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
@@ -2445,11 +3041,13 @@ export function MoodboardCanvas({
       for (let i = 0; i < refs.length; i++) zByKey.set(`${refs[i].kind}:${refs[i].id}`, i);
 
       const nextShapes = shapes.map((s, i) => ({ ...s, z: zByKey.get(`shape:${s.id}`) ?? zFor('shape', i, (s as any).z) }));
+      const nextConnectors = connectors.map((c, i) => ({ ...c, z: zByKey.get(`connector:${c.id}`) ?? zFor('connector', i, (c as any).z) }));
       const nextImages = images.map((img, i) => ({ ...img, z: zByKey.get(`image:${img.id}`) ?? zFor('image', i, (img as any).z) }));
       const nextTexts = texts.map((t, i) => ({ ...t, z: zByKey.get(`text:${t.id}`) ?? zFor('text', i, (t as any).z) }));
 
       const next: MoodboardState = { ...cur, images: nextImages };
       if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      if (connectors.length || cur.connectors) next.connectors = nextConnectors;
       if (texts.length || cur.texts) next.texts = nextTexts;
       commit(next);
     },
@@ -2457,9 +3055,11 @@ export function MoodboardCanvas({
   );
 
   const layerShapes = Array.isArray(value.shapes) ? value.shapes : [];
+  const layerConnectors = Array.isArray(value.connectors) ? value.connectors : [];
   const layerImages = Array.isArray(value.images) ? value.images : [];
   const layerTexts = Array.isArray(value.texts) ? value.texts : [];
   const shapeById = new Map(layerShapes.map((s) => [s.id, s]));
+  const connectorById = new Map(layerConnectors.map((c) => [c.id, c]));
   const imageById = new Map(layerImages.map((img) => [img.id, img]));
   const textById = new Map(layerTexts.map((t) => [t.id, t]));
 
@@ -2491,6 +3091,18 @@ export function MoodboardCanvas({
               <select value={shapeKind} onChange={(e) => setShapeKind((e.target.value as any) || 'rect')}>
                 <option value="rect">Rect</option>
                 <option value="ellipse">Ellipse</option>
+              </select>
+            </label>
+          ) : null}
+          <button className={styles.toolBtn} data-active={tool === 'connector' ? '1' : '0'} onClick={() => setTool('connector')}>
+            Connector
+          </button>
+          {tool === 'connector' ? (
+            <label className={styles.toolLabel}>
+              Kind{' '}
+              <select value={connectorKind} onChange={(e) => setConnectorKind((e.target.value as any) || 'line')}>
+                <option value="line">Line</option>
+                <option value="arrow">Arrow</option>
               </select>
             </label>
           ) : null}
@@ -2573,11 +3185,14 @@ export function MoodboardCanvas({
               const cur = valueRef.current;
               const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
               const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+              const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
               const nextShapes = shapes.filter((s) => s && !keys.has(`shape:${s.id}`));
+              const nextConnectors = connectors.filter((c) => c && !keys.has(`connector:${c.id}`));
               const nextImages = (cur.images || []).filter((img) => img && !keys.has(`image:${img.id}`));
               const nextTexts = (cur.texts || []).filter((t) => t && !keys.has(`text:${t.id}`));
               const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
               if (shapes.length || cur.shapes) next.shapes = nextShapes;
+              if (connectors.length || cur.connectors) next.connectors = nextConnectors;
               commit(next);
               selectionRef.current = [];
               setSelection([]);
@@ -2742,9 +3357,11 @@ export function MoodboardCanvas({
                   const item =
                     ref.kind === 'shape'
                       ? shapeById.get(ref.id)
-                      : ref.kind === 'image'
-                        ? imageById.get(ref.id)
-                        : textById.get(ref.id);
+                      : ref.kind === 'connector'
+                        ? connectorById.get(ref.id)
+                        : ref.kind === 'image'
+                          ? imageById.get(ref.id)
+                          : textById.get(ref.id);
                   if (!item) return null;
 
                   const isSelected = selection.some((s) => s.kind === ref.kind && s.id === ref.id);
@@ -2755,14 +3372,16 @@ export function MoodboardCanvas({
                   const fallbackName =
                     ref.kind === 'shape'
                       ? ((item as any).shape === 'ellipse' ? 'Ellipse' : 'Rect')
-                      : ref.kind === 'image'
-                        ? 'Image'
-                        : (() => {
-                            const raw = String((item as any).text || '').trim();
-                            const first = raw.split(/\r?\n/)[0] || '';
-                            const snippet = first.length > 28 ? `${first.slice(0, 28)}…` : first;
-                            return snippet ? `Text: ${snippet}` : 'Text';
-                          })();
+                      : ref.kind === 'connector'
+                        ? `Connector: ${String((item as any).kind) === 'arrow' ? 'Arrow' : 'Line'}`
+                        : ref.kind === 'image'
+                          ? 'Image'
+                          : (() => {
+                              const raw = String((item as any).text || '').trim();
+                              const first = raw.split(/\r?\n/)[0] || '';
+                              const snippet = first.length > 28 ? `${first.slice(0, 28)}…` : first;
+                              return snippet ? `Text: ${snippet}` : 'Text';
+                            })();
 
                   const displayName = String((item as any).name || '').trim() || fallbackName;
 
@@ -2772,14 +3391,18 @@ export function MoodboardCanvas({
                         className={styles.layerPick}
                         type="button"
                         onClick={() => {
-                          setTool('move');
-                          if (gid) {
-                            const members: Selection = [];
-                            for (const s of layerShapes) {
-                              if (!s || s.hidden) continue;
-                              if (String((s as any).groupId ?? '') === gid) members.push({ kind: 'shape', id: s.id });
-                            }
-                            for (const t of layerTexts) {
+                            setTool('move');
+                            if (gid) {
+                              const members: Selection = [];
+                              for (const c of layerConnectors) {
+                                if (!c || c.hidden) continue;
+                                if (String((c as any).groupId ?? '') === gid) members.push({ kind: 'connector', id: c.id });
+                              }
+                              for (const s of layerShapes) {
+                                if (!s || s.hidden) continue;
+                                if (String((s as any).groupId ?? '') === gid) members.push({ kind: 'shape', id: s.id });
+                              }
+                              for (const t of layerTexts) {
                               if (!t || t.hidden) continue;
                               if (String((t as any).groupId ?? '') === gid) members.push({ kind: 'text', id: t.id });
                             }
@@ -2814,6 +3437,10 @@ export function MoodboardCanvas({
                             const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
                             const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, name } : s));
                             applyNoHistory({ ...cur, shapes: nextShapes }, { clearRedo: true });
+                          } else if (ref.kind === 'connector') {
+                            const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+                            const nextConnectors = connectors.map((c) => (c.id === ref.id ? { ...c, name } : c));
+                            applyNoHistory({ ...cur, connectors: nextConnectors }, { clearRedo: true });
                           } else if (ref.kind === 'image') {
                             const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, name } : img));
                             applyNoHistory({ ...cur, images: nextImages }, { clearRedo: true });
@@ -2836,6 +3463,10 @@ export function MoodboardCanvas({
                               const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
                               const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, hidden: nextHidden } : s));
                               commit({ ...cur, shapes: nextShapes });
+                            } else if (ref.kind === 'connector') {
+                              const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+                              const nextConnectors = connectors.map((c) => (c.id === ref.id ? { ...c, hidden: nextHidden } : c));
+                              commit({ ...cur, connectors: nextConnectors });
                             } else if (ref.kind === 'image') {
                               const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, hidden: nextHidden } : img));
                               commit({ ...cur, images: nextImages });
@@ -2869,6 +3500,10 @@ export function MoodboardCanvas({
                               const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
                               const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, locked: !locked } : s));
                               commit({ ...cur, shapes: nextShapes });
+                            } else if (ref.kind === 'connector') {
+                              const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+                              const nextConnectors = connectors.map((c) => (c.id === ref.id ? { ...c, locked: !locked } : c));
+                              commit({ ...cur, connectors: nextConnectors });
                             } else if (ref.kind === 'image') {
                               const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, locked: !locked } : img));
                               commit({ ...cur, images: nextImages });

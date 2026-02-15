@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add vector connector layers (lines/arrows) that can be selected/moved/transformed and reordered like other moodboard layers.
@@ -23,16 +23,18 @@ Add vector connector layers (lines/arrows) that can be selected/moved/transforme
 - Endpoint attachment to objects (optional later).
 
 ## Acceptance criteria
-- [ ] Can create a connector and edit its endpoints.
-- [ ] Connectors can be reordered/hidden/locked.
-- [ ] Undo/redo covers connector edits.
+- [x] Can create a connector and edit its endpoints.
+- [x] Connectors can be reordered/hidden/locked.
+- [x] Undo/redo covers connector edits.
 
 ## Test plan
 - [ ] Manual: create/edit connectors; reorder; hide/lock; undo/redo.
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (if changes beyond spec v00.051 are required).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (no changes required beyond spec v00.051).
 
 ## Implementation notes
 - Key files to touch:
