@@ -80,7 +80,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0062 | Stories corkboard / outliner | DONE | Codex | Story cards with drag reorder + links to chars/images. |
 | WP-0063 | Export hub (moodboards + image sets + share packs) | DONE | Codex | Central export UI; moodboard PNG; image set export; share packs under `<libraryRoot>/exports/`. |
 | WP-0064 | Web import (URL capture) | DONE | Codex | Import from URL; store provenance metadata. |
-| WP-0065 | Smart Folders 2.0 (rule-based saved searches) | BACKLOG | Codex | Editable rules + live results. |
+| WP-0065 | Smart Folders 2.0 (rule-based saved searches) | IN_PROGRESS | Codex | Editable rules + live results. |
 | WP-0066 | Color tools (palettes + search) | BACKLOG | Codex | Extract palette + filter by color. |
 | WP-0067 | Near-duplicate finder (perceptual) | BACKLOG | Codex | Visually similar scan + safe review. |
 | WP-0068 | Reference window power modes | BACKLOG | Codex | Opacity + click-through + hotkeys. |
@@ -91,5 +91,5 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0073 | Backup/restore wizard | BACKLOG | Codex | Snapshot + restore with manifest/checksums. |
 
 ## Current focus
-- Current: (none).
-- Next: WP-0065.
+- Current: WP-0065.
+- Next: WP-0066.

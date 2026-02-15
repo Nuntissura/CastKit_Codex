@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Upgrade saved searches into rule-based “Smart Folders” (editable rules + live results), including tag logic and common media filters.
@@ -10,7 +10,7 @@ Upgrade saved searches into rule-based “Smart Folders” (editable rules + liv
 ## Why
 - Saved searches become durable workflows, not one-off snapshots.
 - Matches the “asset manager” muscle memory (Eagle-like Smart Folders).
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.12.
+- Spec: `CastKit_Codex_Spec_v00.041.md` §11.12.
 
 ## Scope
 ### In
@@ -44,4 +44,3 @@ Upgrade saved searches into rule-based “Smart Folders” (editable rules + liv
 
 ## Notes
 - Do NOT touch `D:`.
-
