@@ -78,6 +78,10 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'Character', 'search_blob_tags', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn(db, 'Character', 'search_blob_name', "TEXT NOT NULL DEFAULT ''");
 
+  // Human-friendly Character IDs (public IDs, stable per character).
+  await ensureColumn(db, 'Character', 'public_id', 'TEXT');
+  await run(db, 'CREATE UNIQUE INDEX IF NOT EXISTS idx_character_public_id ON Character(public_id)');
+
   // Character icon + focus framing (Library list).
   await ensureColumn(db, 'Character', 'icon_image_id', 'TEXT');
   await ensureColumn(db, 'Character', 'icon_focus_x', 'REAL NOT NULL DEFAULT 0.5');
@@ -243,6 +247,7 @@ async function initSchema(db) {
 
     CREATE TABLE IF NOT EXISTS Character (
       character_id TEXT PRIMARY KEY,
+      public_id TEXT UNIQUE,
       display_name TEXT NOT NULL,
       template_id TEXT NOT NULL,
       template_version TEXT NOT NULL,

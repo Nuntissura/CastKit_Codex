@@ -160,6 +160,21 @@ function isSafeIdForFolder(value) {
   return /^[A-Za-z0-9_-]+$/.test(String(value || ''));
 }
 
+function parseCharPublicIdNumber(value) {
+  const v = String(value ?? '').trim().toUpperCase();
+  const m = v.match(/^CHAR-(\d{6})$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function formatCharPublicId(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return `CHAR-${String(Math.floor(num)).padStart(6, '0')}`;
+}
+
 function clamp01(n, fallback = 0.5) {
   const v = Number(n);
   if (!Number.isFinite(v)) return fallback;
@@ -245,13 +260,15 @@ class CKCLibrary {
 
     if (!fs.existsSync(paths.sheetTxtPath)) {
       const templateAst = await this.getTemplateAst(existing.templateId);
+      const publicId =
+        String(existing.publicId ?? '').trim() || String(existing.valuesById?.['CHAR-ID-001'] ?? '').trim() || String(characterId);
       const repaired = generateCanonicalSheetText(
         templateAst,
         {
           templateId: templateAst.id,
           templateVersion: templateAst.version,
           templateHash: templateAst.hash,
-          characterId,
+          characterId: publicId,
           displayName: existing.displayName,
         },
         existing.valuesById
@@ -277,6 +294,33 @@ class CKCLibrary {
     await this.ensureBuiltinSafeSubsetPack();
     await this.ensureBuiltinAllFieldsPack();
     await this.ensureDefaultProtectedFields();
+  }
+
+  async _allocateNextPublicCharacterId() {
+    const rows = await all(this.db, `SELECT public_id FROM Character WHERE public_id IS NOT NULL AND LENGTH(TRIM(public_id)) > 0`);
+    let max = 0;
+    for (const r of rows) {
+      const n = parseCharPublicIdNumber(r.public_id);
+      if (n && n > max) max = n;
+    }
+    return formatCharPublicId(max + 1);
+  }
+
+  async _getOrCreatePublicCharacterId(characterId) {
+    const row = await get(this.db, `SELECT character_id, public_id, is_system FROM Character WHERE character_id = ?`, [characterId]);
+    if (!row) throw new Error('Character not found');
+
+    const existing = String(row.public_id ?? '').trim();
+    if (existing) return existing;
+
+    const isSystem = !!row.is_system;
+    if (isSystem) return String(characterId);
+
+    const next = await this._allocateNextPublicCharacterId();
+    if (!next) throw new Error('Failed to allocate public Character ID');
+
+    await run(this.db, `UPDATE Character SET public_id = ?, updated_at = CURRENT_TIMESTAMP WHERE character_id = ?`, [next, characterId]);
+    return next;
   }
 
   async ensureInboxCharacter() {
@@ -321,9 +365,9 @@ class CKCLibrary {
 
     await run(
       this.db,
-      `INSERT INTO Character(character_id, display_name, template_id, template_version, template_hash, search_blob, is_system)
-       VALUES(?, ?, ?, ?, ?, ?, 1)`,
-      [characterId, displayName, templateAst.id, templateAst.version, templateAst.hash, '']
+      `INSERT INTO Character(character_id, public_id, display_name, template_id, template_version, template_hash, search_blob, is_system)
+       VALUES(?, ?, ?, ?, ?, ?, ?, 1)`,
+      [characterId, null, displayName, templateAst.id, templateAst.version, templateAst.hash, '']
     );
 
     await run(this.db, 'BEGIN');
@@ -963,13 +1007,14 @@ class CKCLibrary {
     }
 
     let baseSql =
-      'SELECT character_id, display_name, template_id, template_version, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character';
+      'SELECT character_id, public_id, display_name, template_id, template_version, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character';
     if (clauses.length > 0) baseSql += ` WHERE ${clauses.join(' AND ')}`;
     baseSql += ' ORDER BY updated_at DESC';
 
     const rows = await all(this.db, baseSql, params);
     return rows.map((r) => ({
       id: r.character_id,
+      publicId: r.public_id ?? null,
       displayName: r.display_name,
       templateId: r.template_id,
       templateVersion: r.template_version,
@@ -1884,8 +1929,9 @@ class CKCLibrary {
       const v = String(value ?? '').trim();
       if (!v) return [];
       const byId = await all(this.db, `SELECT character_id, display_name FROM Character WHERE character_id = ?`, [v]);
+      const byPublicId = await all(this.db, `SELECT character_id, display_name FROM Character WHERE public_id = ?`, [v]);
       const byName = await all(this.db, `SELECT character_id, display_name FROM Character WHERE display_name = ? COLLATE NOCASE`, [v]);
-      const merged = [...byId, ...byName].filter(Boolean);
+      const merged = [...byId, ...byPublicId, ...byName].filter(Boolean);
       const seen = new Set();
       const out = [];
       for (const r of merged) {
@@ -2307,7 +2353,7 @@ class CKCLibrary {
   async getCharacter(characterId) {
     const character = await get(
       this.db,
-      'SELECT character_id, display_name, template_id, template_version, template_hash, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character WHERE character_id = ?',
+      'SELECT character_id, public_id, display_name, template_id, template_version, template_hash, icon_image_id, icon_focus_x, icon_focus_y, is_system, created_at, updated_at FROM Character WHERE character_id = ?',
       [characterId]
     );
     if (!character) return null;
@@ -2336,6 +2382,7 @@ class CKCLibrary {
 
     return {
       id: character.character_id,
+      publicId: character.public_id ?? null,
       displayName: character.display_name,
       templateId: character.template_id,
       templateVersion: character.template_version,
@@ -2343,6 +2390,7 @@ class CKCLibrary {
       iconImageId: character.icon_image_id ?? null,
       iconFocusX: Number.isFinite(Number(character.icon_focus_x)) ? Number(character.icon_focus_x) : 0.5,
       iconFocusY: Number.isFinite(Number(character.icon_focus_y)) ? Number(character.icon_focus_y) : 0.5,
+      isSystem: !!character.is_system,
       createdAt: character.created_at,
       updatedAt: character.updated_at,
       valuesById,
@@ -2368,6 +2416,120 @@ class CKCLibrary {
         addedAt: img.added_at,
       })),
     };
+  }
+
+  async assignPublicCharacterIds({ dryRun = false } = {}) {
+    const rows = await all(
+      this.db,
+      `SELECT character_id, public_id, is_system, created_at
+       FROM Character
+       WHERE is_system = 0
+       ORDER BY created_at ASC`
+    );
+
+    const used = new Set();
+    let max = 0;
+    for (const r of rows) {
+      const pid = String(r.public_id ?? '').trim().toUpperCase();
+      if (!pid) continue;
+      used.add(pid);
+      const n = parseCharPublicIdNumber(pid);
+      if (n && n > max) max = n;
+    }
+
+    const assignments = [];
+    for (const r of rows) {
+      const characterId = String(r.character_id ?? '').trim();
+      if (!characterId) continue;
+      const pid = String(r.public_id ?? '').trim();
+      if (pid) continue;
+
+      let next = null;
+      do {
+        max += 1;
+        next = formatCharPublicId(max);
+      } while (next && used.has(String(next).toUpperCase()));
+
+      if (!next) throw new Error('Failed to allocate public Character ID');
+      used.add(String(next).toUpperCase());
+      assignments.push({ characterId, publicId: next });
+    }
+
+    if (dryRun) return { ok: true, assigned: assignments };
+
+    let updated = 0;
+    const errors = [];
+
+    for (const a of assignments) {
+      try {
+        const character = await this.getCharacter(a.characterId);
+        if (!character) throw new Error('Character not found');
+
+        const templateAst = await this.getTemplateAst(character.templateId);
+        const hasCharId = templateAst.sections.some((s) => s.fields.some((f) => f.id === 'CHAR-ID-001'));
+
+        await run(this.db, 'BEGIN');
+        try {
+          await run(this.db, `UPDATE Character SET public_id = ?, updated_at = CURRENT_TIMESTAMP WHERE character_id = ?`, [
+            a.publicId,
+            a.characterId,
+          ]);
+
+          if (hasCharId) {
+            const paths = this.getCharacterPaths(a.characterId);
+            if (fs.existsSync(paths.sheetTxtPath)) {
+              const raw = fs.readFileSync(paths.sheetTxtPath, 'utf8');
+              let rewritten = raw;
+              if (/^CHARACTER_ID:\s*.*$/m.test(rewritten)) {
+                rewritten = rewritten.replace(/^CHARACTER_ID:\s*.*$/m, `CHARACTER_ID: ${a.publicId}`);
+              }
+              const parsed = parseSheetText(rewritten);
+              if (parsed.fieldSpans.has('CHAR-ID-001')) {
+                rewritten = applyFieldUpdatesToParsedSheet(parsed, { 'CHAR-ID-001': a.publicId });
+              }
+              if (rewritten !== raw) fs.writeFileSync(paths.sheetTxtPath, rewritten, 'utf8');
+            }
+
+            await run(
+              this.db,
+              `INSERT INTO FieldValue(character_id, field_id, value_text, value_type)
+               VALUES(?, 'CHAR-ID-001', ?, ?)
+               ON CONFLICT(character_id, field_id) DO UPDATE SET
+                 value_text=excluded.value_text,
+                 value_type=excluded.value_type,
+                 updated_at=CURRENT_TIMESTAMP`,
+              [a.characterId, a.publicId, this._fieldTypeById(templateAst, 'CHAR-ID-001')]
+            );
+          }
+
+          await run(this.db, 'COMMIT');
+        } catch (err) {
+          await run(this.db, 'ROLLBACK');
+          throw err;
+        }
+
+        const nextValues = { ...(character.valuesById || {}) };
+        if (hasCharId) nextValues['CHAR-ID-001'] = a.publicId;
+        await this._updateSearchBlob(templateAst, a.characterId, character.displayName, nextValues);
+
+        const paths = this.getCharacterPaths(a.characterId);
+        if (fs.existsSync(paths.sheetTxtPath)) {
+          await this._createSheetVersion({
+            characterId: a.characterId,
+            source: 'ui_edit',
+            sheetPath: paths.sheetTxtPath,
+            notes: 'Assigned public Character ID.',
+          });
+        }
+
+        await this._audit('character.assignPublicId', a.characterId, { publicId: a.publicId });
+        updated += 1;
+      } catch (err) {
+        errors.push({ characterId: a.characterId, message: String(err?.message || err || 'Unknown error') });
+      }
+    }
+
+    return { ok: errors.length === 0, assigned: assignments, updated, errors };
   }
 
   async setCharacterIcon({ characterId, imageId, focusX, focusY } = {}) {
@@ -2416,6 +2578,8 @@ class CKCLibrary {
     const templateAst = await this.getTemplateAst(chosenTemplateId);
 
     const characterId = randomId('char_');
+    const publicId = await this._allocateNextPublicCharacterId();
+    if (!publicId) throw new Error('Failed to allocate public Character ID');
     const paths = this.getCharacterPaths(characterId);
 
     // Folder scaffolding
@@ -2435,7 +2599,7 @@ class CKCLibrary {
     }
 
     // Ensure Character_ID field reflects our internal id if present.
-    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = characterId;
+    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = publicId;
     if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-002')) valuesById['CHAR-ID-002'] = displayName;
 
     const sheetText = generateCanonicalSheetText(
@@ -2444,7 +2608,7 @@ class CKCLibrary {
         templateId: templateAst.id,
         templateVersion: templateAst.version,
         templateHash: templateAst.hash,
-        characterId,
+        characterId: publicId,
         displayName,
       },
       valuesById
@@ -2453,9 +2617,9 @@ class CKCLibrary {
 
     await run(
       this.db,
-      `INSERT INTO Character(character_id, display_name, template_id, template_version, template_hash, search_blob)
-       VALUES(?, ?, ?, ?, ?, ?)`,
-      [characterId, displayName, templateAst.id, templateAst.version, templateAst.hash, '']
+      `INSERT INTO Character(character_id, public_id, display_name, template_id, template_version, template_hash, search_blob)
+       VALUES(?, ?, ?, ?, ?, ?, ?)`,
+      [characterId, publicId, displayName, templateAst.id, templateAst.version, templateAst.hash, '']
     );
 
     // Persist only non-empty values (blank fields are represented as blank in the sheet file).
@@ -2502,21 +2666,26 @@ class CKCLibrary {
     const suggestedName = String(extraction.assignments.get('CHAR-ID-002') ?? meta.DISPLAY_NAME ?? '').trim();
     const finalName = String(displayName ?? '').trim() || suggestedName || path.basename(filePath, path.extname(filePath));
 
-    const sheetCharacterId = preferSheetCharacterId
+    const incomingPublicIdCandidate = preferSheetCharacterId
       ? String(meta.CHARACTER_ID ?? extraction.assignments.get('CHAR-ID-001') ?? '').trim()
       : '';
 
+    let publicId = incomingPublicIdCandidate && isSafeIdForFolder(incomingPublicIdCandidate) ? incomingPublicIdCandidate : '';
+    if (publicId) {
+      const exists = await get(this.db, 'SELECT character_id FROM Character WHERE public_id = ? OR character_id = ?', [publicId, publicId]);
+      if (exists) publicId = '';
+    }
+    if (!publicId) {
+      const next = await this._allocateNextPublicCharacterId();
+      if (!next) throw new Error('Failed to allocate public Character ID');
+      publicId = next;
+    }
+
+    // Internal ID: keep stable storage separate from the public sheet ID.
     let characterId = null;
-    if (sheetCharacterId && isSafeIdForFolder(sheetCharacterId)) {
-      const exists = await get(this.db, 'SELECT character_id FROM Character WHERE character_id = ?', [sheetCharacterId]);
-      if (!exists && !fs.existsSync(this.getCharacterPaths(sheetCharacterId).base)) characterId = sheetCharacterId;
-    }
-    if (!characterId) {
-      // Ensure we don't collide with an existing folder.
-      do {
-        characterId = randomId('char_');
-      } while (fs.existsSync(this.getCharacterPaths(characterId).base));
-    }
+    do {
+      characterId = randomId('char_');
+    } while (fs.existsSync(this.getCharacterPaths(characterId).base));
 
     const paths = this.getCharacterPaths(characterId);
     ensureDir(paths.sheetDir);
@@ -2527,20 +2696,20 @@ class CKCLibrary {
     ensureDir(paths.extrasDir);
     ensureDir(paths.packsDir);
 
-    // Preserve bytes exactly when possible; only rewrite when the imported Character ID doesn't match our chosen internal id.
-    // This avoids ending up with a sheet that claims a different Character ID than the folder/DB identity.
+    // Preserve bytes exactly when possible; only rewrite when the imported Character ID doesn't match our chosen public id.
+    // This avoids ending up with a sheet that claims a different Character ID than our system-managed public identity.
     let sheetBytesToWrite = bytes;
     const incomingMetaId = String(meta.CHARACTER_ID ?? '').trim();
     const incomingFieldId = String(extraction.assignments.get('CHAR-ID-001') ?? '').trim();
     const shouldRewriteCharacterId =
-      incomingMetaId !== characterId || (incomingFieldId && incomingFieldId !== characterId) || (!incomingMetaId && !incomingFieldId);
+      incomingMetaId !== publicId || (incomingFieldId && incomingFieldId !== publicId) || (!incomingMetaId && !incomingFieldId);
     if (shouldRewriteCharacterId) {
       let rewrittenText = text;
-      if (incomingMetaId) rewrittenText = rewrittenText.replace(/^CHARACTER_ID:\\s*.*$/m, `CHARACTER_ID: ${characterId}`);
+      if (incomingMetaId) rewrittenText = rewrittenText.replace(/^CHARACTER_ID:\\s*.*$/m, `CHARACTER_ID: ${publicId}`);
 
       const parsedSheet = parseSheetText(rewrittenText);
       if (parsedSheet.fieldSpans.has('CHAR-ID-001')) {
-        rewrittenText = applyFieldUpdatesToParsedSheet(parsedSheet, { 'CHAR-ID-001': characterId });
+        rewrittenText = applyFieldUpdatesToParsedSheet(parsedSheet, { 'CHAR-ID-001': publicId });
       }
 
       sheetBytesToWrite = Buffer.from(rewrittenText, 'utf8');
@@ -2550,9 +2719,9 @@ class CKCLibrary {
 
     await run(
       this.db,
-      `INSERT INTO Character(character_id, display_name, template_id, template_version, template_hash, search_blob)
-       VALUES(?, ?, ?, ?, ?, ?)`,
-      [characterId, finalName, templateAst.id, templateAst.version, templateAst.hash, '']
+      `INSERT INTO Character(character_id, public_id, display_name, template_id, template_version, template_hash, search_blob)
+       VALUES(?, ?, ?, ?, ?, ?, ?)`,
+      [characterId, publicId, finalName, templateAst.id, templateAst.version, templateAst.hash, '']
     );
 
     const knownIds = new Set(templateAst.sections.flatMap((s) => s.fields.map((f) => f.id)));
@@ -2563,8 +2732,8 @@ class CKCLibrary {
       }
     }
 
-    // Ensure Character_ID field reflects our internal id if present.
-    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = characterId;
+    // Ensure Character_ID field reflects our public id if present.
+    if (Object.prototype.hasOwnProperty.call(valuesById, 'CHAR-ID-001')) valuesById['CHAR-ID-001'] = publicId;
 
     await run(this.db, 'BEGIN');
     try {
@@ -2702,7 +2871,8 @@ class CKCLibrary {
 
     const mergedValuesById = { ...(valuesById || {}) };
     const hasCharId = templateAst.sections.some((s) => s.fields.some((f) => f.id === 'CHAR-ID-001'));
-    if (hasCharId) mergedValuesById['CHAR-ID-001'] = characterId;
+    const publicId = hasCharId ? await this._getOrCreatePublicCharacterId(characterId) : null;
+    if (hasCharId && publicId) mergedValuesById['CHAR-ID-001'] = publicId;
 
     const paths = this.getCharacterPaths(characterId);
     if (!fs.existsSync(paths.sheetTxtPath)) {
@@ -2713,7 +2883,7 @@ class CKCLibrary {
           templateId: templateAst.id,
           templateVersion: templateAst.version,
           templateHash: templateAst.hash,
-          characterId,
+          characterId: publicId || characterId,
           displayName: existing.displayName,
         },
         existing.valuesById

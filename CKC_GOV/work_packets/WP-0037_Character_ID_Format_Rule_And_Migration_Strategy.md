@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Define and implement a fixed, human-friendly Character ID formatting rule so IDs are readable, comparable, and reliable for linking/merging/exporting.
@@ -35,15 +35,22 @@ Users interpret the Character ID as a primary identifier. Random internal IDs (e
 - Multi-user conflict resolution (future).
 
 ## Acceptance criteria
-- [ ] ID format rule is documented and enforced for new characters.
-- [ ] Existing libraries have a safe migration path (documented and tested).
-- [ ] Ingest/merge cannot corrupt or overwrite the Character ID.
-- [ ] Automated tests cover ID generation + a basic migration case.
+- [x] ID format rule is documented and enforced for new characters.
+- [x] Existing libraries have a safe migration path (documented and tested).
+- [x] Ingest/merge cannot corrupt or overwrite the Character ID.
+- [x] Automated tests cover ID generation + a basic migration case.
 
 ## Test plan
-- [ ] Automated: unit tests around ID generation + validation.
-- [ ] Manual: create several characters and verify IDs increment/format correctly in UI and exports.
+- [x] Automated: unit tests around ID generation + validation.
+- [x] Manual: create several characters and verify IDs increment/format correctly in UI and exports.
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
-- [ ] Spec impact: yes (user-facing identity rule). Bump spec + mirror into `CKC_main/docs/` when implemented.
+- [x] Spec impact: yes (user-facing identity rule). Bumped spec + mirrored into `CKC_main/docs/`.
+
+## Implementation notes (what shipped)
+- New Characters are created with:
+  - internal `characterId` (random `char_…`, stable folder/DB key)
+  - public Character ID (`CHAR-000001`, sequential) stored as `Character.public_id`
+  - `CHAR-ID-001` enforced to the public ID (visible in editor, read-only/system-managed)
+- Migration tool: “Assign public IDs” assigns missing `public_id` values to existing characters without renaming folders and repairs `CHAR-ID-001` accordingly.

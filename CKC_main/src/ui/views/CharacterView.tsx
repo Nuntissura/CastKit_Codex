@@ -1638,15 +1638,16 @@ export function CharacterView({
 
   const copyCurrentCharacterId = React.useCallback(() => {
     if (!characterId) return;
+    const toCopy = String(character?.publicId || '').trim() || characterId;
     try {
-      window.ckc.copyText(characterId);
+      window.ckc.copyText(toCopy);
       setIsCharacterIdCopied(true);
       if (characterIdCopyTimerRef.current) window.clearTimeout(characterIdCopyTimerRef.current);
       characterIdCopyTimerRef.current = window.setTimeout(() => setIsCharacterIdCopied(false), 1200);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [characterId]);
+  }, [characterId, character?.publicId]);
 
   const chooseCharacterExportDir = async () => {
     setExportError(null);
@@ -2640,9 +2641,11 @@ export function CharacterView({
                     className={styles.idChip}
                     type="button"
                     onClick={copyCurrentCharacterId}
-                    title={`Click to copy full Character ID: ${characterId}`}
+                    title={`Click to copy Public ID.\n\nPublic ID: ${String(character?.publicId || '').trim() || '(not assigned yet)'}\nInternal ID: ${characterId}`}
                   >
-                    {isCharacterIdCopied ? 'Copied!' : `ID: ${shortCharacterId(characterId)}`}
+                    {isCharacterIdCopied
+                      ? 'Copied!'
+                      : `ID: ${shortCharacterId(String(character?.publicId || '').trim() || characterId)}`}
                   </button>
                 ) : null}
               </div>

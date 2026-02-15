@@ -2,6 +2,7 @@
 
 type CKCCharacterListItem = {
   id: string;
+  publicId: string | null;
   displayName: string;
   templateId: string;
   templateVersion: string;
@@ -64,6 +65,7 @@ type CKCDocDetail = CKCDocListItem & {
 
 type CKCCharacter = {
   id: string;
+  publicId: string | null;
   displayName: string;
   templateId: string;
   templateVersion: string;
@@ -71,6 +73,7 @@ type CKCCharacter = {
   iconImageId: string | null;
   iconFocusX: number;
   iconFocusY: number;
+  isSystem: boolean;
   createdAt: string;
   updatedAt: string;
   valuesById: Record<string, string>;
@@ -402,9 +405,15 @@ interface Window {
       mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
       renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;
       listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
-      listAllTags: () => Promise<string[]>;
+    listAllTags: () => Promise<string[]>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
+    assignPublicCharacterIds: (params?: { dryRun?: boolean } | null) => Promise<{
+      ok: boolean;
+      assigned: Array<{ characterId: string; publicId: string }>;
+      updated?: number;
+      errors?: Array<{ characterId: string; message: string }>;
+    }>;
     importCharacterFromSheetDialog: () => Promise<{ characterId: string } | null>;
     getCharacter: (characterId: string) => Promise<CKCCharacter | null>;
     listGlobalCarouselImages: (params?: unknown) => Promise<CKCGlobalImage[]>;

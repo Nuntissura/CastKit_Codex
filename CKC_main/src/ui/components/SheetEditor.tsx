@@ -4,7 +4,7 @@ import styles from './sheetEditor.module.css';
 type Field = CKCTemplateAstField;
 type Section = { title: string; fields: Field[] };
 
-const HIDDEN_FIELD_IDS = new Set(['CHAR-ID-001']);
+const READ_ONLY_FIELD_IDS = new Set(['CHAR-ID-001']);
 
 function initialCollapsed(title: string): boolean {
   const t = String(title || '').toLowerCase();
@@ -97,13 +97,14 @@ export function SheetEditor({
 
             {!isCollapsed ? (
               <div className={styles.fields}>
-                {section.fields.filter((field) => !HIDDEN_FIELD_IDS.has(field.id)).map((field) => {
+                {section.fields.map((field) => {
                   const value = valuesById[field.id] ?? '';
                   const isRule = field.type === 'rule';
                   const rows = inputRowsForField(field);
                   const listId = `ckc-field-suggest-${field.id}`;
                   const presets = suggestionsByFieldId[field.id] ?? [];
                   const enumValues = field.type === 'enum' && Array.isArray(field.enumValues) ? field.enumValues : [];
+                  const isReadOnly = READ_ONLY_FIELD_IDS.has(field.id);
 
                   const suggestions = (() => {
                     const seen = new Set<string>();
@@ -140,6 +141,7 @@ export function SheetEditor({
                             onFocus={() => ensureSuggestionsLoaded(field.id)}
                             list={suggestions.length ? listId : undefined}
                             placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                            readOnly={isReadOnly}
                           />
                           {suggestions.length ? (
                             <datalist id={listId}>
@@ -158,6 +160,7 @@ export function SheetEditor({
                             onFocus={() => ensureSuggestionsLoaded(field.id)}
                             list={suggestions.length ? listId : undefined}
                             placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                            readOnly={isReadOnly}
                           />
                           {suggestions.length ? (
                             <datalist id={listId}>
@@ -173,7 +176,9 @@ export function SheetEditor({
                           rows={rows}
                           value={value}
                           onChange={(e) => onChange(field.id, e.target.value)}
+                          onFocus={() => ensureSuggestionsLoaded(field.id)}
                           placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                          readOnly={isReadOnly}
                         />
                       )}
                     </div>

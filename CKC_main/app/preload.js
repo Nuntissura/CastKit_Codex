@@ -81,6 +81,7 @@ contextBridge.exposeInMainWorld('ckc', {
     getCharacter: (characterId) => ipcRenderer.invoke('ckc:getCharacter', characterId),
     setCharacterIcon: (params) => ipcRenderer.invoke('ckc:setCharacterIcon', params),
     createCharacter: (params) => ipcRenderer.invoke('ckc:createCharacter', params),
+    assignPublicCharacterIds: (params) => ipcRenderer.invoke('ckc:assignPublicCharacterIds', params),
     importCharacterFromSheetDialog: () => ipcRenderer.invoke('ckc:importCharacterFromSheetDialog'),
     saveCharacter: (params) => ipcRenderer.invoke('ckc:saveCharacter', params),
 

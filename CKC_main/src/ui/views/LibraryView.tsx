@@ -131,6 +131,9 @@ export function LibraryView({
 
   const [libraryRoot, setLibraryRoot] = React.useState<string | null>(null);
   const [configPath, setConfigPath] = React.useState<string | null>(null);
+  const [publicIdBusy, setPublicIdBusy] = React.useState<boolean>(false);
+  const [publicIdError, setPublicIdError] = React.useState<string | null>(null);
+  const [publicIdResult, setPublicIdResult] = React.useState<string | null>(null);
   const [defaultLibraryRootInfo, setDefaultLibraryRootInfo] = React.useState<{
     isPortable: boolean;
     portableDir: string | null;
@@ -1025,6 +1028,40 @@ export function LibraryView({
             </button>
           </div>
 
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Character IDs:</span>
+            <button
+              disabled={publicIdBusy}
+              onClick={async () => {
+                const ok = window.confirm(
+                  'Assign public Character IDs to existing characters?\n\nThis does NOT rename folders. It updates CHAR-ID-001 in sheets and creates a sheet version entry per updated character.'
+                );
+                if (!ok) return;
+
+                setPublicIdError(null);
+                setPublicIdResult(null);
+                setPublicIdBusy(true);
+                try {
+                  const res: any = await window.ckc.assignPublicCharacterIds({ dryRun: false });
+                  const updated = Number(res?.updated ?? 0) || 0;
+                  const errs = Array.isArray(res?.errors) ? res.errors : [];
+                  setPublicIdResult(errs.length ? `Updated ${updated} with ${errs.length} error(s).` : `Updated ${updated}.`);
+                  setRefreshNonce((n) => n + 1);
+                } catch (err: unknown) {
+                  setPublicIdError(err instanceof Error ? err.message : String(err));
+                } finally {
+                  setPublicIdBusy(false);
+                }
+              }}
+              title="Assign human-friendly public IDs (CHAR-000001) to characters that don't have one yet"
+            >
+              {publicIdBusy ? 'Working...' : 'Assign public IDs'}
+            </button>
+            {publicIdResult ? <span style={{ color: 'var(--text-secondary)' }}>{publicIdResult}</span> : null}
+          </div>
+
+          {publicIdError ? <div className={styles.error}>{publicIdError}</div> : null}
+
           {diagnosticsError ? <div className={styles.error}>{diagnosticsError}</div> : null}
 
           {diagnostics ? (
@@ -1908,10 +1945,19 @@ export function LibraryView({
                     )}
                   </div>
 
-                  <div className={styles.characterText}>
+                    <div className={styles.characterText}>
                     <div className={styles.characterName}>{c.displayName}</div>
                     <div className={styles.characterMeta}>
-                      {c.templateId} {c.templateVersion}
+                      {(c as any).publicId ? (
+                        <>
+                          <span style={{ color: 'var(--text-secondary)' }}>ID:</span> <code>{String((c as any).publicId)}</code>{' '}
+                          â€¢ {c.templateId} {c.templateVersion}
+                        </>
+                      ) : (
+                        <>
+                          {c.templateId} {c.templateVersion}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

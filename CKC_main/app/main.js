@@ -821,6 +821,11 @@ function registerIpcHandlers() {
         return lib.createCharacter(params || {});
     });
 
+    ipcMain.handle('ckc:assignPublicCharacterIds', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.assignPublicCharacterIds(params || {});
+    });
+
     ipcMain.handle('ckc:importCharacterFromSheetDialog', async () => {
         const lib = await ensureLibrary();
         const result = await dialog.showOpenDialog(mainWindow, {

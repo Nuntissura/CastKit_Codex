@@ -27,8 +27,10 @@ test('sheet ingest + versions diff/revert works and protects CHAR-ID-001', async
   const characterId = await lib.createCharacter({ displayName: 'Test' });
   const before = await lib.getCharacter(characterId);
   assert.ok(before);
+  assert.ok(before.publicId);
+  assert.match(String(before.publicId), /^CHAR-\d{6}$/);
   const origCharIdField = String(before.valuesById['CHAR-ID-001'] ?? '');
-  assert.equal(origCharIdField, characterId);
+  assert.equal(origCharIdField, before.publicId);
 
   const initialVersions = await lib.listVersions(characterId);
   const initialVer = initialVersions.find((v) => v.source === 'import' && String(v.notes || '').includes('Initial sheet created.'));
@@ -82,4 +84,3 @@ test('sheet ingest + versions diff/revert works and protects CHAR-ID-001', async
 
   lib.close();
 });
-
