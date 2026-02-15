@@ -125,9 +125,13 @@ function dedupeTagsCaseInsensitive(tags: string[]): string[] {
 export function LibraryView({
   onOpenCharacter,
   onOpenExports,
+  commandPaletteTagFilter,
+  onCommandPaletteTagFilterHandled,
 }: {
   onOpenCharacter: (characterId: string, selectImageId?: string | null) => void;
   onOpenExports?: () => void;
+  commandPaletteTagFilter?: string | null;
+  onCommandPaletteTagFilterHandled?: () => void;
 }) {
   const splitterPx = 10;
   const minLeftPx = 360;
@@ -175,6 +179,14 @@ export function LibraryView({
   const [tagManagerBusy, setTagManagerBusy] = React.useState<boolean>(false);
   const [tagManagerMutating, setTagManagerMutating] = React.useState<boolean>(false);
   const [tagManagerError, setTagManagerError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const tag = String(commandPaletteTagFilter ?? '').trim();
+    if (!tag) return;
+    setTagFilters((prev) => Array.from(new Set([...(prev || []), tag])));
+    setShowCommandBar(true);
+    onCommandPaletteTagFilterHandled?.();
+  }, [commandPaletteTagFilter, onCommandPaletteTagFilterHandled]);
 
   const [inboxDir, setInboxDir] = React.useState<string>('');
   const [inboxIncludeSubdirs, setInboxIncludeSubdirs] = React.useState<boolean>(false);

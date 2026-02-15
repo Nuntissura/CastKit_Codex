@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add a keyboard-first command palette (`Ctrl+K`) to jump to characters/docs/tags and run common actions.
@@ -26,11 +26,11 @@ Add a keyboard-first command palette (`Ctrl+K`) to jump to characters/docs/tags 
 - Scripting/macros.
 
 ## Acceptance criteria
-- [ ] Palette opens instantly and does not steal focus unexpectedly.
-- [ ] Selecting an item navigates correctly.
+- [x] Palette opens instantly and does not steal focus unexpectedly.
+- [x] Selecting an item navigates correctly.
 
 ## Test plan
-- [ ] Manual: use palette to navigate to a character, open a doc, and apply a tag filter.
+- [x] Manual: use palette to navigate to a character, open a doc, and apply a tag filter.
 
 ## Notes
 - Do NOT touch `D:`.

@@ -153,6 +153,8 @@ export function CharacterView({
   onNavigateCharacter,
   selectImageId,
   onSelectImageHandled,
+  openDocRequest,
+  onOpenDocRequestHandled,
   onOpenLibraryDrawer,
   isLibraryDrawerOpen,
   onCloseLibraryDrawer,
@@ -163,6 +165,8 @@ export function CharacterView({
   onNavigateCharacter: (characterId: string) => void;
   selectImageId?: string | null;
   onSelectImageHandled?: () => void;
+  openDocRequest?: { docType: CKCDocType; docId: string } | null;
+  onOpenDocRequestHandled?: () => void;
   onOpenLibraryDrawer: () => void;
   isLibraryDrawerOpen: boolean;
   onCloseLibraryDrawer: () => void;
@@ -1470,6 +1474,41 @@ export function CharacterView({
     }
     if (moodboardIsDirty) void saveMoodboard();
   }, [moodboardIsDirty, saveMoodboard]);
+
+  React.useEffect(() => {
+    const req = openDocRequest;
+    if (!req) return;
+    const docId = String(req.docId ?? '').trim();
+    if (!docId) return;
+
+    setIsDocsOpen(true);
+    onCloseLibraryDrawer();
+
+    if (req.docType === 'notes') {
+      flushNotesAutosave();
+      notesDocIdRef.current = docId;
+      setNotesDocId(docId);
+    } else if (req.docType === 'stories') {
+      flushStoriesAutosave();
+      storiesDocIdRef.current = docId;
+      setStoriesDocId(docId);
+      setDocsLowerType('stories');
+    } else {
+      flushMoodboardAutosave();
+      moodboardDocIdRef.current = docId;
+      setMoodboardDocId(docId);
+      setDocsLowerType('moodboard');
+    }
+
+    onOpenDocRequestHandled?.();
+  }, [
+    flushMoodboardAutosave,
+    flushNotesAutosave,
+    flushStoriesAutosave,
+    onCloseLibraryDrawer,
+    onOpenDocRequestHandled,
+    openDocRequest,
+  ]);
 
   const updateStoriesBoard = React.useCallback(
     (updater: (prev: CKCStoryBoard) => CKCStoryBoard) => {

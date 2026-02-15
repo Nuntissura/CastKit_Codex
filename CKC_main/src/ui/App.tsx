@@ -1,5 +1,6 @@
 import React from 'react';
 import { Drawer } from './components/Drawer';
+import { CommandPalette, type CommandPaletteRun } from './components/CommandPalette';
 import { LibraryView } from './views/LibraryView';
 import { CharacterView } from './views/CharacterView';
 import { ReferenceWindowView } from './views/ReferenceWindowView';
@@ -33,6 +34,9 @@ function MainApp() {
   const [selectedCharacterId, setSelectedCharacterId] = React.useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = React.useState<string | null>(null);
   const [drawerMode, setDrawerMode] = React.useState<DrawerMode>('none');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState<boolean>(false);
+  const [pendingOpenDoc, setPendingOpenDoc] = React.useState<{ docType: CKCDocType; docId: string } | null>(null);
+  const [pendingLibraryTagFilter, setPendingLibraryTagFilter] = React.useState<string | null>(null);
   const [exportsContext, setExportsContext] = React.useState<{ characterId: string | null; moodboardDocId: string | null }>({
     characterId: null,
     moodboardDocId: null,
@@ -40,7 +44,14 @@ function MainApp() {
 
   useHotkeys({
     onToggleMenu: () => setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu')),
-    onCloseOverlays: () => setDrawerMode('none'),
+    onToggleCommandPalette: () => {
+      setDrawerMode('none');
+      setIsCommandPaletteOpen((v) => !v);
+    },
+    onCloseOverlays: () => {
+      setDrawerMode('none');
+      setIsCommandPaletteOpen(false);
+    },
   });
 
   const runInit = React.useCallback(() => {
@@ -75,6 +86,77 @@ function MainApp() {
     );
   }
 
+  const runCommandPalette = React.useCallback(
+    (cmd: CommandPaletteRun) => {
+      setIsCommandPaletteOpen(false);
+      setDrawerMode('none');
+
+      if (cmd.kind === 'toggleMenu') {
+        setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu'));
+        return;
+      }
+
+      if (cmd.kind === 'openLibrary') {
+        setPage('library');
+        return;
+      }
+
+      if (cmd.kind === 'openExports') {
+        const from: NonExportPage = page === 'character' ? 'character' : 'library';
+        setExportsReturnPage(from);
+        setExportsContext({
+          characterId: from === 'character' ? selectedCharacterId : null,
+          moodboardDocId: null,
+        });
+        setPage('exports');
+        return;
+      }
+
+      if (cmd.kind === 'filterTag') {
+        setPendingLibraryTagFilter(cmd.tag);
+        setPage('library');
+        return;
+      }
+
+      if (cmd.kind === 'openCharacter') {
+        setSelectedCharacterId(cmd.characterId);
+        setSelectedImageId(null);
+        setPage('character');
+        return;
+      }
+
+      if (cmd.kind === 'openDoc') {
+        const request = { docType: cmd.docType, docId: cmd.docId };
+        const openWithCharacter = (characterId: string) => {
+          setSelectedCharacterId(characterId);
+          setSelectedImageId(null);
+          setPendingOpenDoc(request);
+          setPage('character');
+        };
+
+        if (selectedCharacterId) {
+          openWithCharacter(selectedCharacterId);
+          return;
+        }
+
+        window.ckc
+          .listCharacters({ queryText: '', tagFilters: [] })
+          .then((chars) => {
+            const first = Array.isArray(chars) ? chars[0]?.id : null;
+            const id = String(first || '').trim();
+            if (!id) {
+              window.alert('No characters yet. Create a character first.');
+              return;
+            }
+            openWithCharacter(id);
+          })
+          .catch((err: unknown) => window.alert(err instanceof Error ? err.message : String(err)));
+        return;
+      }
+    },
+    [page, selectedCharacterId]
+  );
+
   return (
     <div className={styles.root}>
       <Drawer
@@ -107,6 +189,8 @@ function MainApp() {
       <div className={styles.content}>
         {page === 'library' ? (
           <LibraryView
+            commandPaletteTagFilter={pendingLibraryTagFilter}
+            onCommandPaletteTagFilterHandled={() => setPendingLibraryTagFilter(null)}
             onOpenCharacter={(characterId, selectImageId) => {
               setSelectedCharacterId(characterId);
               setSelectedImageId(selectImageId ? String(selectImageId) : null);
@@ -129,6 +213,8 @@ function MainApp() {
             }}
             selectImageId={selectedImageId}
             onSelectImageHandled={() => setSelectedImageId(null)}
+            openDocRequest={pendingOpenDoc}
+            onOpenDocRequestHandled={() => setPendingOpenDoc(null)}
             onOpenLibraryDrawer={() => setDrawerMode('library')}
             isLibraryDrawerOpen={drawerMode === 'library'}
             onCloseLibraryDrawer={() => setDrawerMode('none')}
@@ -149,6 +235,8 @@ function MainApp() {
           />
         )}
       </div>
+
+      <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} onRun={runCommandPalette} />
     </div>
   );
 }

@@ -11,15 +11,24 @@ function isEditableActiveElement(): boolean {
 
 export function useHotkeys({
   onToggleMenu,
+  onToggleCommandPalette,
   onCloseOverlays,
 }: {
   onToggleMenu: () => void;
+  onToggleCommandPalette?: () => void;
   onCloseOverlays: () => void;
 }) {
   React.useEffect(() => {
     const onKeyDown = (evt: KeyboardEvent) => {
       if (evt.key === 'Escape') {
         onCloseOverlays();
+        return;
+      }
+
+      if (evt.ctrlKey && (evt.key === 'k' || evt.key === 'K')) {
+        if (isEditableActiveElement()) return;
+        evt.preventDefault();
+        onToggleCommandPalette?.();
         return;
       }
 
@@ -32,5 +41,5 @@ export function useHotkeys({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onToggleMenu, onCloseOverlays]);
+  }, [onToggleMenu, onToggleCommandPalette, onCloseOverlays]);
 }
