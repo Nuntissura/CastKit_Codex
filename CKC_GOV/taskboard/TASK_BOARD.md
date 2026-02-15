@@ -91,8 +91,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0073 | Backup/restore wizard | DONE | Codex | Export Hub wizard; snapshot+restore jobs w/ progress; manifest+SHA256SUMS; refuses D:. |
 | WP-0074 | Moodboard: vector shapes + per-layer fills | DONE | Codex | Rect/ellipse layers; bucket/gradient apply to selected shapes; layers+move+transform+arrange. |
 | WP-0075 | Moodboard: vector connectors | DONE | Codex | Editable line/arrow layers (not ink). |
-| WP-0076 | Moodboard: vector masks / clipping frames | IN_PROGRESS | Codex | Clip images into shapes (non-destructive). |
-| WP-0077 | Moodboard: selection power tools | BACKLOG | Codex | Box select + copy/paste/duplicate + nudge + context menu. |
+| WP-0076 | Moodboard: vector masks / clipping frames | DONE | Codex | Clip images into shapes (non-destructive). |
+| WP-0077 | Moodboard: selection power tools | IN_PROGRESS | Codex | Box select + copy/paste/duplicate + nudge + context menu. |
 | WP-0078 | Moodboard: rotate + numeric inspector | BACKLOG | Codex | Rotation + precise x/y/w/h editing. |
 | WP-0079 | Moodboard: guides/rulers + smart snapping | BACKLOG | Codex | Guides + alignment snapping cues. |
 | WP-0080 | Moodboard: layer folders + search/tags | BACKLOG | Codex | Nested folders + board-local tags + search. |
@@ -100,5 +100,5 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0082 | Moodboard: export powerhouse | BACKLOG | Codex | Hi-res + selection export + PDF. |
 
 ## Current focus
-- Current: WP-0076.
-- Next: WP-0077.
+- Current: WP-0077.
+- Next: WP-0078.

@@ -49,6 +49,7 @@ export type MoodboardImage = {
   h: number; // normalized height
   z?: number; // z-order (higher draws on top)
   name?: string;
+  mask?: { shapeId: string }; // clip this image to a shape frame (optional)
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -436,6 +437,11 @@ export function MoodboardCanvas({
     const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
+    const maskShapeIds = new Set<string>();
+    for (const img of images) {
+      const sid = (img as any)?.mask?.shapeId;
+      if (typeof sid === 'string' && sid.trim()) maskShapeIds.add(sid);
+    }
 
     const selection = Array.isArray(selectionRef.current) ? selectionRef.current : [];
     const groupIds = new Set<string>();
@@ -620,7 +626,7 @@ export function MoodboardCanvas({
       if (s.shape === 'ellipse') ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
       else ctx.rect(left, top, w, h);
 
-      const fill = s.fill;
+      const fill = maskShapeIds.has(String(s.id)) ? ({ kind: 'none' } as const) : s.fill;
       if (fill && fill.kind !== 'none') {
         if (fill.kind === 'solid') {
           ctx.fillStyle = fill.color || 'rgba(0,0,0,0)';
@@ -729,6 +735,30 @@ export function MoodboardCanvas({
       }
       const dx = cx - dw / 2;
       const dy = cy - dh / 2;
+
+      const maskShapeId = (img as any)?.mask?.shapeId;
+      const maskShape =
+        typeof maskShapeId === 'string' && maskShapeId.trim() ? (shapeById.get(maskShapeId.trim()) as MoodboardShape | undefined) : undefined;
+
+      if (maskShape) {
+        const mcx = (Number(maskShape.x) || 0) * rect.width;
+        const mcy = (Number(maskShape.y) || 0) * rect.height;
+        const mw = (Number(maskShape.w) || 0) * rect.width;
+        const mh = (Number(maskShape.h) || 0) * rect.height;
+        if (mw > 0 && mh > 0) {
+          const mleft = mcx - mw / 2;
+          const mtop = mcy - mh / 2;
+          ctx.save();
+          ctx.beginPath();
+          if (maskShape.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
+          else ctx.rect(mleft, mtop, mw, mh);
+          ctx.clip();
+          ctx.drawImage(el, dx, dy, dw, dh);
+          ctx.restore();
+          return;
+        }
+      }
+
       ctx.drawImage(el, dx, dy, dw, dh);
     };
 
@@ -1480,6 +1510,11 @@ export function MoodboardCanvas({
           const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
           const px = pt.x * rect.width;
           const py = pt.y * rect.height;
+          const maskShapeIds = new Set<string>();
+          for (const img of images) {
+            const sid = (img as any)?.mask?.shapeId;
+            if (typeof sid === 'string' && sid.trim()) maskShapeIds.add(sid.trim());
+          }
 
           candidates.sort(compareZAsc);
           for (let i = candidates.length - 1; i >= 0; i--) {
@@ -1508,7 +1543,34 @@ export function MoodboardCanvas({
               const right = (Number(img.x) || 0) + w / 2;
               const top = (Number(img.y) || 0) - h / 2;
               const bottom = (Number(img.y) || 0) + h / 2;
-              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'image', id: img.id };
+              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) {
+                const maskShapeId = (img as any)?.mask?.shapeId;
+                if (typeof maskShapeId === 'string' && maskShapeId.trim()) {
+                  const s = shapeById.get(maskShapeId.trim());
+                  if (s) {
+                    const scx = Number(s.x) || 0;
+                    const scy = Number(s.y) || 0;
+                    const sw = Number(s.w) || 0;
+                    const sh = Number(s.h) || 0;
+                    if (sw > 0 && sh > 0) {
+                      if (s.shape === 'ellipse') {
+                        const rx = sw / 2;
+                        const ry = sh / 2;
+                        const dx = (pt.x - scx) / rx;
+                        const dy = (pt.y - scy) / ry;
+                        if (dx * dx + dy * dy > 1) continue;
+                      } else {
+                        const sLeft = scx - sw / 2;
+                        const sRight = scx + sw / 2;
+                        const sTop = scy - sh / 2;
+                        const sBottom = scy + sh / 2;
+                        if (pt.x < sLeft || pt.x > sRight || pt.y < sTop || pt.y > sBottom) continue;
+                      }
+                    }
+                  }
+                }
+                return { kind: 'image', id: img.id };
+              }
               continue;
             }
 
@@ -1555,6 +1617,36 @@ export function MoodboardCanvas({
             const cy = Number(s.y) || 0;
             const rx = w / 2;
             const ry = h / 2;
+
+            if (maskShapeIds.has(String(s.id))) {
+              const strokeWidthPx =
+                s.stroke && Number.isFinite(Number(s.stroke.width)) && Number(s.stroke.width) > 0 ? Math.max(1, Number(s.stroke.width) || 1) : 1;
+              const tol = Math.max(8, strokeWidthPx * 2) / zoom;
+
+              const cxPx = cx * rect.width;
+              const cyPx = cy * rect.height;
+              const rxPx = rx * rect.width;
+              const ryPx = ry * rect.height;
+
+              if (s.shape === 'ellipse') {
+                if (rxPx <= 0 || ryPx <= 0) continue;
+                const nx = (px - cxPx) / rxPx;
+                const ny = (py - cyPx) / ryPx;
+                const r = Math.sqrt(nx * nx + ny * ny);
+                const dist = Math.abs(r - 1) * Math.min(rxPx, ryPx);
+                if (dist <= tol) return { kind: 'shape', id: s.id };
+              } else {
+                const left = cxPx - rxPx;
+                const right = cxPx + rxPx;
+                const top = cyPx - ryPx;
+                const bottom = cyPx + ryPx;
+                if (px < left - tol || px > right + tol || py < top - tol || py > bottom + tol) continue;
+                const edgeDist = Math.min(Math.abs(px - left), Math.abs(px - right), Math.abs(py - top), Math.abs(py - bottom));
+                if (edgeDist <= tol) return { kind: 'shape', id: s.id };
+              }
+              continue;
+            }
+
             if (s.shape === 'ellipse') {
               if (rx <= 0 || ry <= 0) continue;
               const dx = pt.x - cx;
@@ -2954,6 +3046,31 @@ export function MoodboardCanvas({
     commit(next);
   }, [commit]);
 
+  const applyMaskFromSelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    const imgSel = curSel.filter((s) => s.kind === 'image');
+    const shapeSel = curSel.filter((s) => s.kind === 'shape');
+    if (imgSel.length !== 1 || shapeSel.length !== 1) return;
+    const cur = valueRef.current;
+    const images = Array.isArray(cur.images) ? cur.images : [];
+    const nextImages = images.map((img) => (img && img.id === imgSel[0].id ? { ...img, mask: { shapeId: shapeSel[0].id } } : img));
+    const next: MoodboardState = { ...cur, images: nextImages };
+    commit(next);
+    selectionRef.current = [{ kind: 'image', id: imgSel[0].id }];
+    setSelection([{ kind: 'image', id: imgSel[0].id }]);
+  }, [commit]);
+
+  const removeMaskFromSelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    const imgSel = curSel.filter((s) => s.kind === 'image');
+    if (imgSel.length !== 1) return;
+    const cur = valueRef.current;
+    const images = Array.isArray(cur.images) ? cur.images : [];
+    const nextImages = images.map((img) => (img && img.id === imgSel[0].id ? { ...img, mask: undefined } : img));
+    const next: MoodboardState = { ...cur, images: nextImages };
+    commit(next);
+  }, [commit]);
+
   const arrangeUnits = React.useMemo(() => buildSelectionUnitsForArrange(value, selection), [buildSelectionUnitsForArrange, value, selection]);
   const canArrange = arrangeUnits.length >= 2;
   const canDistribute = arrangeUnits.length >= 3;
@@ -3069,6 +3186,22 @@ export function MoodboardCanvas({
         ? value.texts.find((t) => t && t.id === selection[0].id) ?? null
         : null
       : null;
+
+  const maskShapeIdsForUi = React.useMemo(() => {
+    const out = new Set<string>();
+    for (const img of layerImages) {
+      const sid = (img as any)?.mask?.shapeId;
+      if (typeof sid === 'string' && sid.trim()) out.add(sid.trim());
+    }
+    return out;
+  }, [layerImages]);
+
+  const maskSelImageId = selection.length === 2 ? selection.find((s) => s.kind === 'image')?.id ?? null : null;
+  const maskSelShapeId = selection.length === 2 ? selection.find((s) => s.kind === 'shape')?.id ?? null : null;
+  const canApplyMask = !!maskSelImageId && !!maskSelShapeId;
+  const selectedImageForMask =
+    selection.length === 1 && selection[0]?.kind === 'image' ? layerImages.find((img) => img && img.id === selection[0].id) ?? null : null;
+  const canRemoveMask = !!(selectedImageForMask as any)?.mask?.shapeId;
 
   return (
       <div className={styles.root}>
@@ -3202,6 +3335,17 @@ export function MoodboardCanvas({
           >
             Delete
           </button>
+
+        {canApplyMask ? (
+          <button className={styles.toolBtn} onClick={applyMaskFromSelection} title="Clip selected image to selected shape (frame)">
+            Mask
+          </button>
+        ) : null}
+        {canRemoveMask ? (
+          <button className={styles.toolBtn} onClick={removeMaskFromSelection} title="Remove mask from selected image">
+            Unmask
+          </button>
+        ) : null}
 
         <details
           style={{
@@ -3371,11 +3515,11 @@ export function MoodboardCanvas({
 
                   const fallbackName =
                     ref.kind === 'shape'
-                      ? ((item as any).shape === 'ellipse' ? 'Ellipse' : 'Rect')
+                      ? `${maskShapeIdsForUi.has(ref.id) ? 'Frame: ' : ''}${(item as any).shape === 'ellipse' ? 'Ellipse' : 'Rect'}`
                       : ref.kind === 'connector'
                         ? `Connector: ${String((item as any).kind) === 'arrow' ? 'Arrow' : 'Line'}`
                         : ref.kind === 'image'
-                          ? 'Image'
+                          ? (String((item as any)?.mask?.shapeId || '').trim() ? 'Image (masked)' : 'Image')
                           : (() => {
                               const raw = String((item as any).text || '').trim();
                               const first = raw.split(/\r?\n/)[0] || '';

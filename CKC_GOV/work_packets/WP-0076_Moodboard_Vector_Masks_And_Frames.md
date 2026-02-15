@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Allow an image layer to be clipped by a vector shape (frame/mask) so gradients/shapes can act as masks without affecting other layers.
@@ -23,16 +23,18 @@ Allow an image layer to be clipped by a vector shape (frame/mask) so gradients/s
 - Vector path editing beyond rect/ellipse masks.
 
 ## Acceptance criteria
-- [ ] Can mask an image with a rect/ellipse shape.
-- [ ] Masked image can still be moved/resized independently (or as a frame unit).
-- [ ] Undo/redo covers mask apply/remove.
+- [x] Can mask an image with a rect/ellipse shape.
+- [x] Masked image can still be moved/resized independently (or as a frame unit).
+- [x] Undo/redo covers mask apply/remove.
 
 ## Test plan
 - [ ] Manual: apply/remove mask; export moodboard PNG; verify clipping.
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (if changes beyond spec v00.051 are required).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (no changes required beyond spec v00.051).
 
 ## Implementation notes
 - Key files to touch:
@@ -42,4 +44,3 @@ Allow an image layer to be clipped by a vector shape (frame/mask) so gradients/s
 
 ## Notes
 - Do NOT touch `D:`.
-
