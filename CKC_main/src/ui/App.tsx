@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer } from './components/Drawer';
 import { LibraryView } from './views/LibraryView';
 import { CharacterView } from './views/CharacterView';
+import { ReferenceWindowView } from './views/ReferenceWindowView';
 import { useHotkeys } from './hooks/useHotkeys';
 import styles from './styles/app.module.css';
 
@@ -9,6 +10,12 @@ type Page = 'library' | 'character';
 type DrawerMode = 'none' | 'menu' | 'library';
 
 export function App() {
+  const isReferenceWindow = new URLSearchParams(window.location.search).get('ref') === '1';
+  if (isReferenceWindow) return <ReferenceApp />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const [page, setPage] = React.useState<Page>('library');
   const [selectedCharacterId, setSelectedCharacterId] = React.useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = React.useState<string | null>(null);
@@ -69,6 +76,20 @@ export function App() {
             onCloseLibraryDrawer={() => setDrawerMode('none')}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function ReferenceApp() {
+  React.useEffect(() => {
+    void window.ckc.initialize();
+  }, []);
+
+  return (
+    <div className={styles.root}>
+      <div className={styles.content}>
+        <ReferenceWindowView />
       </div>
     </div>
   );

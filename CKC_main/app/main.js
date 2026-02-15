@@ -130,6 +130,8 @@ let ckcLibrary = null;
 let ckcLibraryInitPromise = null;
 let appConfigPath = null;
 let appConfig = null;
+let referenceWindow = null;
+let referenceSelection = { imageId: null };
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -368,6 +370,59 @@ function createWindow() {
     else mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
 }
 
+function getReferenceWindowPrefs() {
+    const rw = appConfig?.referenceWindow && typeof appConfig.referenceWindow === 'object' ? appConfig.referenceWindow : {};
+    return {
+        alwaysOnTop: !!rw.alwaysOnTop,
+    };
+}
+
+function sendReferenceSelection() {
+    if (!referenceWindow || referenceWindow.isDestroyed()) return;
+    referenceWindow.webContents.send('ckc:referenceSelection', { ...referenceSelection });
+}
+
+function sendReferenceWindowState() {
+    if (!referenceWindow || referenceWindow.isDestroyed()) return;
+    const prefs = getReferenceWindowPrefs();
+    referenceWindow.webContents.send('ckc:referenceWindowState', {
+        isOpen: true,
+        imageId: referenceSelection.imageId ?? null,
+        alwaysOnTop: !!prefs.alwaysOnTop,
+    });
+}
+
+function createReferenceWindow() {
+    const prefs = getReferenceWindowPrefs();
+
+    referenceWindow = new BrowserWindow({
+        width: 980,
+        height: 720,
+        title: 'CKC Reference',
+        icon: path.join(__dirname, 'icon.ico'),
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+        },
+    });
+
+    referenceWindow.setMenuBarVisibility(false);
+    referenceWindow.setAlwaysOnTop(!!prefs.alwaysOnTop);
+
+    referenceWindow.on('closed', () => {
+        referenceWindow = null;
+    });
+
+    referenceWindow.webContents.on('did-finish-load', () => {
+        sendReferenceSelection();
+        sendReferenceWindowState();
+    });
+
+    const isDev = !app.isPackaged;
+    if (isDev) referenceWindow.loadURL('http://localhost:5173?ref=1');
+    else referenceWindow.loadFile(path.join(__dirname, '../dist/index.html'), { search: '?ref=1' });
+}
+
 function registerIpcHandlers() {
     ipcMain.handle('ckc:getConfig', async () => appConfig);
 
@@ -391,6 +446,58 @@ function registerIpcHandlers() {
         }
 
         return appConfig;
+    });
+
+    ipcMain.handle('ckc:openReferenceWindow', async () => {
+        if (referenceWindow && !referenceWindow.isDestroyed()) {
+            referenceWindow.show();
+            referenceWindow.focus();
+            sendReferenceSelection();
+            sendReferenceWindowState();
+            return { ok: true };
+        }
+        createReferenceWindow();
+        return { ok: true };
+    });
+
+    ipcMain.handle('ckc:closeReferenceWindow', async () => {
+        if (referenceWindow && !referenceWindow.isDestroyed()) referenceWindow.close();
+        return { ok: true };
+    });
+
+    ipcMain.handle('ckc:getReferenceWindowState', async () => {
+        const prefs = getReferenceWindowPrefs();
+        return {
+            isOpen: !!(referenceWindow && !referenceWindow.isDestroyed()),
+            imageId: referenceSelection.imageId ?? null,
+            alwaysOnTop: !!prefs.alwaysOnTop,
+        };
+    });
+
+    ipcMain.handle('ckc:setReferenceWindowOptions', async (_evt, params) => {
+        const p = params && typeof params === 'object' ? params : {};
+        const prev = appConfig?.referenceWindow && typeof appConfig.referenceWindow === 'object' ? appConfig.referenceWindow : {};
+        const next = { ...prev };
+
+        if (p.alwaysOnTop !== undefined) next.alwaysOnTop = !!p.alwaysOnTop;
+
+        appConfig = { ...appConfig, referenceWindow: next };
+        saveConfig(appConfigPath, appConfig);
+
+        if (referenceWindow && !referenceWindow.isDestroyed()) {
+            referenceWindow.setAlwaysOnTop(!!next.alwaysOnTop);
+            sendReferenceWindowState();
+        }
+
+        return { ok: true, state: { alwaysOnTop: !!next.alwaysOnTop } };
+    });
+
+    ipcMain.handle('ckc:setReferenceSelection', async (_evt, params) => {
+        const p = params && typeof params === 'object' ? params : {};
+        const nextId = p.imageId == null ? null : String(p.imageId ?? '').trim();
+        referenceSelection = { imageId: nextId || null };
+        sendReferenceSelection();
+        return { ok: true };
     });
 
     ipcMain.handle('ckc:llmChat', async (_evt, params) => {

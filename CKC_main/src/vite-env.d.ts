@@ -363,6 +363,13 @@ interface Window {
     getConfig: () => Promise<unknown>;
     getConfigInfo: () => Promise<CKCConfigInfo>;
     setConfig: (cfg: unknown) => Promise<unknown>;
+    openReferenceWindow: () => Promise<{ ok: true }>;
+    closeReferenceWindow: () => Promise<{ ok: true }>;
+    getReferenceWindowState: () => Promise<{ isOpen: boolean; imageId: string | null; alwaysOnTop: boolean }>;
+    setReferenceWindowOptions: (params: { alwaysOnTop?: boolean }) => Promise<{ ok: true; state: { alwaysOnTop: boolean } }>;
+    setReferenceSelection: (params: { imageId: string | null }) => Promise<{ ok: true }>;
+    onReferenceSelection: (cb: (payload: { imageId: string | null }) => void) => () => void;
+    onReferenceWindowState: (cb: (payload: { isOpen?: boolean; imageId?: string | null; alwaysOnTop?: boolean }) => void) => () => void;
     llmChat: (params: {
       messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
       temperature?: number;

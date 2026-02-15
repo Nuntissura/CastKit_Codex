@@ -211,6 +211,10 @@ export function MediaPane({
   const selectedImages = React.useMemo(() => filteredImages.filter((i) => selectedSet.has(i.id)), [filteredImages, selectedSet]);
   const selectionCount = selectedImages.length;
 
+  React.useEffect(() => {
+    void window.ckc.setReferenceSelection({ imageId: primarySelectedId });
+  }, [primarySelectedId]);
+
   const isBusy = busyBatch || !!busyImageId;
   const notesIsDirty = selectionCount === 1 && !!primarySelected && String(draftNotes ?? '') !== String(primarySelected.notes ?? '');
   const didInitialSelectionRef = React.useRef<boolean>(false);
@@ -712,6 +716,20 @@ export function MediaPane({
           </button>
           <button className={styles.topBtn} onClick={() => setIsFullscreenOpen(true)} disabled={!primarySelected}>
             Fullscreen
+          </button>
+          <button
+            className={styles.topBtn}
+            onClick={() => {
+              if (!primarySelectedId) return;
+              void window.ckc
+                .openReferenceWindow()
+                .then(() => window.ckc.setReferenceSelection({ imageId: primarySelectedId }))
+                .catch(() => {});
+            }}
+            disabled={!primarySelected}
+            title="Open a pop-out reference window synced to selection"
+          >
+            Pop out
           </button>
         </div>
       </div>

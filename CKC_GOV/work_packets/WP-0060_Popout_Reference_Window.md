@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a separate pop-out window for reference viewing (image viewer, optionally moodboard) with an always-on-top toggle.
@@ -10,7 +10,7 @@ Add a separate pop-out window for reference viewing (image viewer, optionally mo
 ## Why
 - Mimics PureRef-like workflows: keep reference visible while writing/editing.
 - High ROI for multi-monitor setups.
-- Spec: `CastKit_Codex_Spec_v00.038.md` §11.7.
+- Spec: `CastKit_Codex_Spec_v00.039.md` §11.7.
 
 ## Scope
 ### In
@@ -49,4 +49,3 @@ Remove the reference window and related IPC.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

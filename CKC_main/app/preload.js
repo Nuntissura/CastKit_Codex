@@ -5,6 +5,23 @@ contextBridge.exposeInMainWorld('ckc', {
     getConfig: () => ipcRenderer.invoke('ckc:getConfig'),
     getConfigInfo: () => ipcRenderer.invoke('ckc:getConfigInfo'),
     setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
+
+    openReferenceWindow: () => ipcRenderer.invoke('ckc:openReferenceWindow'),
+    closeReferenceWindow: () => ipcRenderer.invoke('ckc:closeReferenceWindow'),
+    getReferenceWindowState: () => ipcRenderer.invoke('ckc:getReferenceWindowState'),
+    setReferenceWindowOptions: (params) => ipcRenderer.invoke('ckc:setReferenceWindowOptions', params),
+    setReferenceSelection: (params) => ipcRenderer.invoke('ckc:setReferenceSelection', params),
+    onReferenceSelection: (cb) => {
+        const handler = (_evt, payload) => cb(payload);
+        ipcRenderer.on('ckc:referenceSelection', handler);
+        return () => ipcRenderer.removeListener('ckc:referenceSelection', handler);
+    },
+    onReferenceWindowState: (cb) => {
+        const handler = (_evt, payload) => cb(payload);
+        ipcRenderer.on('ckc:referenceWindowState', handler);
+        return () => ipcRenderer.removeListener('ckc:referenceWindowState', handler);
+    },
+
     llmChat: (params) => ipcRenderer.invoke('ckc:llmChat', params),
     selectLibraryRoot: () => ipcRenderer.invoke('ckc:selectLibraryRoot'),
     getDefaultLibraryRootInfo: () => ipcRenderer.invoke('ckc:getDefaultLibraryRootInfo'),
