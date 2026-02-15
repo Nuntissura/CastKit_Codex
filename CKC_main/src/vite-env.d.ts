@@ -307,6 +307,29 @@ type CKCNearDuplicateScanJobStatus = {
   result: CKCNearDuplicateScanResult | null;
 };
 
+type CKCCollectionListItem = {
+  id: string;
+  name: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CKCCollectionImage = {
+  id: string;
+  characterId: string;
+  characterName: string;
+  favorite: boolean;
+  rating: number;
+  notes: string;
+  sourceUrl?: string | null;
+  sourceNote?: string;
+  tags: string[];
+  addedAt: string;
+  sortOrder: number;
+  addedToCollectionAt: string;
+};
+
 type CKCRepairMissingImagesByHashResult = {
   ok: true;
   reportPath: string;
@@ -463,6 +486,13 @@ interface Window {
       startNearDuplicateScan: (params?: { threshold?: number; maxImages?: number; maxPerGroup?: number } | null) => Promise<{ ok: true; jobId: string }>;
       getNearDuplicateScanStatus: (jobId: string) => Promise<CKCNearDuplicateScanJobStatus>;
       cancelNearDuplicateScan: (jobId: string) => Promise<{ ok: true }>;
+      listCollections: () => Promise<CKCCollectionListItem[]>;
+      createCollection: (params: { name: string }) => Promise<{ ok: true; id: string; name: string }>;
+      renameCollection: (params: { collectionId: string; name: string }) => Promise<{ ok: true }>;
+      deleteCollection: (params: { collectionId: string }) => Promise<{ ok: true }>;
+      listCollectionImages: (params: { collectionId: string }) => Promise<CKCCollectionImage[]>;
+      addImagesToCollection: (params: { collectionId: string; imageIds: string[] }) => Promise<{ ok: true; inserted: number; skipped: number }>;
+      removeImagesFromCollection: (params: { collectionId: string; imageIds: string[] }) => Promise<{ ok: true; removed: number }>;
       listTagStats: () => Promise<CKCTagStats[]>;
       mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
       renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;

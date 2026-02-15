@@ -721,6 +721,41 @@ function registerIpcHandlers() {
         return { ok: true };
     });
 
+    ipcMain.handle('ckc:listCollections', async () => {
+        const lib = await ensureLibrary();
+        return lib.listCollections();
+    });
+
+    ipcMain.handle('ckc:createCollection', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.createCollection(params || {});
+    });
+
+    ipcMain.handle('ckc:renameCollection', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.renameCollection(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteCollection', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteCollection(params || {});
+    });
+
+    ipcMain.handle('ckc:listCollectionImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listCollectionImages(params || {});
+    });
+
+    ipcMain.handle('ckc:addImagesToCollection', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.addImagesToCollection(params || {});
+    });
+
+    ipcMain.handle('ckc:removeImagesFromCollection', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.removeImagesFromCollection(params || {});
+    });
+
     ipcMain.handle('ckc:listTagStats', async () => {
         const lib = await ensureLibrary();
         return lib.listTagStats();

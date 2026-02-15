@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add named collections of images across characters, with slideshow playback and export.
@@ -10,7 +10,7 @@ Add named collections of images across characters, with slideshow playback and e
 ## Why
 - “Casting” and vibe passes are inherently cross-character.
 - Collections are a simple primitive that unlocks many workflows.
-- Spec: `CastKit_Codex_Spec_v00.045.md` §11.16.
+- Spec: `CastKit_Codex_Spec_v00.046.md` §11.16.
 
 ## Scope
 ### In
@@ -23,12 +23,12 @@ Add named collections of images across characters, with slideshow playback and e
 - Advanced ordering rules (shuffle, weighted) beyond manual reorder.
 
 ## Acceptance criteria
-- [ ] Collections persist in DB and survive restarts.
-- [ ] Slideshow works for a collection.
-- [ ] Export destination is user-selectable and never defaults to `D:`.
+- [x] Collections persist in DB and survive restarts.
+- [x] Slideshow works for a collection.
+- [x] Export destination is user-selectable and never defaults to `D:`.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
+- [x] `cd CKC_main; npm test`
 - [ ] Manual: build a collection, run slideshow, export to a folder under libraryRoot.
 
 ## Notes

@@ -174,6 +174,16 @@ export function ExportHubView({
   const [allTags, setAllTags] = React.useState<string[]>([]);
   const [mediaSelectedIds, setMediaSelectedIds] = React.useState<string[]>([]);
 
+  const allImageIds = React.useMemo(() => {
+    return (selectedCharacter?.images || []).map((i) => i.id);
+  }, [selectedCharacter?.images]);
+
+  // --- Collections / playlists ---
+  const [collections, setCollections] = React.useState<CKCCollectionListItem[] | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = React.useState<string | null>(null);
+  const [collectionImages, setCollectionImages] = React.useState<CKCCollectionImage[] | null>(null);
+  const [collectionSelectedIds, setCollectionSelectedIds] = React.useState<string[]>([]);
+
   React.useEffect(() => {
     window.ckc
       .listCharacters({ queryText: '', tagFilters: [] })
@@ -189,6 +199,191 @@ export function ExportHubView({
       .catch(() => setAllTags([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const reloadCollections = React.useCallback(async () => {
+    setError(null);
+    try {
+      const rows = await window.ckc.listCollections();
+      const list = Array.isArray(rows) ? rows : [];
+      setCollections(list);
+      if (selectedCollectionId && list.some((c) => c.id === selectedCollectionId)) return;
+      setSelectedCollectionId(list[0]?.id ?? null);
+    } catch {
+      setCollections([]);
+      setSelectedCollectionId(null);
+    }
+  }, [selectedCollectionId]);
+
+  const reloadCollectionImages = React.useCallback(async (collectionId: string) => {
+    const cid = String(collectionId ?? '').trim();
+    if (!cid) {
+      setCollectionImages(null);
+      setCollectionSelectedIds([]);
+      return;
+    }
+    setError(null);
+    try {
+      const rows = await window.ckc.listCollectionImages({ collectionId: cid });
+      setCollectionImages(Array.isArray(rows) ? rows : []);
+      setCollectionSelectedIds([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setCollectionImages([]);
+      setCollectionSelectedIds([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void reloadCollections();
+  }, [reloadCollections]);
+
+  React.useEffect(() => {
+    void reloadCollectionImages(selectedCollectionId ?? '');
+  }, [selectedCollectionId, reloadCollectionImages]);
+
+  const selectedCollection = React.useMemo(() => {
+    const cid = String(selectedCollectionId ?? '').trim();
+    if (!cid) return null;
+    return (collections || []).find((c) => c.id === cid) ?? null;
+  }, [collections, selectedCollectionId]);
+
+  const createCollection = React.useCallback(async () => {
+    const name = window.prompt('New collection name:', '');
+    if (name == null) return;
+    const n = String(name || '').trim();
+    if (!n) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await window.ckc.createCollection({ name: n });
+      await reloadCollections();
+      setSelectedCollectionId(res.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [reloadCollections]);
+
+  const renameCollection = React.useCallback(async () => {
+    const cid = String(selectedCollectionId ?? '').trim();
+    if (!cid) return;
+    const current = selectedCollection?.name ?? '';
+    const name = window.prompt('Rename collection:', current);
+    if (name == null) return;
+    const n = String(name || '').trim();
+    if (!n) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await window.ckc.renameCollection({ collectionId: cid, name: n });
+      await reloadCollections();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [selectedCollectionId, selectedCollection?.name, reloadCollections]);
+
+  const deleteCollection = React.useCallback(async () => {
+    const cid = String(selectedCollectionId ?? '').trim();
+    if (!cid) return;
+    const ok = window.confirm(`Delete collection "${selectedCollection?.name || cid}"?`);
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await window.ckc.deleteCollection({ collectionId: cid });
+      await reloadCollections();
+      setSelectedCollectionId(null);
+      setCollectionImages(null);
+      setCollectionSelectedIds([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [selectedCollectionId, selectedCollection?.name, reloadCollections]);
+
+  const addSelectedToCollection = React.useCallback(
+    async (mode: 'selected' | 'all') => {
+      const cid = String(selectedCollectionId ?? '').trim();
+      if (!cid) {
+        setError('Choose a collection first.');
+        return;
+      }
+      const imageIds = mode === 'all' ? allImageIds : mediaSelectedIds;
+      if (!imageIds.length) {
+        setError(mode === 'all' ? 'This character has no images.' : 'No images selected.');
+        return;
+      }
+
+      setBusy(true);
+      setError(null);
+      try {
+        await window.ckc.addImagesToCollection({ collectionId: cid, imageIds });
+        await reloadCollections();
+        await reloadCollectionImages(cid);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedCollectionId, mediaSelectedIds, allImageIds, reloadCollections, reloadCollectionImages]
+  );
+
+  const removeSelectedFromCollection = React.useCallback(async () => {
+    const cid = String(selectedCollectionId ?? '').trim();
+    if (!cid) return;
+    if (collectionSelectedIds.length === 0) return;
+
+    const ok = window.confirm(`Remove ${collectionSelectedIds.length} image(s) from this collection?`);
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await window.ckc.removeImagesFromCollection({ collectionId: cid, imageIds: collectionSelectedIds });
+      await reloadCollections();
+      await reloadCollectionImages(cid);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [selectedCollectionId, collectionSelectedIds, reloadCollections, reloadCollectionImages]);
+
+  const exportCollection = React.useCallback(async () => {
+    if (!exportRoot) {
+      setError('Export folder is not set yet.');
+      return;
+    }
+    const cid = String(selectedCollectionId ?? '').trim();
+    if (!cid) {
+      setError('Choose a collection first.');
+      return;
+    }
+    const ids = (collectionImages || []).map((i) => i.id);
+    if (ids.length === 0) {
+      setError('This collection has no images.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await window.ckc.exportImageSet({ imageIds: ids, outDir: exportRoot, setName: selectedCollection?.name ?? 'collection' });
+      setLastExportPath(res.outDir);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [exportRoot, selectedCollectionId, collectionImages, selectedCollection?.name]);
 
   React.useEffect(() => {
     const cid = String(selectedCharacterId ?? '').trim();
@@ -206,10 +401,6 @@ export function ExportHubView({
         setSelectedCharacter(null);
       });
   }, [selectedCharacterId]);
-
-  const allImageIds = React.useMemo(() => {
-    return (selectedCharacter?.images || []).map((i) => i.id);
-  }, [selectedCharacter?.images]);
 
   const exportImageSet = React.useCallback(
     async (mode: 'selected' | 'all') => {
@@ -504,6 +695,92 @@ export function ExportHubView({
             <button className={styles.btnSecondary} onClick={() => void exportSharePack()} disabled={busy || !selectedCharacterId}>
               Export share pack
             </button>
+          </div>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Collections / playlists</div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Collection</div>
+            <select
+              className={styles.select}
+              value={selectedCollectionId ?? ''}
+              onChange={(e) => setSelectedCollectionId(e.target.value || null)}
+              disabled={busy}
+            >
+              <option value="">(none)</option>
+              {(collections || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.itemCount})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.row}>
+            <button className={styles.btnSecondary} onClick={() => void createCollection()} disabled={busy}>
+              Newâ€¦
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void renameCollection()} disabled={busy || !selectedCollectionId}>
+              Renameâ€¦
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void deleteCollection()} disabled={busy || !selectedCollectionId}>
+              Delete
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void reloadCollections()} disabled={busy}>
+              Refresh
+            </button>
+            {selectedCollectionId ? (
+              <span className={styles.muted}>
+                items <b>{collectionImages ? collectionImages.length : 0}</b>
+              </span>
+            ) : null}
+          </div>
+
+          <div className={styles.row}>
+            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('selected')} disabled={busy || !selectedCollectionId}>
+              Add selected from character ({mediaSelectedIds.length})
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('all')} disabled={busy || !selectedCollectionId}>
+              Add all from character ({allImageIds.length})
+            </button>
+          </div>
+
+          <div className={styles.mediaBox} aria-label="Collection viewer">
+            <MediaPane
+              images={collectionImages || []}
+              allTags={allTags}
+              defaultShowThumbnails={true}
+              defaultShowControls={true}
+              enableViewerSlideshow={true}
+              emptyLabel={selectedCollectionId ? 'No images in this collection.' : 'Choose a collection.'}
+              onSelectionChange={(ids) => setCollectionSelectedIds(ids)}
+              onPatchImageMeta={(imageId, patch) => {
+                setCollectionImages((prev) =>
+                  prev
+                    ? prev.map((img) => (img.id === imageId ? { ...img, ...patch, tags: patch.tags ?? img.tags } : img))
+                    : prev
+                );
+              }}
+            />
+          </div>
+
+          <div className={styles.row}>
+            <button
+              className={styles.btnSecondary}
+              onClick={() => void removeSelectedFromCollection()}
+              disabled={busy || !selectedCollectionId || collectionSelectedIds.length === 0}
+            >
+              Remove selected ({collectionSelectedIds.length})
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void exportCollection()} disabled={busy || !selectedCollectionId}>
+              Export collection
+            </button>
+          </div>
+
+          <div className={styles.muted} style={{ marginTop: 8 }}>
+            Tip: export uses the same output root and writes under <code>image_sets/</code>.
           </div>
         </div>
       </div>

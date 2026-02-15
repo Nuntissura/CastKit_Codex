@@ -175,6 +175,7 @@ export function CharacterView({
   const [mediaMode, setMediaMode] = React.useState<'carousel' | 'photos'>('carousel');
   const [linksError, setLinksError] = React.useState<string | null>(null);
   const [requestedImageId, setRequestedImageId] = React.useState<string | null>(null);
+  const [mediaSelectedIds, setMediaSelectedIds] = React.useState<string[]>([]);
 
   const [notesBacklinks, setNotesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [storiesBacklinks, setStoriesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
@@ -809,6 +810,39 @@ export function CharacterView({
     const carousel = all.filter((i) => (i.tags || []).includes('carousel'));
     return carousel.length > 0 ? carousel : all;
   }, [character, mediaMode]);
+
+  const addSelectionToCollection = React.useCallback(async () => {
+    const ids = Array.isArray(mediaSelectedIds) ? mediaSelectedIds : [];
+    if (ids.length === 0) {
+      window.alert('No images selected.');
+      return;
+    }
+
+    setError(null);
+    try {
+      const rows = await window.ckc.listCollections();
+      const list = Array.isArray(rows) ? rows : [];
+      const names = list.map((c: any) => String(c?.name ?? '')).filter(Boolean);
+      const hint = names.length ? `\n\nExisting: ${names.slice(0, 12).join(', ')}${names.length > 12 ? '…' : ''}` : '';
+      const proposed = window.prompt(`Add ${ids.length} image(s) to which collection?${hint}`, '');
+      if (proposed == null) return;
+      const name = String(proposed || '').trim();
+      if (!name) return;
+
+      let target = list.find((c: any) => String(c?.name ?? '').toLowerCase() === name.toLowerCase()) || null;
+      if (!target) {
+        const ok = window.confirm(`Create new collection "${name}"?`);
+        if (!ok) return;
+        target = await window.ckc.createCollection({ name });
+      }
+
+      const collectionId = String((target as any)?.id ?? '').trim();
+      if (!collectionId) throw new Error('Invalid collection id');
+      await window.ckc.addImagesToCollection({ collectionId, imageIds: ids });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [mediaSelectedIds]);
 
   const notesOutboundLinks = React.useMemo(() => extractBracketLinks(notesDraftContent), [notesDraftContent]);
   const storiesOutboundLinks = React.useMemo(() => {
@@ -1974,6 +2008,9 @@ export function CharacterView({
                   >
                     Photos
                   </button>
+                  <button className={styles.leftToggle} onClick={() => void addSelectionToCollection()} disabled={mediaSelectedIds.length === 0}>
+                    Add to collectionâ€¦
+                  </button>
                 </div>
                 }
                 enableViewerSlideshow={mediaMode === 'carousel'}
@@ -1982,6 +2019,7 @@ export function CharacterView({
                 autoOpenControlsOnSelect={mediaMode === 'photos'}
                 images={images}
                 emptyLabel="No images for this character yet."
+                onSelectionChange={(ids) => setMediaSelectedIds(ids)}
                 onPatchImageMeta={(imageId, patch) => {
                   setCharacter((prev) => {
                     if (!prev) return prev;

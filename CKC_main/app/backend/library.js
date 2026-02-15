@@ -4847,6 +4847,170 @@ class CKCLibrary {
     return { ok: true, threshold: thr, totalImages: total, hashedImages: n, groups };
   }
 
+  async listCollections() {
+    const rows = await all(
+      this.db,
+      `SELECT c.collection_id, c.name, c.created_at, c.updated_at, COUNT(ci.image_id) AS item_count
+       FROM Collection c
+       LEFT JOIN CollectionItem ci ON ci.collection_id = c.collection_id
+       GROUP BY c.collection_id
+       ORDER BY c.name COLLATE NOCASE ASC`
+    );
+    return rows.map((r) => ({
+      id: String(r.collection_id ?? ''),
+      name: String(r.name ?? ''),
+      itemCount: Number(r.item_count) || 0,
+      createdAt: String(r.created_at ?? ''),
+      updatedAt: String(r.updated_at ?? ''),
+    }));
+  }
+
+  async createCollection({ name } = {}) {
+    const n = String(name ?? '').trim();
+    if (!n) throw new Error('name is required');
+    if (n.length > 140) throw new Error('name is too long');
+
+    const id = randomId('col_');
+    await run(
+      this.db,
+      `INSERT INTO Collection(collection_id, name)
+       VALUES(?, ?)`,
+      [id, n]
+    );
+    await this._audit('collection.create', null, { collectionId: id, name: n });
+    return { ok: true, id, name: n };
+  }
+
+  async renameCollection({ collectionId, name } = {}) {
+    const id = String(collectionId ?? '').trim();
+    if (!id) throw new Error('collectionId is required');
+    const n = String(name ?? '').trim();
+    if (!n) throw new Error('name is required');
+    if (n.length > 140) throw new Error('name is too long');
+
+    await run(
+      this.db,
+      `UPDATE Collection
+       SET name = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE collection_id = ?`,
+      [n, id]
+    );
+    await this._audit('collection.rename', null, { collectionId: id, name: n });
+    return { ok: true };
+  }
+
+  async deleteCollection({ collectionId } = {}) {
+    const id = String(collectionId ?? '').trim();
+    if (!id) throw new Error('collectionId is required');
+    await run(this.db, `DELETE FROM Collection WHERE collection_id = ?`, [id]);
+    await this._audit('collection.delete', null, { collectionId: id });
+    return { ok: true };
+  }
+
+  async addImagesToCollection({ collectionId, imageIds = [] } = {}) {
+    const cid = String(collectionId ?? '').trim();
+    if (!cid) throw new Error('collectionId is required');
+    const idsRaw = Array.isArray(imageIds) ? imageIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    if (ids.length === 0) throw new Error('imageIds is required');
+
+    const maxRow = await get(this.db, `SELECT COALESCE(MAX(sort_order), 0) AS m FROM CollectionItem WHERE collection_id = ?`, [cid]);
+    let order = (Number(maxRow?.m) || 0) + 1;
+
+    let inserted = 0;
+    let skipped = 0;
+    await run(this.db, 'BEGIN');
+    try {
+      for (const imageId of ids) {
+        const res = await run(
+          this.db,
+          `INSERT OR IGNORE INTO CollectionItem(collection_id, image_id, sort_order)
+           VALUES(?, ?, ?)`,
+          [cid, imageId, order]
+        );
+        if (Number(res?.changes) > 0) {
+          inserted += 1;
+          order += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+      await run(this.db, `UPDATE Collection SET updated_at = CURRENT_TIMESTAMP WHERE collection_id = ?`, [cid]);
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._audit('collection.addImages', null, { collectionId: cid, requested: ids.length, inserted, skipped });
+    return { ok: true, inserted, skipped };
+  }
+
+  async removeImagesFromCollection({ collectionId, imageIds = [] } = {}) {
+    const cid = String(collectionId ?? '').trim();
+    if (!cid) throw new Error('collectionId is required');
+    const idsRaw = Array.isArray(imageIds) ? imageIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    if (ids.length === 0) throw new Error('imageIds is required');
+
+    let removed = 0;
+    await run(this.db, 'BEGIN');
+    try {
+      for (const imageId of ids) {
+        const res = await run(this.db, `DELETE FROM CollectionItem WHERE collection_id = ? AND image_id = ?`, [cid, imageId]);
+        removed += Number(res?.changes) || 0;
+      }
+      await run(this.db, `UPDATE Collection SET updated_at = CURRENT_TIMESTAMP WHERE collection_id = ?`, [cid]);
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._audit('collection.removeImages', null, { collectionId: cid, requested: ids.length, removed });
+    return { ok: true, removed };
+  }
+
+  async listCollectionImages({ collectionId } = {}) {
+    const cid = String(collectionId ?? '').trim();
+    if (!cid) throw new Error('collectionId is required');
+
+    const rows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, c.display_name,
+              ia.favorite, ia.rating, ia.notes, ia.tags_json, ia.source_url, ia.source_note, ia.added_at,
+              ci.sort_order, ci.added_at AS added_to_collection_at
+       FROM CollectionItem ci
+       JOIN ImageAsset ia ON ia.image_id = ci.image_id
+       JOIN Character c ON c.character_id = ia.character_id
+       WHERE ci.collection_id = ?
+       ORDER BY ci.sort_order ASC, ci.added_at ASC`,
+      [cid]
+    );
+
+    return rows.map((img) => ({
+      id: img.image_id,
+      characterId: img.character_id,
+      characterName: String(img.display_name ?? ''),
+      favorite: !!img.favorite,
+      rating: img.rating,
+      notes: img.notes ?? '',
+      sourceUrl: img.source_url ?? null,
+      sourceNote: img.source_note ?? '',
+      tags: (() => {
+        try {
+          const parsed = JSON.parse(img.tags_json ?? '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
+      addedAt: img.added_at,
+      sortOrder: Number(img.sort_order) || 0,
+      addedToCollectionAt: String(img.added_to_collection_at ?? ''),
+    }));
+  }
+
   async getImageAnnotations({ imageId } = {}) {
     const id = String(imageId ?? '').trim();
     if (!id) throw new Error('imageId is required');

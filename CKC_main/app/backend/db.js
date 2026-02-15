@@ -245,6 +245,31 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_image_annotation_updated ON ImageAnnotation(updated_at DESC);
   `
   );
+
+  // Collections / playlists (cross-character image sets).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS Collection (
+      collection_id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS CollectionItem (
+      collection_id TEXT NOT NULL,
+      image_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(collection_id, image_id),
+      FOREIGN KEY(collection_id) REFERENCES Collection(collection_id) ON DELETE CASCADE,
+      FOREIGN KEY(image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_collection_item_order ON CollectionItem(collection_id, sort_order, added_at);
+  `
+  );
 }
 
 async function initSchema(db) {
