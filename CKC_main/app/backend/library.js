@@ -15,6 +15,7 @@ const {
 } = require('./sheet');
 const { validateCharacterValues, classifyChangeType } = require('./validation');
 const { extractDominantPaletteFromBitmap } = require('./palette');
+const { computeDhashHexFromBitmap, hammingDistanceHex64, isHex64 } = require('./dhash');
 
 const INBOX_CHARACTER_ID = '__ckc_inbox';
 const INBOX_CHARACTER_NAME = 'Inbox';
@@ -4603,6 +4604,247 @@ class CKCLibrary {
     }
 
     return { ok: true, palettes };
+  }
+
+  async getImageDhash({ imageId } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const row = await get(
+      this.db,
+      `SELECT image_id, character_id, relative_path, storage_mode, source_path, dhash_hex
+       FROM ImageAsset
+       WHERE image_id = ?`,
+      [id]
+    );
+    if (!row) throw new Error('Image not found');
+
+    if (row.dhash_hex != null) {
+      const s = String(row.dhash_hex ?? '').trim().toLowerCase();
+      if (s === '' || isHex64(s)) return { ok: true, imageId: id, dhash: s };
+    }
+
+    if (!this.electronNativeImage) return { ok: true, imageId: id, dhash: '' };
+
+    const characterId = String(row.character_id ?? '').trim();
+    const relRaw = String(row.relative_path ?? '');
+    const mode = String(row.storage_mode ?? 'copy');
+    const sourcePath = row.source_path != null ? String(row.source_path) : null;
+
+    const paths = this.getCharacterPaths(characterId);
+    const fileName = path.basename(relRaw.replaceAll('/', path.sep));
+    const stem = fileName.replace(path.extname(fileName), '');
+    const thumbAbs = stem ? path.join(paths.imagesThumbDir, `${stem}.png`) : null;
+
+    const originalAbs =
+      mode === 'reference' && sourcePath ? sourcePath : path.join(paths.base, relRaw.replaceAll('/', path.sep));
+
+    const hasThumb = !!(thumbAbs && fs.existsSync(thumbAbs));
+    const pickedAbs = hasThumb ? thumbAbs : originalAbs;
+    if (!pickedAbs || !fs.existsSync(pickedAbs)) {
+      await run(this.db, `UPDATE ImageAsset SET dhash_hex = ? WHERE image_id = ?`, ['', id]);
+      return { ok: true, imageId: id, dhash: '' };
+    }
+
+    let dhash = '';
+    try {
+      const img = this.electronNativeImage.createFromPath(pickedAbs);
+      const resized = img.resize({ width: 9, height: 8 });
+      const size = resized.getSize();
+      const bytes = resized.toBitmap();
+      dhash = computeDhashHexFromBitmap({
+        width: size.width,
+        height: size.height,
+        bytes,
+        channelOrder: 'bgra',
+      });
+    } catch {
+      dhash = '';
+    }
+
+    const stored = dhash && isHex64(dhash) ? String(dhash).trim().toLowerCase() : '';
+    await run(this.db, `UPDATE ImageAsset SET dhash_hex = ? WHERE image_id = ?`, [stored, id]);
+    await this._audit('image.dhash.compute', characterId || null, {
+      imageId: id,
+      source: hasThumb ? 'thumb' : 'original',
+    });
+    return { ok: true, imageId: id, dhash: stored };
+  }
+
+  async scanNearDuplicateGroups({ threshold = 10, maxImages = 2500, maxPerGroup = 60, onProgress = null, isCancelled = null } = {}) {
+    const thr = Math.max(0, Math.min(32, Number(threshold) || 10));
+    const lim = Math.max(1, Math.min(50_000, Number(maxImages) || 2500));
+    const per = Math.max(2, Math.min(400, Number(maxPerGroup) || 60));
+
+    const rows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, c.display_name, ia.favorite, ia.rating, ia.tags_json, ia.dhash_hex, ia.added_at
+       FROM ImageAsset ia
+       JOIN Character c ON c.character_id = ia.character_id
+       ORDER BY ia.added_at DESC
+       LIMIT ?`,
+      [lim]
+    );
+
+    const cancelled = () => (typeof isCancelled === 'function' ? !!isCancelled() : false);
+
+    const items = [];
+    const total = rows.length;
+    let done = 0;
+
+    for (const r of rows) {
+      if (cancelled()) return { ok: true, cancelled: true, threshold: thr, groups: [] };
+
+      const imageId = String(r.image_id ?? '').trim();
+      const characterId = String(r.character_id ?? '').trim();
+      const characterName = String(r.display_name ?? '');
+
+      let tags = [];
+      try {
+        const parsed = JSON.parse(r.tags_json ?? '[]');
+        tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+      } catch {
+        tags = [];
+      }
+
+      let dhash = r.dhash_hex != null ? String(r.dhash_hex ?? '').trim().toLowerCase() : null;
+      const needsCompute = dhash == null || (dhash !== '' && !isHex64(dhash));
+      if (needsCompute && imageId) {
+        try {
+          const res = await this.getImageDhash({ imageId });
+          dhash = String(res?.dhash ?? '').trim().toLowerCase();
+        } catch {
+          dhash = '';
+        }
+      }
+
+      if (dhash && isHex64(dhash)) {
+        items.push({
+          imageId,
+          characterId,
+          characterName,
+          favorite: !!r.favorite,
+          rating: Number(r.rating) || 0,
+          tags,
+          dhash,
+        });
+      }
+
+      done += 1;
+      if (typeof onProgress === 'function' && (done % 10 === 0 || done === total)) {
+        onProgress({ phase: 'hashing', done, total });
+      }
+      if (done % 8 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+
+    const n = items.length;
+    if (n < 2) return { ok: true, threshold: thr, totalImages: total, hashedImages: n, groups: [] };
+
+    const buckets = new Map();
+    for (let i = 0; i < n; i++) {
+      const h = String(items[i].dhash);
+      for (let b = 0; b < 4; b++) {
+        const key = `${b}:${h.slice(b * 4, b * 4 + 4)}`;
+        const arr = buckets.get(key);
+        if (arr) arr.push(i);
+        else buckets.set(key, [i]);
+      }
+    }
+
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const rank = new Array(n).fill(0);
+
+    const find = (x) => {
+      let p = parent[x];
+      while (p !== parent[p]) p = parent[p];
+      let cur = x;
+      while (cur !== p) {
+        const nxt = parent[cur];
+        parent[cur] = p;
+        cur = nxt;
+      }
+      return p;
+    };
+
+    const union = (a, b) => {
+      let ra = find(a);
+      let rb = find(b);
+      if (ra === rb) return;
+      const rka = rank[ra] || 0;
+      const rkb = rank[rb] || 0;
+      if (rka < rkb) {
+        parent[ra] = rb;
+        return;
+      }
+      if (rkb < rka) {
+        parent[rb] = ra;
+        return;
+      }
+      parent[rb] = ra;
+      rank[ra] = rka + 1;
+    };
+
+    let groupedDone = 0;
+    for (let i = 0; i < n; i++) {
+      if (cancelled()) return { ok: true, cancelled: true, threshold: thr, groups: [] };
+
+      const h = String(items[i].dhash);
+      const seen = new Set();
+
+      for (let b = 0; b < 4; b++) {
+        const key = `${b}:${h.slice(b * 4, b * 4 + 4)}`;
+        const cand = buckets.get(key) || [];
+        for (const j of cand) {
+          if (j <= i) continue;
+          seen.add(j);
+        }
+      }
+
+      for (const j of seen) {
+        if (hammingDistanceHex64(h, String(items[j].dhash)) <= thr) union(i, j);
+      }
+
+      groupedDone += 1;
+      if (typeof onProgress === 'function' && (groupedDone % 20 === 0 || groupedDone === n)) {
+        onProgress({ phase: 'grouping', done: groupedDone, total: n });
+      }
+      if (groupedDone % 10 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+
+    const byRoot = new Map();
+    for (let i = 0; i < n; i++) {
+      const root = find(i);
+      const arr = byRoot.get(root);
+      if (arr) arr.push(i);
+      else byRoot.set(root, [i]);
+    }
+
+    const groups = [];
+    for (const [root, idxs] of byRoot.entries()) {
+      if (!idxs || idxs.length < 2) continue;
+      const repIdx = idxs[0];
+      const repHash = String(items[repIdx].dhash);
+      let maxDistance = 0;
+      const images = idxs.map((idx) => {
+        const it = items[idx];
+        const distance = hammingDistanceHex64(repHash, String(it.dhash));
+        if (distance > maxDistance) maxDistance = distance;
+        return { ...it, distance };
+      });
+      images.sort((a, b) => a.distance - b.distance || Number(b.favorite) - Number(a.favorite) || (b.rating || 0) - (a.rating || 0));
+      const truncated = images.length > per;
+      groups.push({
+        groupId: `nd_${String(root)}`,
+        count: images.length,
+        repHash,
+        maxDistance,
+        truncated,
+        images: images.slice(0, per),
+      });
+    }
+
+    groups.sort((a, b) => (b.count || 0) - (a.count || 0) || (a.maxDistance || 0) - (b.maxDistance || 0));
+    return { ok: true, threshold: thr, totalImages: total, hashedImages: n, groups };
   }
 
   async getImageAnnotations({ imageId } = {}) {

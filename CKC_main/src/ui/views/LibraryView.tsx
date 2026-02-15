@@ -160,6 +160,13 @@ export function LibraryView({
   const [dupGroups, setDupGroups] = React.useState<CKCDuplicateGroup[] | null>(null);
   const [dupBusy, setDupBusy] = React.useState<boolean>(false);
   const [dupError, setDupError] = React.useState<string | null>(null);
+  const [nearDupGroups, setNearDupGroups] = React.useState<CKCNearDuplicateGroup[] | null>(null);
+  const [nearDupJob, setNearDupJob] = React.useState<CKCNearDuplicateScanJobStatus | null>(null);
+  const [nearDupBusy, setNearDupBusy] = React.useState<boolean>(false);
+  const [nearDupError, setNearDupError] = React.useState<string | null>(null);
+  const [nearDupThreshold, setNearDupThreshold] = React.useState<number>(10);
+  const [nearDupMaxImages, setNearDupMaxImages] = React.useState<number>(2500);
+  const nearDupPollRef = React.useRef<number | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [exportRootOverride, setExportRootOverride] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
@@ -180,6 +187,12 @@ export function LibraryView({
 
   React.useEffect(() => {
     window.ckc.getDefaultLibraryRootInfo().then(setDefaultLibraryRootInfo).catch(() => setDefaultLibraryRootInfo(null));
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (nearDupPollRef.current != null) window.clearInterval(nearDupPollRef.current);
+    };
   }, []);
 
   React.useEffect(() => {
@@ -491,6 +504,106 @@ export function LibraryView({
       setDupGroups([]);
     } finally {
       setDupBusy(false);
+    }
+  }, []);
+
+  const stopNearDupPolling = React.useCallback(() => {
+    if (nearDupPollRef.current == null) return;
+    window.clearInterval(nearDupPollRef.current);
+    nearDupPollRef.current = null;
+  }, []);
+
+  const pollNearDupStatus = React.useCallback(
+    async (jobId: string) => {
+      const id = String(jobId || '').trim();
+      if (!id) return;
+      try {
+        const st = await window.ckc.getNearDuplicateScanStatus(id);
+        setNearDupJob(st);
+
+        if (st.status === 'done') {
+          const groups = Array.isArray(st.result?.groups) ? st.result.groups : [];
+          setNearDupGroups(groups);
+          setNearDupBusy(false);
+          stopNearDupPolling();
+          return;
+        }
+
+        if (st.status === 'cancelled') {
+          setNearDupError('Near-duplicate scan cancelled.');
+          setNearDupBusy(false);
+          stopNearDupPolling();
+          return;
+        }
+
+        if (st.status === 'error') {
+          setNearDupError(st.error || 'Near-duplicate scan failed.');
+          setNearDupBusy(false);
+          stopNearDupPolling();
+          return;
+        }
+      } catch (err: unknown) {
+        setNearDupError(err instanceof Error ? err.message : String(err));
+        setNearDupBusy(false);
+        stopNearDupPolling();
+      }
+    },
+    [stopNearDupPolling]
+  );
+
+  const startNearDupScan = React.useCallback(async () => {
+    stopNearDupPolling();
+    setNearDupError(null);
+    setNearDupGroups(null);
+    setNearDupJob(null);
+    setNearDupBusy(true);
+
+    try {
+      const res = await window.ckc.startNearDuplicateScan({ threshold: nearDupThreshold, maxImages: nearDupMaxImages, maxPerGroup: 80 });
+      const jobId = String((res as any)?.jobId ?? '').trim();
+      if (!jobId) throw new Error('Near-duplicate scan did not return a jobId.');
+
+      await pollNearDupStatus(jobId);
+      nearDupPollRef.current = window.setInterval(() => void pollNearDupStatus(jobId), 650);
+    } catch (err: unknown) {
+      setNearDupError(err instanceof Error ? err.message : String(err));
+      setNearDupBusy(false);
+      stopNearDupPolling();
+    }
+  }, [nearDupThreshold, nearDupMaxImages, pollNearDupStatus, stopNearDupPolling]);
+
+  const cancelNearDupScan = React.useCallback(async () => {
+    const jobId = String(nearDupJob?.jobId ?? '').trim();
+    if (!jobId) return;
+    try {
+      await window.ckc.cancelNearDuplicateScan(jobId);
+    } catch (err: unknown) {
+      setNearDupError(err instanceof Error ? err.message : String(err));
+    }
+  }, [nearDupJob]);
+
+  const markNearDupRedundant = React.useCallback(async (img: CKCNearDuplicateImage) => {
+    const imageId = String(img?.imageId ?? '').trim();
+    if (!imageId) return;
+    const baseTags = Array.isArray(img?.tags) ? img.tags.map((t) => String(t ?? '').trim()).filter(Boolean) : [];
+    const has = baseTags.some((t) => t.toLowerCase() === 'redundant');
+    const nextTags = has ? baseTags : Array.from(new Set([...baseTags, 'redundant']));
+
+    const ok = window.confirm(`Mark image as redundant (adds tag: redundant)?\n\n${imageId}`);
+    if (!ok) return;
+
+    try {
+      await window.ckc.setImageMeta({ imageId, tags: nextTags });
+      setNearDupGroups((prev) =>
+        prev
+          ? prev.map((g) => ({
+              ...g,
+              images: (g.images || []).map((it) => (it.imageId === imageId ? { ...it, tags: nextTags } : it)),
+            }))
+          : prev
+      );
+    } catch (err: unknown) {
+      setNearDupError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -1350,6 +1463,156 @@ export function LibraryView({
               )
             ) : (
               <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Scan to find exact (byte-identical) duplicates by hash.</div>
+            )}
+          </details>
+
+          <details style={{ marginTop: 12 }}>
+            <summary>Near-duplicates (perceptual)</summary>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={nearDupBusy} onClick={() => void startNearDupScan()}>
+                {nearDupBusy ? 'Workingâ€¦' : 'Scan near-duplicates'}
+              </button>
+              {nearDupJob?.status === 'running' ? (
+                <button disabled={!nearDupBusy} onClick={() => void cancelNearDupScan()}>
+                  Cancel
+                </button>
+              ) : null}
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Threshold
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  step={1}
+                  value={String(nearDupThreshold)}
+                  onChange={(e) => setNearDupThreshold(Number(e.target.value) || 0)}
+                  disabled={nearDupBusy}
+                />
+                <code style={{ fontSize: '0.85rem' }}>{nearDupThreshold}</code>
+              </label>
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Max images
+                <input
+                  type="number"
+                  min={100}
+                  max={50000}
+                  step={100}
+                  value={String(nearDupMaxImages)}
+                  onChange={(e) => setNearDupMaxImages(Number(e.target.value) || 0)}
+                  disabled={nearDupBusy}
+                  style={{ width: 110 }}
+                />
+              </label>
+
+              {nearDupJob?.status === 'running' && nearDupJob.progress ? (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {nearDupJob.progress.phase} <b>{nearDupJob.progress.done}</b> / <b>{nearDupJob.progress.total}</b>
+                </span>
+              ) : null}
+
+              {nearDupGroups ? (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  groups <b>{nearDupGroups.length}</b>
+                </span>
+              ) : null}
+            </div>
+
+            {nearDupError ? <div className={styles.error}>{nearDupError}</div> : null}
+
+            {nearDupGroups ? (
+              nearDupGroups.length === 0 ? (
+                <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>No near-duplicate groups found.</div>
+              ) : (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {nearDupGroups.map((g) => (
+                    <details key={g.groupId} style={{ border: '1px solid var(--glass-border)', padding: 8 }}>
+                      <summary>
+                        <code style={{ fontSize: '0.85rem' }}>{String(g.repHash || '').slice(0, 8)}â€¦</code> â€¢ <b>{g.count}</b> similar â€¢ max dist{' '}
+                        <b>{g.maxDistance}</b>
+                      </summary>
+
+                      {g.truncated ? (
+                        <div style={{ marginTop: 10, color: 'rgba(255,0,0,0.75)' }}>
+                          Truncated: showing {g.images.length} of {g.count}. Rescan with higher max-per-group.
+                        </div>
+                      ) : null}
+
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                          gap: 10,
+                        }}
+                      >
+                        {(g.images || []).map((img) => (
+                          <div
+                            key={img.imageId}
+                            style={{
+                              border: '1px solid var(--glass-border)',
+                              background: 'var(--glass)',
+                              padding: 8,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              minWidth: 0,
+                            }}
+                          >
+                            <img
+                              src={`ckc://thumb/${encodeURIComponent(img.imageId)}`}
+                              alt=""
+                              style={{ width: '100%', height: 90, objectFit: 'contain', background: 'rgba(0,0,0,0.08)' }}
+                            />
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                              title={img.imageId}
+                            >
+                              {img.characterName || img.characterId}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <span>
+                                {img.favorite ? 'â˜…' : 'â˜†'} {img.rating}
+                              </span>
+                              <span>dist {img.distance}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <button
+                                disabled={nearDupBusy}
+                                onClick={() => onOpenCharacter(img.characterId, img.imageId)}
+                                title="Open character at this image"
+                              >
+                                Open
+                              </button>
+                              <button disabled={nearDupBusy} onClick={() => void markNearDupRedundant(img)} title="Adds tag: redundant">
+                                Mark redundant
+                              </button>
+                            </div>
+                            {img.tags?.length ? (
+                              <div style={{ color: 'var(--text-secondary)', fontSize: '0.72rem' }} title={img.tags.join(', ')}>
+                                {img.tags.slice(0, 4).join(', ')}
+                                {img.tags.length > 4 ? 'â€¦' : ''}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+                Scan to find visually similar images by perceptual hash (safe: no auto-delete).
+              </div>
             )}
           </details>
         </CommandBar>

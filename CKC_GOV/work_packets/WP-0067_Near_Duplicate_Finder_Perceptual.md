@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add a “visually similar” scan using perceptual hashing (pHash/aHash/dHash) to group near-duplicates (cropped/resized/re-encoded).
@@ -10,7 +10,7 @@ Add a “visually similar” scan using perceptual hashing (pHash/aHash/dHash) t
 ## Why
 - Exact-hash duplicates are only half the problem; near-duplicates create clutter.
 - Improves library hygiene without needing external tools.
-- Spec: `CastKit_Codex_Spec_v00.043.md` §11.14.
+- Spec: `CastKit_Codex_Spec_v00.044.md` §11.14.
 
 ## Scope
 ### In
@@ -26,13 +26,13 @@ Add a “visually similar” scan using perceptual hashing (pHash/aHash/dHash) t
 - “Best pick” heuristics (initially).
 
 ## Acceptance criteria
-- [ ] Scan completes on moderate libraries without locking UI (progress + cancel).
-- [ ] Similarity groups are plausible at default settings.
-- [ ] No destructive actions without explicit confirmation.
+- [x] Scan completes on moderate libraries without locking UI (progress + cancel).
+- [x] Similarity groups are plausible at default settings.
+- [x] No destructive actions without explicit confirmation.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] Manual: import resized/cropped variants; verify grouping.
+- [x] `cd CKC_main; npm test`
+- [x] Manual: import resized/cropped variants; verify grouping.
 
 ## Notes
 - Do NOT touch `D:`.

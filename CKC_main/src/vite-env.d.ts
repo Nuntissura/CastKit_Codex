@@ -265,6 +265,48 @@ type CKCDuplicateGroup = {
   truncated: boolean;
 };
 
+type CKCNearDuplicateImage = {
+  imageId: string;
+  characterId: string;
+  characterName: string;
+  favorite: boolean;
+  rating: number;
+  tags: string[];
+  dhash: string;
+  distance: number;
+};
+
+type CKCNearDuplicateGroup = {
+  groupId: string;
+  count: number;
+  repHash: string;
+  maxDistance: number;
+  truncated: boolean;
+  images: CKCNearDuplicateImage[];
+};
+
+type CKCNearDuplicateScanProgress = { phase: string; done: number; total: number };
+
+type CKCNearDuplicateScanResult = {
+  ok: true;
+  cancelled?: boolean;
+  threshold: number;
+  totalImages?: number;
+  hashedImages?: number;
+  groups: CKCNearDuplicateGroup[];
+};
+
+type CKCNearDuplicateScanJobStatus = {
+  ok: true;
+  jobId: string;
+  status: 'running' | 'done' | 'cancelled' | 'error';
+  startedAt: string;
+  finishedAt: string | null;
+  progress: CKCNearDuplicateScanProgress | null;
+  error: string | null;
+  result: CKCNearDuplicateScanResult | null;
+};
+
 type CKCRepairMissingImagesByHashResult = {
   ok: true;
   reportPath: string;
@@ -409,6 +451,9 @@ interface Window {
       resetLibraryRootToDefault: () => Promise<string>;
       getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
       listDuplicateGroups: (params?: { minCount?: number; limitGroups?: number; maxPerGroup?: number } | null) => Promise<CKCDuplicateGroup[]>;
+      startNearDuplicateScan: (params?: { threshold?: number; maxImages?: number; maxPerGroup?: number } | null) => Promise<{ ok: true; jobId: string }>;
+      getNearDuplicateScanStatus: (jobId: string) => Promise<CKCNearDuplicateScanJobStatus>;
+      cancelNearDuplicateScan: (jobId: string) => Promise<{ ok: true }>;
       listTagStats: () => Promise<CKCTagStats[]>;
       mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
       renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;

@@ -99,6 +99,7 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', 'source_url', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'source_note', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'palette_json', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'dhash_hex', 'TEXT');
 
   // Tag rules can optionally be template-scoped.
   await ensureColumn(db, 'TagRule', 'template_id', 'TEXT');

@@ -132,6 +132,8 @@ let appConfigPath = null;
 let appConfig = null;
 let referenceWindow = null;
 let referenceSelection = { imageId: null };
+let nearDupJobs = new Map();
+let nearDupActiveJobId = null;
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -310,6 +312,70 @@ async function ensureLibrary() {
         // If initialization fails, allow retry on next call.
         resetLibrary();
         throw err;
+    }
+}
+
+function makeNearDupJobId() {
+    return `nd_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+}
+
+function getNearDupJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return null;
+    return nearDupJobs.get(id) || null;
+}
+
+function snapshotNearDupJob(job) {
+    if (!job) return null;
+    const status = String(job.status || 'running');
+    return {
+        ok: true,
+        jobId: String(job.jobId),
+        status,
+        startedAt: String(job.startedAt),
+        finishedAt: job.finishedAt ? String(job.finishedAt) : null,
+        progress: job.progress && typeof job.progress === 'object' ? job.progress : null,
+        error: job.error ? String(job.error) : null,
+        result: status === 'done' ? job.result : null,
+    };
+}
+
+async function runNearDuplicateScanJob(job, params) {
+    const p = params && typeof params === 'object' ? params : {};
+    const threshold = typeof p.threshold === 'number' ? p.threshold : Number(p.threshold) || 10;
+    const maxImages = typeof p.maxImages === 'number' ? p.maxImages : Number(p.maxImages) || 2500;
+    const maxPerGroup = typeof p.maxPerGroup === 'number' ? p.maxPerGroup : Number(p.maxPerGroup) || 60;
+
+    try {
+        const lib = await ensureLibrary();
+        const res = await lib.scanNearDuplicateGroups({
+            threshold,
+            maxImages,
+            maxPerGroup,
+            onProgress: (prog) => {
+                if (!job || job.cancelRequested) return;
+                const phase = String(prog?.phase || '').trim() || 'working';
+                const done = Number(prog?.done) || 0;
+                const total = Number(prog?.total) || 0;
+                job.progress = { phase, done, total };
+            },
+            isCancelled: () => !!job.cancelRequested,
+        });
+
+        if (job.cancelRequested || res?.cancelled) {
+            job.status = 'cancelled';
+            job.result = null;
+        } else {
+            job.status = 'done';
+            job.result = res;
+        }
+    } catch (err) {
+        job.status = 'error';
+        job.error = err instanceof Error ? err.message : String(err);
+        job.result = null;
+    } finally {
+        job.finishedAt = new Date().toISOString();
+        if (nearDupActiveJobId === job.jobId) nearDupActiveJobId = null;
     }
 }
 
@@ -544,6 +610,46 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:listDuplicateGroups', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.listDuplicateGroups(params || {});
+    });
+
+    ipcMain.handle('ckc:startNearDuplicateScan', async (_evt, params) => {
+        if (nearDupActiveJobId) {
+            const existing = getNearDupJob(nearDupActiveJobId);
+            if (existing && String(existing.status) === 'running') throw new Error('Near-duplicate scan already running.');
+            nearDupActiveJobId = null;
+        }
+
+        const jobId = makeNearDupJobId();
+        const job = {
+            jobId,
+            status: 'running',
+            startedAt: new Date().toISOString(),
+            finishedAt: null,
+            progress: { phase: 'starting', done: 0, total: 0 },
+            cancelRequested: false,
+            error: null,
+            result: null,
+        };
+
+        nearDupJobs.set(jobId, job);
+        nearDupActiveJobId = jobId;
+        void runNearDuplicateScanJob(job, params || {});
+        return { ok: true, jobId };
+    });
+
+    ipcMain.handle('ckc:getNearDuplicateScanStatus', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getNearDupJob(id);
+        if (!job) throw new Error(`Near-duplicate scan job not found: ${id || '(blank)'}`);
+        return snapshotNearDupJob(job);
+    });
+
+    ipcMain.handle('ckc:cancelNearDuplicateScan', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getNearDupJob(id);
+        if (!job) throw new Error(`Near-duplicate scan job not found: ${id || '(blank)'}`);
+        job.cancelRequested = true;
+        return { ok: true };
     });
 
     ipcMain.handle('ckc:listTagStats', async () => {
