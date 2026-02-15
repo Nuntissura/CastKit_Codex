@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add vector connector layers (lines/arrows) that can be selected/moved/transformed and reordered like other moodboard layers.
@@ -42,4 +42,3 @@ Add vector connector layers (lines/arrows) that can be selected/moved/transforme
 
 ## Notes
 - Do NOT touch `D:`.
-

@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add vector shape layers (rect/ellipse) to the moodboard and allow bucket/gradient tools to apply fills to selected shapes (instead of only the background).
@@ -35,21 +35,22 @@ Add vector shape layers (rect/ellipse) to the moodboard and allow bucket/gradien
 - Advanced styling (blend modes/shadows) (tracked separately).
 
 ## Acceptance criteria
-- [ ] Can create rect/ellipse shape layers.
-- [ ] Bucket fills selected shapes without changing background.
-- [ ] Gradient fills selected shapes without changing background, with live preview.
-- [ ] Shapes can be moved/resized, reordered, hidden/locked.
+- [x] Can create rect/ellipse shape layers.
+- [x] Bucket fills selected shapes without changing background.
+- [x] Gradient fills selected shapes without changing background, with live preview.
+- [x] Shapes can be moved/resized, reordered, hidden/locked.
 
 ## Test plan
 - [ ] Manual: create shapes, apply bucket+gradient, reorder vs images/text, hide/lock, resize, undo/redo.
-- [ ] Add/extend unit tests if feasible (state persistence + tool behavior).
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored:
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored:
   - `CKC_GOV/spec/CastKit_Codex_Spec_v00.051.md`
   - mirror into `CKC_main/docs/`
-- [ ] Session dump alignment: no conflicts; representation documented in spec.
+- [x] Session dump alignment: no conflicts; representation documented in spec.
 
 ## Implementation notes
 - Key files to touch:
@@ -57,6 +58,9 @@ Add vector shape layers (rect/ellipse) to the moodboard and allow bucket/gradien
   - `CKC_main/src/ui/components/moodboardCanvas.module.css` (if needed)
 - Data model changes:
   - Extend moodboard JSON with `shapes?: MoodboardShape[]` (backwards compatible).
+- UI notes:
+  - Shape tool: drag to create; `Shift` constrains to square/circle; `Alt` draws from center.
+  - Layer ordering uses per-item `z`; layers panel reorder reindexes `z` across shapes/images/texts.
 - IPC/API changes:
   - None (moodboard stored as JSON doc content).
 
@@ -70,4 +74,3 @@ Add vector shape layers (rect/ellipse) to the moodboard and allow bucket/gradien
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

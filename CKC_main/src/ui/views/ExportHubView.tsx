@@ -14,6 +14,7 @@ function emptyMoodboard(): MoodboardState {
     version: 1,
     background: { kind: 'paper' },
     strokes: [],
+    shapes: [],
     images: [],
     texts: [],
   };
@@ -32,6 +33,7 @@ function normalizeMoodboardState(raw: any): MoodboardState {
   const out: MoodboardState = emptyMoodboard();
   if (obj.background && typeof obj.background === 'object') out.background = obj.background as any;
   out.strokes = Array.isArray(obj.strokes) ? (obj.strokes as any) : [];
+  out.shapes = Array.isArray(obj.shapes) ? (obj.shapes as any) : [];
   out.images = Array.isArray(obj.images) ? (obj.images as any) : [];
   out.texts = Array.isArray(obj.texts) ? (obj.texts as any) : [];
   out.strokesHidden = !!obj.strokesHidden;

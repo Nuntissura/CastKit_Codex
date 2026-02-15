@@ -1,7 +1,19 @@
 import React from 'react';
 import styles from './moodboardCanvas.module.css';
 
-type MoodboardTool = 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'eraser' | 'move' | 'transform' | 'text' | 'bucket' | 'gradient';
+type MoodboardTool =
+  | 'pen'
+  | 'line'
+  | 'arrow'
+  | 'rect'
+  | 'ellipse'
+  | 'eraser'
+  | 'move'
+  | 'transform'
+  | 'text'
+  | 'shape'
+  | 'bucket'
+  | 'gradient';
 type MoodboardDrawTool = 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'eraser';
 
 function randomHex(bytes = 8): string {
@@ -34,6 +46,7 @@ export type MoodboardImage = {
   y: number; // normalized center y
   w: number; // normalized width
   h: number; // normalized height
+  z?: number; // z-order (higher draws on top)
   name?: string;
   groupId?: string;
   hidden?: boolean;
@@ -46,10 +59,33 @@ export type MoodboardText = {
   y: number; // normalized center y
   w: number; // normalized width
   h: number; // normalized height
+  z?: number; // z-order (higher draws on top)
+  name?: string;
   text: string;
   fontSize?: number; // px
   color?: string; // CSS color (prefer #RRGGBB)
   bg?: string; // CSS color (prefer #RRGGBB)
+  groupId?: string;
+  hidden?: boolean;
+  locked?: boolean;
+};
+
+export type MoodboardFill =
+  | { kind: 'none' }
+  | { kind: 'solid'; color: string }
+  | { kind: 'gradient'; from: string; to: string; angle: number; mode?: 'linear' | 'radial' };
+
+export type MoodboardShape = {
+  id: string;
+  shape: 'rect' | 'ellipse';
+  x: number; // normalized center x
+  y: number; // normalized center y
+  w: number; // normalized width
+  h: number; // normalized height
+  z?: number; // z-order (higher draws on top)
+  fill?: MoodboardFill;
+  stroke?: { color: string; width: number };
+  name?: string;
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -62,6 +98,7 @@ export type MoodboardState = {
     | { kind: 'solid'; color: string }
     | { kind: 'gradient'; from: string; to: string; angle: number; mode?: 'linear' | 'radial' };
   strokes: MoodboardStroke[];
+  shapes?: MoodboardShape[];
   images: MoodboardImage[];
   texts?: MoodboardText[];
   strokesHidden?: boolean;
@@ -69,9 +106,31 @@ export type MoodboardState = {
 };
 
 type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
-type MoodboardItemKind = 'image' | 'text';
+type MoodboardItemKind = 'image' | 'text' | 'shape';
 type SelectedItem = { kind: MoodboardItemKind; id: string };
 type Selection = SelectedItem[];
+
+const KIND_Z_BASE: Record<MoodboardItemKind, number> = {
+  shape: 0,
+  image: 1000,
+  text: 2000,
+};
+
+function zFor(kind: MoodboardItemKind, index: number, z: unknown): number {
+  const n = Number(z);
+  return Number.isFinite(n) ? n : KIND_Z_BASE[kind] + index;
+}
+
+function compareZAsc(
+  a: { kind: MoodboardItemKind; index: number; z: number },
+  b: { kind: MoodboardItemKind; index: number; z: number }
+): number {
+  if (a.z !== b.z) return a.z - b.z;
+  const ba = KIND_Z_BASE[a.kind];
+  const bb = KIND_Z_BASE[b.kind];
+  if (ba !== bb) return ba - bb;
+  return a.index - b.index;
+}
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -103,11 +162,21 @@ function pointFromEvent(evt: PointerEvent, canvas: HTMLCanvasElement, view?: Vie
 function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   const images = Array.isArray(value.images) ? value.images : [];
   const texts = Array.isArray(value.texts) ? value.texts : [];
+  const rawShapes = (value as any)?.shapes;
+  const shapes = Array.isArray(rawShapes) ? (rawShapes as MoodboardShape[]) : [];
   let changed = false;
   const nextImages = images.map((img) => {
     if (img && typeof img.id === 'string' && img.id.trim().length) return img;
     changed = true;
     return { ...(img as any), id: makeMoodId('mbi_') } as MoodboardImage;
+  });
+
+  const nextShapes = shapes.map((s: any) => {
+    const hasId = !!(s && typeof s.id === 'string' && s.id.trim().length);
+    const shape = s?.shape === 'ellipse' ? 'ellipse' : 'rect';
+    if (hasId && (s?.shape === 'rect' || s?.shape === 'ellipse')) return s as MoodboardShape;
+    changed = true;
+    return { ...(s as any), id: hasId ? String(s.id) : makeMoodId('mbs_'), shape } as MoodboardShape;
   });
 
   const nextTexts = texts.map((t) => {
@@ -118,8 +187,10 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
     return { ...(t as any), id: hasId ? (t as any).id : makeMoodId('mbt_'), text: nextText } as MoodboardText;
   });
 
+  if (rawShapes !== undefined && !Array.isArray(rawShapes)) changed = true;
   if (!changed) return value;
   const next: MoodboardState = { ...value, images: nextImages };
+  if (shapes.length || rawShapes !== undefined) next.shapes = nextShapes;
   if (texts.length || value.texts) next.texts = nextTexts;
   return next;
 }
@@ -162,7 +233,7 @@ export function MoodboardCanvas({
         itemKind: MoodboardItemKind;
         id: string;
         handle: ResizeHandle;
-        startItem: MoodboardImage | MoodboardText;
+        startItem: MoodboardImage | MoodboardText | MoodboardShape;
         startState: MoodboardState;
         moved: boolean;
       }
@@ -180,6 +251,7 @@ export function MoodboardCanvas({
   const toolRef = React.useRef<MoodboardTool>('pen');
   const sizeRef = React.useRef<number>(3);
   const colorRef = React.useRef<string>('#111111');
+  const shapeKindRef = React.useRef<'rect' | 'ellipse'>('rect');
   const gradientToRef = React.useRef<string>('#ffffff');
   const gradientAngleRef = React.useRef<number>(0);
   const gradientModeRef = React.useRef<'linear' | 'radial'>('linear');
@@ -187,7 +259,19 @@ export function MoodboardCanvas({
   const internalChangeRef = React.useRef<MoodboardState | null>(null);
   const historyPastRef = React.useRef<MoodboardState[]>([]);
   const historyFutureRef = React.useRef<MoodboardState[]>([]);
-  const gradientDragRef = React.useRef<null | { startPt: { x: number; y: number }; startState: MoodboardState; moved: boolean; lastAngle: number }>(null);
+  const gradientDragRef = React.useRef<
+    null | {
+      startPt: { x: number; y: number };
+      startState: MoodboardState;
+      moved: boolean;
+      lastAngle: number;
+      target: 'background' | 'shapes';
+      shapeIds?: string[];
+    }
+  >(null);
+  const shapeDragRef = React.useRef<
+    null | { startPt: { x: number; y: number }; startState: MoodboardState; shapeId: string; shape: 'rect' | 'ellipse'; moved: boolean }
+  >(null);
   const viewRef = React.useRef<ViewTransform>({ zoom: 1, panX: 0, panY: 0 });
   const panDragRef = React.useRef<null | { startSX: number; startSY: number; startPanX: number; startPanY: number }>(null);
   const isSpaceDownRef = React.useRef<boolean>(false);
@@ -197,6 +281,7 @@ export function MoodboardCanvas({
   const [tool, setTool] = React.useState<MoodboardTool>('pen');
   const [size, setSize] = React.useState<number>(3);
   const [color, setColor] = React.useState<string>('#111111');
+  const [shapeKind, setShapeKind] = React.useState<'rect' | 'ellipse'>('rect');
   const [gradientTo, setGradientTo] = React.useState<string>('#ffffff');
   const [gradientAngle, setGradientAngle] = React.useState<number>(0);
   const [gradientMode, setGradientMode] = React.useState<'linear' | 'radial'>('linear');
@@ -236,6 +321,7 @@ export function MoodboardCanvas({
     if (tool !== 'move' && tool !== 'transform') dragRef.current = null;
     if (tool !== 'transform') resizeRef.current = null;
     if (tool !== 'gradient') gradientDragRef.current = null;
+    if (tool !== 'shape') shapeDragRef.current = null;
   }, [tool]);
 
   React.useEffect(() => {
@@ -245,6 +331,10 @@ export function MoodboardCanvas({
   React.useEffect(() => {
     colorRef.current = color;
   }, [color]);
+
+  React.useEffect(() => {
+    shapeKindRef.current = shapeKind;
+  }, [shapeKind]);
 
   React.useEffect(() => {
     gradientToRef.current = gradientTo;
@@ -262,16 +352,19 @@ export function MoodboardCanvas({
     if (!selection.length) return;
     const images = Array.isArray(value.images) ? value.images : [];
     const texts = Array.isArray(value.texts) ? value.texts : [];
+    const shapes = Array.isArray(value.shapes) ? value.shapes : [];
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
     const next = selection.filter((sel) => {
       if (sel.kind === 'image') return !!imageById.get(sel.id) && !imageById.get(sel.id)?.hidden;
-      return !!textById.get(sel.id) && !textById.get(sel.id)?.hidden;
+      if (sel.kind === 'text') return !!textById.get(sel.id) && !textById.get(sel.id)?.hidden;
+      return !!shapeById.get(sel.id) && !shapeById.get(sel.id)?.hidden;
     });
     if (next.length === selection.length && next.every((x, i) => x.kind === selection[i].kind && x.id === selection[i].id)) return;
     selectionRef.current = next;
     setSelection(next);
-  }, [selection, value.images, value.texts]);
+  }, [selection, value.images, value.texts, value.shapes]);
 
   const redraw = React.useCallback(() => {
     const canvas = canvasRef.current;
@@ -280,23 +373,27 @@ export function MoodboardCanvas({
     if (!ctx) return;
 
     const current = valueRef.current;
+    const shapes = Array.isArray(current.shapes) ? current.shapes : [];
     const images = Array.isArray(current.images) ? current.images : [];
     const texts = Array.isArray(current.texts) ? current.texts : [];
     const strokes = Array.isArray(current.strokes) ? current.strokes : [];
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
 
     const selection = Array.isArray(selectionRef.current) ? selectionRef.current : [];
     const groupIds = new Set<string>();
     for (const sel of selection) {
-      const item = sel.kind === 'image' ? imageById.get(sel.id) : textById.get(sel.id);
+      const item =
+        sel.kind === 'image' ? imageById.get(sel.id) : sel.kind === 'text' ? textById.get(sel.id) : shapeById.get(sel.id);
       const gid = String((item as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
 
     const selectionUnits: Array<{ kind: 'group' | 'item'; key: string; bounds: { left: number; top: number; right: number; bottom: number } }> = [];
     for (const gid of groupIds) {
-      const members: Array<MoodboardImage | MoodboardText> = [];
+      const members: Array<MoodboardImage | MoodboardText | MoodboardShape> = [];
+      for (const s of shapes) if (s && !s.hidden && String((s as any).groupId ?? '') === gid) members.push(s);
       for (const img of images) if (img && !img.hidden && String((img as any).groupId ?? '') === gid) members.push(img);
       for (const t of texts) if (t && !t.hidden && String((t as any).groupId ?? '') === gid) members.push(t);
       if (!members.length) continue;
@@ -318,7 +415,8 @@ export function MoodboardCanvas({
     }
 
     for (const sel of selection) {
-      const item = sel.kind === 'image' ? imageById.get(sel.id) : textById.get(sel.id);
+      const item =
+        sel.kind === 'image' ? imageById.get(sel.id) : sel.kind === 'text' ? textById.get(sel.id) : shapeById.get(sel.id);
       if (!item || (item as any).hidden) continue;
       const gid = String((item as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue; // covered by group unit
@@ -408,11 +506,65 @@ export function MoodboardCanvas({
       }
       ctx.stroke();
       ctx.restore();
-    }
+     }
 
-    for (const img of images) {
-      if (!img?.imageId) continue;
-      if (img.hidden) continue;
+    const drawShapeItem = (s: MoodboardShape) => {
+      if (!s) return;
+      if (s.hidden) return;
+      const cx = (Number(s.x) || 0) * rect.width;
+      const cy = (Number(s.y) || 0) * rect.height;
+      const w = (Number(s.w) || 0) * rect.width;
+      const h = (Number(s.h) || 0) * rect.height;
+      if (w <= 0 || h <= 0) return;
+      const left = cx - w / 2;
+      const top = cy - h / 2;
+
+      ctx.save();
+      ctx.beginPath();
+      if (s.shape === 'ellipse') ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+      else ctx.rect(left, top, w, h);
+
+      const fill = s.fill;
+      if (fill && fill.kind !== 'none') {
+        if (fill.kind === 'solid') {
+          ctx.fillStyle = fill.color || 'rgba(0,0,0,0)';
+          ctx.fill();
+        } else if (fill.kind === 'gradient') {
+          const mode = fill.mode || 'linear';
+          if (mode === 'radial') {
+            const radius = Math.sqrt(w * w + h * h) / 2;
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            g.addColorStop(0, fill.from || '#000000');
+            g.addColorStop(1, fill.to || '#ffffff');
+            ctx.fillStyle = g;
+            ctx.fill();
+          } else {
+            const angle = Number(fill.angle) || 0;
+            const rad = (angle * Math.PI) / 180;
+            const len = Math.sqrt(w * w + h * h) / 2;
+            const dx = Math.cos(rad) * len;
+            const dy = Math.sin(rad) * len;
+            const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+            g.addColorStop(0, fill.from || '#000000');
+            g.addColorStop(1, fill.to || '#ffffff');
+            ctx.fillStyle = g;
+            ctx.fill();
+          }
+        }
+      }
+
+      if (s.stroke && Number.isFinite(Number(s.stroke.width)) && Number(s.stroke.width) > 0) {
+        ctx.strokeStyle = s.stroke.color || '#111111';
+        ctx.lineWidth = Math.max(1, Number(s.stroke.width) || 1) * invZoom;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    };
+
+    const drawImageItem = (img: MoodboardImage) => {
+      if (!img?.imageId) return;
+      if (img.hidden) return;
       let el = imageCacheRef.current.get(img.imageId);
       if (!el) {
         el = new Image();
@@ -421,14 +573,13 @@ export function MoodboardCanvas({
         el.onload = () => requestAnimationFrame(redraw);
         imageCacheRef.current.set(img.imageId, el);
       }
-      if (!el.complete || !el.naturalWidth || !el.naturalHeight) continue;
+      if (!el.complete || !el.naturalWidth || !el.naturalHeight) return;
 
-      const cx = img.x * rect.width;
-      const cy = img.y * rect.height;
-      const w = img.w * rect.width;
-      const h = img.h * rect.height;
-      const x = cx - w / 2;
-      const y = cy - h / 2;
+      const cx = (Number(img.x) || 0) * rect.width;
+      const cy = (Number(img.y) || 0) * rect.height;
+      const w = (Number(img.w) || 0) * rect.width;
+      const h = (Number(img.h) || 0) * rect.height;
+      if (w <= 0 || h <= 0) return;
 
       // Contain within the desired rect, preserving aspect ratio.
       const srcAspect = el.naturalWidth / el.naturalHeight;
@@ -442,8 +593,8 @@ export function MoodboardCanvas({
       }
       const dx = cx - dw / 2;
       const dy = cy - dh / 2;
-       ctx.drawImage(el, dx, dy, dw, dh);
-     }
+      ctx.drawImage(el, dx, dy, dw, dh);
+    };
 
     const drawTextItem = (t: MoodboardText) => {
       if (!t) return;
@@ -510,7 +661,29 @@ export function MoodboardCanvas({
       ctx.restore();
     };
 
-    for (const t of texts) drawTextItem(t);
+    const drawItems: Array<{ kind: MoodboardItemKind; index: number; z: number; item: MoodboardShape | MoodboardImage | MoodboardText }> = [];
+    for (let i = 0; i < shapes.length; i++) {
+      const s = shapes[i];
+      if (!s || s.hidden) continue;
+      drawItems.push({ kind: 'shape', index: i, z: zFor('shape', i, (s as any).z), item: s });
+    }
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      if (!img || img.hidden) continue;
+      drawItems.push({ kind: 'image', index: i, z: zFor('image', i, (img as any).z), item: img });
+    }
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i];
+      if (!t || t.hidden) continue;
+      drawItems.push({ kind: 'text', index: i, z: zFor('text', i, (t as any).z), item: t });
+    }
+
+    drawItems.sort(compareZAsc);
+    for (const it of drawItems) {
+      if (it.kind === 'shape') drawShapeItem(it.item as MoodboardShape);
+      else if (it.kind === 'image') drawImageItem(it.item as MoodboardImage);
+      else drawTextItem(it.item as MoodboardText);
+    }
 
     const drawStroke = (s: MoodboardStroke) => {
       if (!s.points.length) return;
@@ -685,6 +858,7 @@ export function MoodboardCanvas({
     dragRef.current = null;
     resizeRef.current = null;
     gradientDragRef.current = null;
+    shapeDragRef.current = null;
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -703,6 +877,7 @@ export function MoodboardCanvas({
     dragRef.current = null;
     resizeRef.current = null;
     gradientDragRef.current = null;
+    shapeDragRef.current = null;
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -818,8 +993,10 @@ export function MoodboardCanvas({
       const currentTool = toolRef.current;
 
       if (currentTool === 'move' || currentTool === 'transform') {
+        const shapes = Array.isArray(current.shapes) ? current.shapes : [];
         const images = Array.isArray(current.images) ? current.images : [];
         const texts = Array.isArray(current.texts) ? current.texts : [];
+        const shapeById = new Map(shapes.map((s) => [s.id, s]));
         const imageById = new Map(images.map((img) => [img.id, img]));
         const textById = new Map(texts.map((t) => [t.id, t]));
 
@@ -827,6 +1004,10 @@ export function MoodboardCanvas({
 
         const membersForGroup = (gid: string): Selection => {
           const out: Selection = [];
+          for (const s of shapes) {
+            if (!s || s.hidden) continue;
+            if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
+          }
           for (const t of texts) {
             if (!t || t.hidden) continue;
             if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
@@ -839,7 +1020,8 @@ export function MoodboardCanvas({
         };
 
         const unitForHit = (hit: SelectedItem): Selection => {
-          const item = hit.kind === 'image' ? imageById.get(hit.id) : textById.get(hit.id);
+          const item =
+            hit.kind === 'image' ? imageById.get(hit.id) : hit.kind === 'text' ? textById.get(hit.id) : shapeById.get(hit.id);
           const gid = String((item as any)?.groupId ?? '').trim();
           if (!gid) return [hit];
           const members = membersForGroup(gid);
@@ -850,7 +1032,8 @@ export function MoodboardCanvas({
         const buildSelectionUnits = (selList: Selection) => {
           const groupIds = new Set<string>();
           for (const s of selList) {
-            const item = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+            const item =
+              s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
             const gid = String((item as any)?.groupId ?? '').trim();
             if (gid) groupIds.add(gid);
           }
@@ -872,7 +1055,7 @@ export function MoodboardCanvas({
             let right = -Infinity;
             let bottom = -Infinity;
             for (const m of members) {
-              const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+              const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
               if (!it || (it as any).hidden) continue;
               const cx = Number((it as any).x) || 0;
               const cy = Number((it as any).y) || 0;
@@ -895,7 +1078,7 @@ export function MoodboardCanvas({
           }
 
           for (const s of selList) {
-            const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+            const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
             if (!it || (it as any).hidden) continue;
             const gid = String((it as any).groupId ?? '').trim();
             if (gid && groupIds.has(gid)) continue;
@@ -944,7 +1127,12 @@ export function MoodboardCanvas({
 
             if (hitHandle) {
               if (u.kind === 'item' && u.item) {
-                const it = u.item.kind === 'image' ? imageById.get(u.item.id) : textById.get(u.item.id);
+                const it =
+                  u.item.kind === 'image'
+                    ? imageById.get(u.item.id)
+                    : u.item.kind === 'text'
+                      ? textById.get(u.item.id)
+                      : shapeById.get(u.item.id);
                 if (!it || (it as any).locked) {
                   redraw();
                   return;
@@ -967,7 +1155,7 @@ export function MoodboardCanvas({
                 const members = membersForGroup(u.groupId);
                 const startItems: Array<{ kind: MoodboardItemKind; id: string; x: number; y: number; w: number; h: number; locked?: boolean }> = [];
                 for (const m of members) {
-                  const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+                  const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
                   if (!it || (it as any).hidden) continue;
                   startItems.push({
                     kind: m.kind,
@@ -1001,33 +1189,78 @@ export function MoodboardCanvas({
         }
 
         const hit = ((): SelectedItem | null => {
-          const texts = Array.isArray(current.texts) ? current.texts : [];
-          for (let i = texts.length - 1; i >= 0; i--) {
-            const t = texts[i];
-            if (!t || t.hidden) continue;
-            const w = Number(t.w) || 0;
-            const h = Number(t.h) || 0;
-            if (w <= 0 || h <= 0) continue;
-            const left = (Number(t.x) || 0) - w / 2;
-            const right = (Number(t.x) || 0) + w / 2;
-            const top = (Number(t.y) || 0) - h / 2;
-            const bottom = (Number(t.y) || 0) + h / 2;
-            if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'text', id: t.id };
+          const candidates: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
+          for (let i = 0; i < shapes.length; i++) {
+            const s = shapes[i];
+            if (!s || s.hidden) continue;
+            candidates.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
           }
-
-          const images = Array.isArray(current.images) ? current.images : [];
-          for (let i = images.length - 1; i >= 0; i--) {
+          for (let i = 0; i < images.length; i++) {
             const img = images[i];
             if (!img || img.hidden) continue;
-            const w = Number(img.w) || 0;
-            const h = Number(img.h) || 0;
-            if (w <= 0 || h <= 0) continue;
-            const left = (Number(img.x) || 0) - w / 2;
-            const right = (Number(img.x) || 0) + w / 2;
-            const top = (Number(img.y) || 0) - h / 2;
-            const bottom = (Number(img.y) || 0) + h / 2;
-            if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'image', id: img.id };
+            candidates.push({ kind: 'image', id: img.id, z: zFor('image', i, (img as any).z), index: i });
           }
+          for (let i = 0; i < texts.length; i++) {
+            const t = texts[i];
+            if (!t || t.hidden) continue;
+            candidates.push({ kind: 'text', id: t.id, z: zFor('text', i, (t as any).z), index: i });
+          }
+
+          candidates.sort(compareZAsc);
+          for (let i = candidates.length - 1; i >= 0; i--) {
+            const c = candidates[i];
+            if (c.kind === 'text') {
+              const t = texts[c.index];
+              if (!t || t.hidden) continue;
+              const w = Number(t.w) || 0;
+              const h = Number(t.h) || 0;
+              if (w <= 0 || h <= 0) continue;
+              const left = (Number(t.x) || 0) - w / 2;
+              const right = (Number(t.x) || 0) + w / 2;
+              const top = (Number(t.y) || 0) - h / 2;
+              const bottom = (Number(t.y) || 0) + h / 2;
+              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'text', id: t.id };
+              continue;
+            }
+
+            if (c.kind === 'image') {
+              const img = images[c.index];
+              if (!img || img.hidden) continue;
+              const w = Number(img.w) || 0;
+              const h = Number(img.h) || 0;
+              if (w <= 0 || h <= 0) continue;
+              const left = (Number(img.x) || 0) - w / 2;
+              const right = (Number(img.x) || 0) + w / 2;
+              const top = (Number(img.y) || 0) - h / 2;
+              const bottom = (Number(img.y) || 0) + h / 2;
+              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'image', id: img.id };
+              continue;
+            }
+
+            const s = shapes[c.index];
+            if (!s || s.hidden) continue;
+            const w = Number(s.w) || 0;
+            const h = Number(s.h) || 0;
+            if (w <= 0 || h <= 0) continue;
+            const cx = Number(s.x) || 0;
+            const cy = Number(s.y) || 0;
+            const rx = w / 2;
+            const ry = h / 2;
+            if (s.shape === 'ellipse') {
+              if (rx <= 0 || ry <= 0) continue;
+              const dx = pt.x - cx;
+              const dy = pt.y - cy;
+              const v = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+              if (v <= 1) return { kind: 'shape', id: s.id };
+            } else {
+              const left = cx - rx;
+              const right = cx + rx;
+              const top = cy - ry;
+              const bottom = cy + ry;
+              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'shape', id: s.id };
+            }
+          }
+
           return null;
         })();
 
@@ -1075,7 +1308,8 @@ export function MoodboardCanvas({
         selectionRef.current = nextSel;
         setSelection(nextSel);
 
-        const hitItem = hit.kind === 'image' ? imageById.get(hit.id) : textById.get(hit.id);
+        const hitItem =
+          hit.kind === 'image' ? imageById.get(hit.id) : hit.kind === 'text' ? textById.get(hit.id) : shapeById.get(hit.id);
         if (!hitItem || (hitItem as any).locked) {
           redraw();
           return;
@@ -1096,7 +1330,7 @@ export function MoodboardCanvas({
           let right = -Infinity;
           let bottom = -Infinity;
           for (const m of u.members) {
-            const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+            const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
             if (!it || (it as any).hidden || (it as any).locked) continue;
             const cx = Number((it as any).x) || 0;
             const cy = Number((it as any).y) || 0;
@@ -1130,8 +1364,50 @@ export function MoodboardCanvas({
         return;
       }
 
+      if (currentTool === 'shape') {
+        const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const images = Array.isArray(cur.images) ? cur.images : [];
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const maxZ = Math.max(
+          0,
+          ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+          ...images.map((img, i) => zFor('image', i, (img as any).z)),
+          ...texts.map((t, i) => zFor('text', i, (t as any).z))
+        );
+
+        const id = makeMoodId('mbs_');
+        const item: MoodboardShape = {
+          id,
+          shape: shapeKindRef.current,
+          x: pt.x,
+          y: pt.y,
+          w: 0.001,
+          h: 0.001,
+          z: maxZ + 1,
+          fill: { kind: 'solid' as const, color: '#ffffff' },
+          stroke: { color: 'rgba(0,0,0,0.25)', width: 1 },
+        };
+        valueRef.current = { ...cur, shapes: [...shapes, item] };
+        shapeDragRef.current = { startPt: pt, startState: cur, shapeId: id, shape: item.shape, moved: false };
+        selectionRef.current = [{ kind: 'shape', id }];
+        setSelection([{ kind: 'shape', id }]);
+        canvas.setPointerCapture(evt.pointerId);
+        redraw();
+        return;
+      }
+
       if (currentTool === 'text') {
         const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const images = Array.isArray(cur.images) ? cur.images : [];
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const maxZ = Math.max(
+          0,
+          ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+          ...images.map((img, i) => zFor('image', i, (img as any).z)),
+          ...texts.map((t, i) => zFor('text', i, (t as any).z))
+        );
         const id = makeMoodId('mbt_');
         const item: MoodboardText = {
           id,
@@ -1139,6 +1415,7 @@ export function MoodboardCanvas({
           y: pt.y,
           w: 0.28,
           h: 0.16,
+          z: maxZ + 1,
           text: '',
           fontSize: 18,
           color: colorRef.current,
@@ -1154,6 +1431,20 @@ export function MoodboardCanvas({
 
       if (currentTool === 'bucket') {
         const cur = valueRef.current;
+        const sel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+        const shapeIds = sel.filter((s) => s.kind === 'shape').map((s) => s.id);
+        if (shapeIds.length) {
+          const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          const idSet = new Set(shapeIds);
+          const nextShapes = shapes.map((s) => {
+            if (!s || s.hidden || s.locked) return s;
+            if (!idSet.has(s.id)) return s;
+            return { ...s, fill: { kind: 'solid' as const, color: colorRef.current } };
+          });
+          commit({ ...cur, shapes: nextShapes });
+          return;
+        }
+
         const next = { ...cur, background: { kind: 'solid' as const, color: colorRef.current } };
         commit(next);
         return;
@@ -1163,18 +1454,37 @@ export function MoodboardCanvas({
         const startState = valueRef.current;
         const angle = Number(gradientAngleRef.current) || 0;
         const mode = gradientModeRef.current;
-        gradientDragRef.current = { startPt: pt, startState, moved: false, lastAngle: angle };
-        const next: MoodboardState = {
-          ...startState,
-          background: {
-            kind: 'gradient' as const,
-            from: colorRef.current,
-            to: gradientToRef.current,
-            angle,
-            mode,
-          },
-        };
-        valueRef.current = next;
+        const sel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+        const shapeIdsAll = sel.filter((s) => s.kind === 'shape').map((s) => s.id);
+        const startShapes = Array.isArray(startState.shapes) ? startState.shapes : [];
+        const byId = new Map(startShapes.map((s) => [s.id, s]));
+        const shapeIds = shapeIdsAll.filter((id) => {
+          const s = byId.get(id);
+          return !!s && !s.hidden && !s.locked;
+        });
+
+        if (shapeIds.length) {
+          gradientDragRef.current = { startPt: pt, startState, moved: false, lastAngle: angle, target: 'shapes', shapeIds };
+          const idSet = new Set(shapeIds);
+          const nextShapes = startShapes.map((s) =>
+            idSet.has(s.id)
+              ? { ...s, fill: { kind: 'gradient' as const, from: colorRef.current, to: gradientToRef.current, angle, mode } }
+              : s
+          );
+          valueRef.current = { ...startState, shapes: nextShapes };
+        } else {
+          gradientDragRef.current = { startPt: pt, startState, moved: false, lastAngle: angle, target: 'background' };
+          valueRef.current = {
+            ...startState,
+            background: {
+              kind: 'gradient' as const,
+              from: colorRef.current,
+              to: gradientToRef.current,
+              angle,
+              mode,
+            },
+          };
+        }
         canvas.setPointerCapture(evt.pointerId);
         redraw();
         return;
@@ -1206,6 +1516,76 @@ export function MoodboardCanvas({
         return;
       }
 
+      const shapeDrag = shapeDragRef.current;
+      if (shapeDrag) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const start = shapeDrag.startPt;
+        let left = 0;
+        let right = 0;
+        let top = 0;
+        let bottom = 0;
+
+        if (evt.altKey) {
+          let w = Math.abs(pt.x - start.x) * 2;
+          let h = Math.abs(pt.y - start.y) * 2;
+          if (evt.shiftKey) {
+            const m = Math.max(w, h);
+            w = m;
+            h = m;
+          }
+          left = start.x - w / 2;
+          right = start.x + w / 2;
+          top = start.y - h / 2;
+          bottom = start.y + h / 2;
+        } else {
+          let w = Math.abs(pt.x - start.x);
+          let h = Math.abs(pt.y - start.y);
+          if (evt.shiftKey) {
+            const m = Math.max(w, h);
+            w = m;
+            h = m;
+          }
+          if (pt.x >= start.x) {
+            left = start.x;
+            right = start.x + w;
+          } else {
+            left = start.x - w;
+            right = start.x;
+          }
+          if (pt.y >= start.y) {
+            top = start.y;
+            bottom = start.y + h;
+          } else {
+            top = start.y - h;
+            bottom = start.y;
+          }
+        }
+
+        left = clamp01(left);
+        right = clamp01(right);
+        top = clamp01(top);
+        bottom = clamp01(bottom);
+
+        const minSize = 0.01;
+        const w = Math.min(1, Math.max(minSize, right - left));
+        const h = Math.min(1, Math.max(minSize, bottom - top));
+        const cx = clamp01(left + w / 2);
+        const cy = clamp01(top + h / 2);
+
+        const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const idx = shapes.findIndex((s) => s && s.id === shapeDrag.shapeId);
+        if (idx < 0) return;
+        const basis = shapes[idx];
+        if (!basis || basis.locked) return;
+
+        const nextShapes = shapes.map((s, i) => (i === idx ? { ...s, x: cx, y: cy, w, h } : s));
+        valueRef.current = { ...cur, shapes: nextShapes };
+        shapeDrag.moved = true;
+        redraw();
+        return;
+      }
+
       const gradientDrag = gradientDragRef.current;
       if (gradientDrag) {
         const pt = pointFromEvent(evt, canvas, viewRef.current);
@@ -1223,17 +1603,28 @@ export function MoodboardCanvas({
             gradientDrag.lastAngle = angle;
           }
         }
-        const next: MoodboardState = {
-          ...gradientDrag.startState,
-          background: {
-            kind: 'gradient' as const,
-            from: colorRef.current,
-            to: gradientToRef.current,
-            angle,
-            mode,
-          },
-        };
-        valueRef.current = next;
+
+        if (gradientDrag.target === 'shapes' && gradientDrag.shapeIds?.length) {
+          const startShapes = Array.isArray(gradientDrag.startState.shapes) ? gradientDrag.startState.shapes : [];
+          const idSet = new Set(gradientDrag.shapeIds);
+          const nextShapes = startShapes.map((s) =>
+            idSet.has(s.id)
+              ? { ...s, fill: { kind: 'gradient' as const, from: colorRef.current, to: gradientToRef.current, angle, mode } }
+              : s
+          );
+          valueRef.current = { ...gradientDrag.startState, shapes: nextShapes };
+        } else {
+          valueRef.current = {
+            ...gradientDrag.startState,
+            background: {
+              kind: 'gradient' as const,
+              from: colorRef.current,
+              to: gradientToRef.current,
+              angle,
+              mode,
+            },
+          };
+        }
         redraw();
         return;
       }
@@ -1332,6 +1723,22 @@ export function MoodboardCanvas({
             if (!changed) return;
             const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
             const next = { ...cur, images: nextImages };
+            valueRef.current = next;
+            resizing.moved = true;
+            redraw();
+            return;
+          }
+
+          if (resizing.itemKind === 'shape') {
+            const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+            const idx = shapes.findIndex((x) => x && x.id === resizing.id);
+            if (idx < 0) return;
+            const s = shapes[idx];
+            if (!s || s.locked) return;
+            const changed = s.x !== nextX || s.y !== nextY || s.w !== nextW || s.h !== nextH;
+            if (!changed) return;
+            const nextShapes = shapes.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
+            const next = { ...cur, shapes: nextShapes };
             valueRef.current = next;
             resizing.moved = true;
             redraw();
@@ -1464,6 +1871,11 @@ export function MoodboardCanvas({
         if (!updates.size) return;
 
         const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const nextShapes = shapes.map((s) => {
+          const u = updates.get(`shape:${s.id}`);
+          return u ? { ...s, x: u.x, y: u.y, w: u.w, h: u.h } : s;
+        });
         const nextImages = (cur.images || []).map((img) => {
           const u = updates.get(`image:${img.id}`);
           return u ? { ...img, x: u.x, y: u.y, w: u.w, h: u.h } : img;
@@ -1472,7 +1884,9 @@ export function MoodboardCanvas({
           const u = updates.get(`text:${t.id}`);
           return u ? { ...t, x: u.x, y: u.y, w: u.w, h: u.h } : t;
         });
-        valueRef.current = { ...cur, images: nextImages, texts: nextTexts };
+        const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+        if (shapes.length || cur.shapes) next.shapes = nextShapes;
+        valueRef.current = next;
         resizing.moved = true;
         redraw();
         return;
@@ -1521,6 +1935,13 @@ export function MoodboardCanvas({
         if (!updates.size) return;
 
         let changed = false;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const nextShapes = shapes.map((s) => {
+          const u = updates.get(`shape:${s.id}`);
+          if (!u) return s;
+          if (s.x !== u.x || s.y !== u.y) changed = true;
+          return { ...s, x: u.x, y: u.y };
+        });
         const nextImages = (cur.images || []).map((img) => {
           const u = updates.get(`image:${img.id}`);
           if (!u) return img;
@@ -1535,7 +1956,9 @@ export function MoodboardCanvas({
         });
         if (!changed) return;
 
-        valueRef.current = { ...cur, images: nextImages, texts: nextTexts };
+        const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+        if (shapes.length || cur.shapes) next.shapes = nextShapes;
+        valueRef.current = next;
         dragging.moved = true;
         redraw();
         return;
@@ -1558,6 +1981,34 @@ export function MoodboardCanvas({
       if (panDragRef.current) {
         panDragRef.current = null;
         redraw();
+        return;
+      }
+
+      const shapeDrag = shapeDragRef.current;
+      if (shapeDrag) {
+        shapeDragRef.current = null;
+        if (!shapeDrag.moved) {
+          const cur = valueRef.current;
+          const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          const idx = shapes.findIndex((s) => s && s.id === shapeDrag.shapeId);
+          if (idx >= 0) {
+            const s = shapes[idx];
+            if (s && !s.locked) {
+              const defaultW = shapeDrag.shape === 'ellipse' ? 0.18 : 0.22;
+              const defaultH = shapeDrag.shape === 'ellipse' ? 0.18 : 0.16;
+              let x = clamp01(Number(s.x) || shapeDrag.startPt.x);
+              let y = clamp01(Number(s.y) || shapeDrag.startPt.y);
+              const w = Math.min(1, Math.max(0.01, defaultW));
+              const h = Math.min(1, Math.max(0.01, defaultH));
+              x = clamp01(Math.max(w / 2, Math.min(1 - w / 2, x)));
+              y = clamp01(Math.max(h / 2, Math.min(1 - h / 2, y)));
+              const nextShapes = shapes.map((it, i) => (i === idx ? { ...it, x, y, w, h } : it));
+              valueRef.current = { ...cur, shapes: nextShapes };
+            }
+          }
+        }
+
+        commit(valueRef.current, { historyPrev: shapeDrag.startState });
         return;
       }
 
@@ -1700,13 +2151,19 @@ export function MoodboardCanvas({
   }, []);
 
   const buildSelectionUnitsForArrange = React.useCallback((state: MoodboardState, selList: Selection) => {
+    const shapes = Array.isArray(state.shapes) ? state.shapes : [];
     const images = Array.isArray(state.images) ? state.images : [];
     const texts = Array.isArray(state.texts) ? state.texts : [];
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
 
     const membersForGroup = (gid: string): Selection => {
       const out: Selection = [];
+      for (const s of shapes) {
+        if (!s || s.hidden) continue;
+        if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
+      }
       for (const t of texts) {
         if (!t || t.hidden) continue;
         if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
@@ -1720,7 +2177,7 @@ export function MoodboardCanvas({
 
     const groupIds = new Set<string>();
     for (const s of selList) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
       const gid = String((it as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
@@ -1741,7 +2198,7 @@ export function MoodboardCanvas({
       let right = -Infinity;
       let bottom = -Infinity;
       for (const m of members) {
-        const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+        const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
         if (!it || (it as any).hidden) continue;
         const cx = Number((it as any).x) || 0;
         const cy = Number((it as any).y) || 0;
@@ -1758,7 +2215,7 @@ export function MoodboardCanvas({
     }
 
     for (const s of selList) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
       if (!it || (it as any).hidden) continue;
       const gid = String((it as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue;
@@ -1781,7 +2238,12 @@ export function MoodboardCanvas({
       if (units.length < 2 && mode !== 'tidy') return;
 
       const updates = new Map<string, { x: number; y: number }>();
-      const getItem = (s: SelectedItem) => (s.kind === 'image' ? (cur.images || []).find((x) => x && x.id === s.id) : (cur.texts || []).find((x) => x && x.id === s.id));
+      const getItem = (s: SelectedItem) =>
+        s.kind === 'image'
+          ? (cur.images || []).find((x) => x && x.id === s.id)
+          : s.kind === 'text'
+            ? (cur.texts || []).find((x) => x && x.id === s.id)
+            : (Array.isArray(cur.shapes) ? cur.shapes : []).find((x) => x && x.id === s.id);
 
       const applyTranslate = (unit: (typeof units)[number], dx: number, dy: number) => {
         const clampedDx = Math.max(-unit.bounds.left, Math.min(1 - unit.bounds.right, dx));
@@ -1848,6 +2310,11 @@ export function MoodboardCanvas({
       }
 
       if (!updates.size) return;
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const nextShapes = shapes.map((s) => {
+        const u = updates.get(`shape:${s.id}`);
+        return u ? { ...s, x: u.x, y: u.y } : s;
+      });
       const nextImages = (cur.images || []).map((img) => {
         const u = updates.get(`image:${img.id}`);
         return u ? { ...img, x: u.x, y: u.y } : img;
@@ -1856,7 +2323,9 @@ export function MoodboardCanvas({
         const u = updates.get(`text:${t.id}`);
         return u ? { ...t, x: u.x, y: u.y } : t;
       });
-      commit({ ...cur, images: nextImages, texts: nextTexts });
+      const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+      if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      commit(next);
     },
     [buildSelectionUnitsForArrange, commit]
   );
@@ -1867,29 +2336,38 @@ export function MoodboardCanvas({
     const gid = makeMoodId('mbg_');
     const cur = valueRef.current;
     const keys = new Set(curSel.map((s) => `${s.kind}:${s.id}`));
+    const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+    const nextShapes = shapes.map((s) => (keys.has(`shape:${s.id}`) ? { ...s, groupId: gid } : s));
     const nextImages = (cur.images || []).map((img) => (keys.has(`image:${img.id}`) ? { ...img, groupId: gid } : img));
     const nextTexts = (cur.texts || []).map((t) => (keys.has(`text:${t.id}`) ? { ...t, groupId: gid } : t));
-    commit({ ...cur, images: nextImages, texts: nextTexts });
+    const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+    if (shapes.length || cur.shapes) next.shapes = nextShapes;
+    commit(next);
   }, [commit]);
 
   const ungroupSelection = React.useCallback(() => {
     const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
     if (!curSel.length) return;
     const cur = valueRef.current;
+    const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
     const images = Array.isArray(cur.images) ? cur.images : [];
     const texts = Array.isArray(cur.texts) ? cur.texts : [];
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
     const groupIds = new Set<string>();
     for (const s of curSel) {
-      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      const it = s.kind === 'image' ? imageById.get(s.id) : s.kind === 'text' ? textById.get(s.id) : shapeById.get(s.id);
       const gid = String((it as any)?.groupId ?? '').trim();
       if (gid) groupIds.add(gid);
     }
     if (!groupIds.size) return;
+    const nextShapes = shapes.map((s) => (s && groupIds.has(String((s as any).groupId ?? '')) ? { ...s, groupId: undefined } : s));
     const nextImages = images.map((img) => (img && groupIds.has(String((img as any).groupId ?? '')) ? { ...img, groupId: undefined } : img));
     const nextTexts = texts.map((t) => (t && groupIds.has(String((t as any).groupId ?? '')) ? { ...t, groupId: undefined } : t));
-    commit({ ...cur, images: nextImages, texts: nextTexts });
+    const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+    if (shapes.length || cur.shapes) next.shapes = nextShapes;
+    commit(next);
   }, [commit]);
 
   const arrangeUnits = React.useMemo(() => buildSelectionUnitsForArrange(value, selection), [buildSelectionUnitsForArrange, value, selection]);
@@ -1897,6 +2375,93 @@ export function MoodboardCanvas({
   const canDistribute = arrangeUnits.length >= 3;
   const canGroup = selection.length >= 2;
   const canUngroup = arrangeUnits.some((u) => u.kind === 'group');
+
+  const layerOrderAsc = React.useMemo(() => {
+    const shapes = Array.isArray(value.shapes) ? value.shapes : [];
+    const images = Array.isArray(value.images) ? value.images : [];
+    const texts = Array.isArray(value.texts) ? value.texts : [];
+    const refs: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
+    for (let i = 0; i < shapes.length; i++) {
+      const s = shapes[i];
+      if (!s) continue;
+      refs.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
+    }
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      if (!img) continue;
+      refs.push({ kind: 'image', id: img.id, z: zFor('image', i, (img as any).z), index: i });
+    }
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i];
+      if (!t) continue;
+      refs.push({ kind: 'text', id: t.id, z: zFor('text', i, (t as any).z), index: i });
+    }
+    refs.sort(compareZAsc);
+    return refs;
+  }, [value.images, value.shapes, value.texts]);
+
+  const layerPosByKey = React.useMemo(() => {
+    return new Map(layerOrderAsc.map((r, i) => [`${r.kind}:${r.id}`, i]));
+  }, [layerOrderAsc]);
+
+  const reorderLayer = React.useCallback(
+    (target: SelectedItem, action: 'up' | 'down' | 'top' | 'bottom') => {
+      const cur = valueRef.current;
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const images = Array.isArray(cur.images) ? cur.images : [];
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+      const refs: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
+      for (let i = 0; i < shapes.length; i++) {
+        const s = shapes[i];
+        if (!s) continue;
+        refs.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
+      }
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        if (!img) continue;
+        refs.push({ kind: 'image', id: img.id, z: zFor('image', i, (img as any).z), index: i });
+      }
+      for (let i = 0; i < texts.length; i++) {
+        const t = texts[i];
+        if (!t) continue;
+        refs.push({ kind: 'text', id: t.id, z: zFor('text', i, (t as any).z), index: i });
+      }
+      refs.sort(compareZAsc);
+      const key = `${target.kind}:${target.id}`;
+      const idx = refs.findIndex((r) => `${r.kind}:${r.id}` === key);
+      if (idx < 0) return;
+
+      let nextIdx = idx;
+      if (action === 'up') nextIdx = Math.min(refs.length - 1, idx + 1);
+      else if (action === 'down') nextIdx = Math.max(0, idx - 1);
+      else if (action === 'top') nextIdx = refs.length - 1;
+      else nextIdx = 0;
+
+      if (nextIdx === idx) return;
+      const [moved] = refs.splice(idx, 1);
+      refs.splice(nextIdx, 0, moved);
+
+      const zByKey = new Map<string, number>();
+      for (let i = 0; i < refs.length; i++) zByKey.set(`${refs[i].kind}:${refs[i].id}`, i);
+
+      const nextShapes = shapes.map((s, i) => ({ ...s, z: zByKey.get(`shape:${s.id}`) ?? zFor('shape', i, (s as any).z) }));
+      const nextImages = images.map((img, i) => ({ ...img, z: zByKey.get(`image:${img.id}`) ?? zFor('image', i, (img as any).z) }));
+      const nextTexts = texts.map((t, i) => ({ ...t, z: zByKey.get(`text:${t.id}`) ?? zFor('text', i, (t as any).z) }));
+
+      const next: MoodboardState = { ...cur, images: nextImages };
+      if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      if (texts.length || cur.texts) next.texts = nextTexts;
+      commit(next);
+    },
+    [commit]
+  );
+
+  const layerShapes = Array.isArray(value.shapes) ? value.shapes : [];
+  const layerImages = Array.isArray(value.images) ? value.images : [];
+  const layerTexts = Array.isArray(value.texts) ? value.texts : [];
+  const shapeById = new Map(layerShapes.map((s) => [s.id, s]));
+  const imageById = new Map(layerImages.map((img) => [img.id, img]));
+  const textById = new Map(layerTexts.map((t) => [t.id, t]));
 
   const selectedText =
     selection.length === 1 && selection[0]?.kind === 'text'
@@ -1917,9 +2482,21 @@ export function MoodboardCanvas({
           <button className={styles.toolBtn} data-active={tool === 'text' ? '1' : '0'} onClick={() => setTool('text')}>
             Text
           </button>
-        <button className={styles.toolBtn} data-active={tool === 'pen' ? '1' : '0'} onClick={() => setTool('pen')}>
-          Pen
-        </button>
+          <button className={styles.toolBtn} data-active={tool === 'shape' ? '1' : '0'} onClick={() => setTool('shape')}>
+            Shape
+          </button>
+          {tool === 'shape' ? (
+            <label className={styles.toolLabel}>
+              Kind{' '}
+              <select value={shapeKind} onChange={(e) => setShapeKind((e.target.value as any) || 'rect')}>
+                <option value="rect">Rect</option>
+                <option value="ellipse">Ellipse</option>
+              </select>
+            </label>
+          ) : null}
+         <button className={styles.toolBtn} data-active={tool === 'pen' ? '1' : '0'} onClick={() => setTool('pen')}>
+           Pen
+         </button>
         <button className={styles.toolBtn} data-active={tool === 'line' ? '1' : '0'} onClick={() => setTool('line')}>
           Line
         </button>
@@ -1995,9 +2572,13 @@ export function MoodboardCanvas({
               if (!sel || sel.length === 0) return;
               const cur = valueRef.current;
               const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
+              const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+              const nextShapes = shapes.filter((s) => s && !keys.has(`shape:${s.id}`));
               const nextImages = (cur.images || []).filter((img) => img && !keys.has(`image:${img.id}`));
               const nextTexts = (cur.texts || []).filter((t) => t && !keys.has(`text:${t.id}`));
-              commit({ ...cur, images: nextImages, texts: nextTexts });
+              const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+              if (shapes.length || cur.shapes) next.shapes = nextShapes;
+              commit(next);
               selectionRef.current = [];
               setSelection([]);
             }}
@@ -2068,7 +2649,9 @@ export function MoodboardCanvas({
             max={18}
             value={String(size)}
             onChange={(e) => setSize(Number(e.target.value) || 3)}
-            disabled={tool === 'move' || tool === 'transform' || tool === 'text' || tool === 'bucket' || tool === 'gradient'}
+            disabled={
+              tool === 'move' || tool === 'transform' || tool === 'text' || tool === 'shape' || tool === 'bucket' || tool === 'gradient'
+            }
           />
         </label>
 
@@ -2147,103 +2730,164 @@ export function MoodboardCanvas({
             </div>
 
             <div className={styles.layersList}>
-              {[...(value.images || [])]
-                .map((img, idx) => ({ img, idx }))
+              {layerOrderAsc
+                .slice()
                 .reverse()
-                .map(({ img, idx }) => {
-                  const isSelected = selection.some((s) => s.kind === 'image' && s.id === img.id);
+                .map((ref) => {
+                  const key = `${ref.kind}:${ref.id}`;
+                  const pos = layerPosByKey.get(key) ?? 0;
+                  const isTop = pos >= layerOrderAsc.length - 1;
+                  const isBottom = pos <= 0;
+
+                  const item =
+                    ref.kind === 'shape'
+                      ? shapeById.get(ref.id)
+                      : ref.kind === 'image'
+                        ? imageById.get(ref.id)
+                        : textById.get(ref.id);
+                  if (!item) return null;
+
+                  const isSelected = selection.some((s) => s.kind === ref.kind && s.id === ref.id);
+                  const hidden = !!(item as any).hidden;
+                  const locked = !!(item as any).locked;
+                  const gid = String((item as any).groupId ?? '').trim();
+
+                  const fallbackName =
+                    ref.kind === 'shape'
+                      ? ((item as any).shape === 'ellipse' ? 'Ellipse' : 'Rect')
+                      : ref.kind === 'image'
+                        ? 'Image'
+                        : (() => {
+                            const raw = String((item as any).text || '').trim();
+                            const first = raw.split(/\r?\n/)[0] || '';
+                            const snippet = first.length > 28 ? `${first.slice(0, 28)}…` : first;
+                            return snippet ? `Text: ${snippet}` : 'Text';
+                          })();
+
+                  const displayName = String((item as any).name || '').trim() || fallbackName;
+
                   return (
-                    <div key={img.id} className={styles.layerRow} data-selected={isSelected ? '1' : '0'}>
+                    <div key={key} className={styles.layerRow} data-selected={isSelected ? '1' : '0'}>
                       <button
                         className={styles.layerPick}
                         type="button"
                         onClick={() => {
                           setTool('move');
-                          const gid = String((img as any).groupId ?? '').trim();
                           if (gid) {
                             const members: Selection = [];
-                            const texts = Array.isArray(value.texts) ? value.texts : [];
-                            for (const t of texts) {
+                            for (const s of layerShapes) {
+                              if (!s || s.hidden) continue;
+                              if (String((s as any).groupId ?? '') === gid) members.push({ kind: 'shape', id: s.id });
+                            }
+                            for (const t of layerTexts) {
                               if (!t || t.hidden) continue;
                               if (String((t as any).groupId ?? '') === gid) members.push({ kind: 'text', id: t.id });
                             }
-                            for (const it of value.images || []) {
-                              if (!it || it.hidden) continue;
-                              if (String((it as any).groupId ?? '') === gid) members.push({ kind: 'image', id: it.id });
+                            for (const img of layerImages) {
+                              if (!img || img.hidden) continue;
+                              if (String((img as any).groupId ?? '') === gid) members.push({ kind: 'image', id: img.id });
                             }
-                            const hit: SelectedItem = { kind: 'image', id: img.id };
+                            const hit: SelectedItem = { kind: ref.kind, id: ref.id };
                             const rest = members.filter((m) => !(m.kind === hit.kind && m.id === hit.id));
                             const nextSel: Selection = [hit, ...rest];
                             selectionRef.current = nextSel;
                             setSelection(nextSel);
                             return;
                           }
-                          selectionRef.current = [{ kind: 'image', id: img.id }];
-                          setSelection([{ kind: 'image', id: img.id }]);
+                          selectionRef.current = [{ kind: ref.kind, id: ref.id }];
+                          setSelection([{ kind: ref.kind, id: ref.id }]);
                         }}
                         title="Select layer"
                       >
-                        {img.hidden ? '(hidden)' : 'Image'} {idx + 1}
+                        {hidden ? '(hidden) ' : ''}
+                        {displayName}
                       </button>
 
                       <input
                         className={styles.layerNameInput}
-                        value={img.name ?? ''}
+                        value={String((item as any).name ?? '')}
                         placeholder="Name"
                         onChange={(e) => {
                           const name = e.target.value;
-                          const nextImages = value.images.map((x) => (x.id === img.id ? { ...x, name } : x));
-                          applyNoHistory({ ...value, images: nextImages }, { clearRedo: true });
+                          const cur = valueRef.current;
+                          if (ref.kind === 'shape') {
+                            const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+                            const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, name } : s));
+                            applyNoHistory({ ...cur, shapes: nextShapes }, { clearRedo: true });
+                          } else if (ref.kind === 'image') {
+                            const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, name } : img));
+                            applyNoHistory({ ...cur, images: nextImages }, { clearRedo: true });
+                          } else {
+                            const texts = Array.isArray(cur.texts) ? cur.texts : [];
+                            const nextTexts = texts.map((t) => (t.id === ref.id ? { ...t, name } : t));
+                            applyNoHistory({ ...cur, texts: nextTexts }, { clearRedo: true });
+                          }
                         }}
                       />
 
                       <div className={styles.layerActions}>
                         <button
                           className={styles.layerBtn}
-                          data-active={img.hidden ? '1' : '0'}
+                          data-active={hidden ? '1' : '0'}
                           onClick={() => {
-                            const nextHidden = !img.hidden;
-                            const nextImages = value.images.map((x) => (x.id === img.id ? { ...x, hidden: nextHidden } : x));
-                            commit({ ...value, images: nextImages });
+                            const cur = valueRef.current;
+                            const nextHidden = !hidden;
+                            if (ref.kind === 'shape') {
+                              const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+                              const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, hidden: nextHidden } : s));
+                              commit({ ...cur, shapes: nextShapes });
+                            } else if (ref.kind === 'image') {
+                              const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, hidden: nextHidden } : img));
+                              commit({ ...cur, images: nextImages });
+                            } else {
+                              const texts = Array.isArray(cur.texts) ? cur.texts : [];
+                              const nextTexts = texts.map((t) => (t.id === ref.id ? { ...t, hidden: nextHidden } : t));
+                              commit({ ...cur, texts: nextTexts });
+                            }
+
                             if (nextHidden) {
                               const prev = Array.isArray(selectionRef.current) ? selectionRef.current : [];
-                              if (prev.some((s) => s.kind === 'image' && s.id === img.id)) {
-                                const nextSel = prev.filter((s) => !(s.kind === 'image' && s.id === img.id));
+                              if (prev.some((s) => s.kind === ref.kind && s.id === ref.id)) {
+                                const nextSel = prev.filter((s) => !(s.kind === ref.kind && s.id === ref.id));
                                 selectionRef.current = nextSel;
                                 setSelection(nextSel);
                               }
                             }
                           }}
-                          title={img.hidden ? 'Show layer' : 'Hide layer'}
+                          title={hidden ? 'Show layer' : 'Hide layer'}
                           type="button"
                         >
-                          {img.hidden ? 'Show' : 'Hide'}
+                          {hidden ? 'Show' : 'Hide'}
                         </button>
 
                         <button
                           className={styles.layerBtn}
-                          data-active={img.locked ? '1' : '0'}
+                          data-active={locked ? '1' : '0'}
                           onClick={() => {
-                            const nextImages = value.images.map((x) => (x.id === img.id ? { ...x, locked: !img.locked } : x));
-                            commit({ ...value, images: nextImages });
+                            const cur = valueRef.current;
+                            if (ref.kind === 'shape') {
+                              const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+                              const nextShapes = shapes.map((s) => (s.id === ref.id ? { ...s, locked: !locked } : s));
+                              commit({ ...cur, shapes: nextShapes });
+                            } else if (ref.kind === 'image') {
+                              const nextImages = (cur.images || []).map((img) => (img.id === ref.id ? { ...img, locked: !locked } : img));
+                              commit({ ...cur, images: nextImages });
+                            } else {
+                              const texts = Array.isArray(cur.texts) ? cur.texts : [];
+                              const nextTexts = texts.map((t) => (t.id === ref.id ? { ...t, locked: !locked } : t));
+                              commit({ ...cur, texts: nextTexts });
+                            }
                           }}
-                          title={img.locked ? 'Unlock layer' : 'Lock layer'}
+                          title={locked ? 'Unlock layer' : 'Lock layer'}
                           type="button"
                         >
-                          {img.locked ? 'Unlock' : 'Lock'}
+                          {locked ? 'Unlock' : 'Lock'}
                         </button>
 
                         <button
                           className={styles.layerBtn}
-                          disabled={idx >= value.images.length - 1}
-                          onClick={() => {
-                            if (idx >= value.images.length - 1) return;
-                            const next = value.images.slice();
-                            const t = next[idx];
-                            next[idx] = next[idx + 1];
-                            next[idx + 1] = t;
-                            commit({ ...value, images: next });
-                          }}
+                          disabled={isTop}
+                          onClick={() => reorderLayer({ kind: ref.kind, id: ref.id }, 'up')}
                           title="Bring forward"
                           type="button"
                         >
@@ -2252,13 +2896,8 @@ export function MoodboardCanvas({
 
                         <button
                           className={styles.layerBtn}
-                          disabled={idx >= value.images.length - 1}
-                          onClick={() => {
-                            if (idx >= value.images.length - 1) return;
-                            const next = value.images.filter((x) => x.id !== img.id);
-                            next.push(img);
-                            commit({ ...value, images: next });
-                          }}
+                          disabled={isTop}
+                          onClick={() => reorderLayer({ kind: ref.kind, id: ref.id }, 'top')}
                           title="Bring to top"
                           type="button"
                         >
@@ -2267,15 +2906,8 @@ export function MoodboardCanvas({
 
                         <button
                           className={styles.layerBtn}
-                          disabled={idx <= 0}
-                          onClick={() => {
-                            if (idx <= 0) return;
-                            const next = value.images.slice();
-                            const t = next[idx];
-                            next[idx] = next[idx - 1];
-                            next[idx - 1] = t;
-                            commit({ ...value, images: next });
-                          }}
+                          disabled={isBottom}
+                          onClick={() => reorderLayer({ kind: ref.kind, id: ref.id }, 'down')}
                           title="Send backward"
                           type="button"
                         >
@@ -2284,13 +2916,8 @@ export function MoodboardCanvas({
 
                         <button
                           className={styles.layerBtn}
-                          disabled={idx <= 0}
-                          onClick={() => {
-                            if (idx <= 0) return;
-                            const next = value.images.filter((x) => x.id !== img.id);
-                            next.unshift(img);
-                            commit({ ...value, images: next });
-                          }}
+                          disabled={isBottom}
+                          onClick={() => reorderLayer({ kind: ref.kind, id: ref.id }, 'bottom')}
                           title="Send to bottom"
                           type="button"
                         >
