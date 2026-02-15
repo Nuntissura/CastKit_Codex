@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add explicit character→character relationship edges (type + notes) and a lightweight graph view to browse and navigate.
@@ -10,7 +10,7 @@ Add explicit character→character relationship edges (type + notes) and a light
 ## Why
 - Story/worldbuilding workflows need explicit relationships.
 - Links/backlinks show mentions; relationships provide structured intent.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.17.
+- Spec: `CastKit_Codex_Spec_v00.046.md` §11.17.
 
 ## Scope
 ### In
@@ -37,4 +37,3 @@ Add explicit character→character relationship edges (type + notes) and a light
 
 ## Notes
 - Do NOT touch `D:`.
-
