@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add an explicit “Import from URL” action that downloads a file and imports it through CKC’s normal ingest pipeline, storing provenance metadata (`source_url` + optional `source_note`).
@@ -10,7 +10,7 @@ Add an explicit “Import from URL” action that downloads a file and imports i
 ## Why
 - Fast capture loop (screenshots, references) without manual download steps.
 - Provenance matters for later tracing/credits.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.11.
+- Spec: `CastKit_Codex_Spec_v00.040.md` §11.11.
 
 ## Scope
 ### In
@@ -52,4 +52,3 @@ DB schema changes are additive; feature can be disabled via UI gating if needed.
 
 ## Notes
 - Do NOT touch `D:`.
-
