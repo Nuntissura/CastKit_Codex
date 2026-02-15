@@ -35,6 +35,7 @@ export type MoodboardImage = {
   w: number; // normalized width
   h: number; // normalized height
   name?: string;
+  groupId?: string;
   hidden?: boolean;
   locked?: boolean;
 };
@@ -49,6 +50,7 @@ export type MoodboardText = {
   fontSize?: number; // px
   color?: string; // CSS color (prefer #RRGGBB)
   bg?: string; // CSS color (prefer #RRGGBB)
+  groupId?: string;
   hidden?: boolean;
   locked?: boolean;
 };
@@ -68,7 +70,8 @@ export type MoodboardState = {
 
 type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
 type MoodboardItemKind = 'image' | 'text';
-type SelectedItem = { kind: MoodboardItemKind; id: string } | null;
+type SelectedItem = { kind: MoodboardItemKind; id: string };
+type Selection = SelectedItem[];
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -137,9 +140,41 @@ export function MoodboardCanvas({
   const drawingRef = React.useRef<boolean>(false);
   const strokeRef = React.useRef<MoodboardStroke | null>(null);
   const imageCacheRef = React.useRef<Map<string, HTMLImageElement>>(new Map());
-  const dragRef = React.useRef<null | { kind: MoodboardItemKind; id: string; offsetX: number; offsetY: number; start: MoodboardState; moved: boolean }>(null);
+  const dragRef = React.useRef<
+    | null
+    | {
+        startPt: { x: number; y: number };
+        startState: MoodboardState;
+        units: Array<{
+          key: string;
+          kind: 'group' | 'item';
+          groupId?: string;
+          bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
+          items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }>;
+        }>;
+        moved: boolean;
+      }
+  >(null);
   const resizeRef = React.useRef<
-    null | { kind: MoodboardItemKind; id: string; handle: ResizeHandle; startItem: MoodboardImage | MoodboardText; startState: MoodboardState; moved: boolean }
+    | null
+    | {
+        kind: 'item';
+        itemKind: MoodboardItemKind;
+        id: string;
+        handle: ResizeHandle;
+        startItem: MoodboardImage | MoodboardText;
+        startState: MoodboardState;
+        moved: boolean;
+      }
+    | {
+        kind: 'group';
+        groupId: string;
+        handle: ResizeHandle;
+        startBounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
+        startItems: Array<{ kind: MoodboardItemKind; id: string; x: number; y: number; w: number; h: number; locked?: boolean }>;
+        startState: MoodboardState;
+        moved: boolean;
+      }
   >(null);
   const valueRef = React.useRef<MoodboardState>(value);
   const toolRef = React.useRef<MoodboardTool>('pen');
@@ -148,7 +183,7 @@ export function MoodboardCanvas({
   const gradientToRef = React.useRef<string>('#ffffff');
   const gradientAngleRef = React.useRef<number>(0);
   const gradientModeRef = React.useRef<'linear' | 'radial'>('linear');
-  const selectedItemRef = React.useRef<SelectedItem>(null);
+  const selectionRef = React.useRef<Selection>([]);
   const internalChangeRef = React.useRef<MoodboardState | null>(null);
   const historyPastRef = React.useRef<MoodboardState[]>([]);
   const historyFutureRef = React.useRef<MoodboardState[]>([]);
@@ -168,7 +203,7 @@ export function MoodboardCanvas({
   const [viewZoom, setViewZoom] = React.useState<number>(1);
   const [showGrid, setShowGrid] = React.useState<boolean>(false);
   const [snapToGrid, setSnapToGrid] = React.useState<boolean>(false);
-  const [selectedItem, setSelectedItem] = React.useState<SelectedItem>(null);
+  const [selection, setSelection] = React.useState<Selection>([]);
   const [showLayers, setShowLayers] = React.useState<boolean>(false);
   const [, setHistoryVersion] = React.useState<number>(0);
 
@@ -224,15 +259,19 @@ export function MoodboardCanvas({
   }, [gradientMode]);
 
   React.useEffect(() => {
-    if (!selectedItem) return;
-    if (selectedItem.kind === 'image') {
-      const images = Array.isArray(value.images) ? value.images : [];
-      if (!images.some((img) => img && img.id === selectedItem.id)) setSelectedItem(null);
-      return;
-    }
+    if (!selection.length) return;
+    const images = Array.isArray(value.images) ? value.images : [];
     const texts = Array.isArray(value.texts) ? value.texts : [];
-    if (!texts.some((t) => t && t.id === selectedItem.id)) setSelectedItem(null);
-  }, [selectedItem, value.images, value.texts]);
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+    const next = selection.filter((sel) => {
+      if (sel.kind === 'image') return !!imageById.get(sel.id) && !imageById.get(sel.id)?.hidden;
+      return !!textById.get(sel.id) && !textById.get(sel.id)?.hidden;
+    });
+    if (next.length === selection.length && next.every((x, i) => x.kind === selection[i].kind && x.id === selection[i].id)) return;
+    selectionRef.current = next;
+    setSelection(next);
+  }, [selection, value.images, value.texts]);
 
   const redraw = React.useCallback(() => {
     const canvas = canvasRef.current;
@@ -244,10 +283,51 @@ export function MoodboardCanvas({
     const images = Array.isArray(current.images) ? current.images : [];
     const texts = Array.isArray(current.texts) ? current.texts : [];
     const strokes = Array.isArray(current.strokes) ? current.strokes : [];
-    const selected = selectedItemRef.current;
-    const selectedImage = selected?.kind === 'image' ? images.find((img) => img && img.id === selected.id) : null;
-    const selectedText = selected?.kind === 'text' ? texts.find((t) => t && t.id === selected.id) : null;
-    const selectedAny = selectedImage ?? selectedText;
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+
+    const selection = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    const groupIds = new Set<string>();
+    for (const sel of selection) {
+      const item = sel.kind === 'image' ? imageById.get(sel.id) : textById.get(sel.id);
+      const gid = String((item as any)?.groupId ?? '').trim();
+      if (gid) groupIds.add(gid);
+    }
+
+    const selectionUnits: Array<{ kind: 'group' | 'item'; key: string; bounds: { left: number; top: number; right: number; bottom: number } }> = [];
+    for (const gid of groupIds) {
+      const members: Array<MoodboardImage | MoodboardText> = [];
+      for (const img of images) if (img && !img.hidden && String((img as any).groupId ?? '') === gid) members.push(img);
+      for (const t of texts) if (t && !t.hidden && String((t as any).groupId ?? '') === gid) members.push(t);
+      if (!members.length) continue;
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const m of members) {
+        const cx = Number((m as any).x) || 0;
+        const cy = Number((m as any).y) || 0;
+        const w = Number((m as any).w) || 0;
+        const h = Number((m as any).h) || 0;
+        left = Math.min(left, cx - w / 2);
+        top = Math.min(top, cy - h / 2);
+        right = Math.max(right, cx + w / 2);
+        bottom = Math.max(bottom, cy + h / 2);
+      }
+      selectionUnits.push({ kind: 'group', key: `g:${gid}`, bounds: { left, top, right, bottom } });
+    }
+
+    for (const sel of selection) {
+      const item = sel.kind === 'image' ? imageById.get(sel.id) : textById.get(sel.id);
+      if (!item || (item as any).hidden) continue;
+      const gid = String((item as any).groupId ?? '').trim();
+      if (gid && groupIds.has(gid)) continue; // covered by group unit
+      const cx = Number((item as any).x) || 0;
+      const cy = Number((item as any).y) || 0;
+      const w = Number((item as any).w) || 0;
+      const h = Number((item as any).h) || 0;
+      selectionUnits.push({ kind: 'item', key: `${sel.kind}:${sel.id}`, bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2 } });
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
@@ -523,25 +603,29 @@ export function MoodboardCanvas({
       if (strokeRef.current) drawStroke(strokeRef.current);
     }
 
-    if (selectedAny && !selectedAny.hidden) {
-      const cx = (Number(selectedAny.x) || 0) * rect.width;
-      const cy = (Number(selectedAny.y) || 0) * rect.height;
-      const w = (Number(selectedAny.w) || 0) * rect.width;
-      const h = (Number(selectedAny.h) || 0) * rect.height;
-      const x = cx - w / 2;
-      const y = cy - h / 2;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = 2 * invZoom;
-      ctx.setLineDash([6 * invZoom, 5 * invZoom]);
-      ctx.strokeRect(x + invZoom, y + invZoom, Math.max(0, w - 2 * invZoom), Math.max(0, h - 2 * invZoom));
-      ctx.restore();
+    if (selectionUnits.length) {
+      for (const u of selectionUnits) {
+        const left = u.bounds.left * rect.width;
+        const top = u.bounds.top * rect.height;
+        const right = u.bounds.right * rect.width;
+        const bottom = u.bounds.bottom * rect.height;
+        const w = right - left;
+        const h = bottom - top;
+        if (w <= 0 || h <= 0) continue;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 2 * invZoom;
+        ctx.setLineDash([6 * invZoom, 5 * invZoom]);
+        ctx.strokeRect(left + invZoom, top + invZoom, Math.max(0, w - 2 * invZoom), Math.max(0, h - 2 * invZoom));
+        ctx.restore();
+      }
 
-      if (toolRef.current === 'transform') {
-        const left = cx - w / 2;
-        const right = cx + w / 2;
-        const top = cy - h / 2;
-        const bottom = cy + h / 2;
+      if (toolRef.current === 'transform' && selectionUnits.length === 1) {
+        const u = selectionUnits[0];
+        const left = u.bounds.left * rect.width;
+        const top = u.bounds.top * rect.height;
+        const right = u.bounds.right * rect.width;
+        const bottom = u.bounds.bottom * rect.height;
 
         const handleSize = 10 * invZoom;
         const half = handleSize / 2;
@@ -633,9 +717,9 @@ export function MoodboardCanvas({
   }, [commit, redraw]);
 
   React.useEffect(() => {
-    selectedItemRef.current = selectedItem;
+    selectionRef.current = selection;
     redraw();
-  }, [selectedItem, redraw]);
+  }, [selection, redraw]);
 
   React.useEffect(() => {
     const onKeyDown = (evt: KeyboardEvent) => {
@@ -734,46 +818,181 @@ export function MoodboardCanvas({
       const currentTool = toolRef.current;
 
       if (currentTool === 'move' || currentTool === 'transform') {
+        const images = Array.isArray(current.images) ? current.images : [];
+        const texts = Array.isArray(current.texts) ? current.texts : [];
+        const imageById = new Map(images.map((img) => [img.id, img]));
+        const textById = new Map(texts.map((t) => [t.id, t]));
+
+        const keyOf = (sel: SelectedItem) => `${sel.kind}:${sel.id}`;
+
+        const membersForGroup = (gid: string): Selection => {
+          const out: Selection = [];
+          for (const t of texts) {
+            if (!t || t.hidden) continue;
+            if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
+          }
+          for (const img of images) {
+            if (!img || img.hidden) continue;
+            if (String((img as any).groupId ?? '') === gid) out.push({ kind: 'image', id: img.id });
+          }
+          return out;
+        };
+
+        const unitForHit = (hit: SelectedItem): Selection => {
+          const item = hit.kind === 'image' ? imageById.get(hit.id) : textById.get(hit.id);
+          const gid = String((item as any)?.groupId ?? '').trim();
+          if (!gid) return [hit];
+          const members = membersForGroup(gid);
+          const rest = members.filter((m) => keyOf(m) !== keyOf(hit));
+          return [hit, ...rest];
+        };
+
+        const buildSelectionUnits = (selList: Selection) => {
+          const groupIds = new Set<string>();
+          for (const s of selList) {
+            const item = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+            const gid = String((item as any)?.groupId ?? '').trim();
+            if (gid) groupIds.add(gid);
+          }
+
+          const units: Array<{
+            kind: 'group' | 'item';
+            key: string;
+            groupId?: string;
+            item?: SelectedItem;
+            members: Selection;
+            bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
+          }> = [];
+
+          for (const gid of groupIds) {
+            const members = membersForGroup(gid);
+            if (!members.length) continue;
+            let left = Infinity;
+            let top = Infinity;
+            let right = -Infinity;
+            let bottom = -Infinity;
+            for (const m of members) {
+              const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+              if (!it || (it as any).hidden) continue;
+              const cx = Number((it as any).x) || 0;
+              const cy = Number((it as any).y) || 0;
+              const w = Number((it as any).w) || 0;
+              const h = Number((it as any).h) || 0;
+              left = Math.min(left, cx - w / 2);
+              top = Math.min(top, cy - h / 2);
+              right = Math.max(right, cx + w / 2);
+              bottom = Math.max(bottom, cy + h / 2);
+            }
+            const w = right - left;
+            const h = bottom - top;
+            units.push({
+              kind: 'group',
+              key: `g:${gid}`,
+              groupId: gid,
+              members,
+              bounds: { left, top, right, bottom, cx: left + w / 2, cy: top + h / 2, w, h },
+            });
+          }
+
+          for (const s of selList) {
+            const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+            if (!it || (it as any).hidden) continue;
+            const gid = String((it as any).groupId ?? '').trim();
+            if (gid && groupIds.has(gid)) continue;
+            const cx = Number((it as any).x) || 0;
+            const cy = Number((it as any).y) || 0;
+            const w = Number((it as any).w) || 0;
+            const h = Number((it as any).h) || 0;
+            units.push({
+              kind: 'item',
+              key: `${s.kind}:${s.id}`,
+              item: s,
+              members: [s],
+              bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2, cx, cy, w, h },
+            });
+          }
+
+          return units;
+        };
+
         if (currentTool === 'transform') {
-          const sel = selectedItemRef.current;
-          if (sel) {
-            const item =
-              sel.kind === 'image'
-                ? (current.images || []).find((x) => x && x.id === sel.id)
-                : (current.texts || []).find((x) => x && x.id === sel.id);
-            if (item && !item.hidden) {
-              const rect = canvas.getBoundingClientRect();
-              const px = pt.x * rect.width;
-              const py = pt.y * rect.height;
-              const cx = item.x * rect.width;
-              const cy = item.y * rect.height;
-              const w = item.w * rect.width;
-              const h = item.h * rect.height;
-              const left = cx - w / 2;
-              const right = cx + w / 2;
-              const top = cy - h / 2;
-              const bottom = cy + h / 2;
+          const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+          const units = buildSelectionUnits(curSel);
+          if (units.length === 1) {
+            const u = units[0];
+            const rect = canvas.getBoundingClientRect();
+            const px = pt.x * rect.width;
+            const py = pt.y * rect.height;
+            const left = u.bounds.left * rect.width;
+            const right = u.bounds.right * rect.width;
+            const top = u.bounds.top * rect.height;
+            const bottom = u.bounds.bottom * rect.height;
 
-              const hitHandle = ((): ResizeHandle | null => {
-                const half = 7 / Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
-                const checks: Array<{ h: ResizeHandle; x: number; y: number }> = [
-                  { h: 'nw', x: left, y: top },
-                  { h: 'ne', x: right, y: top },
-                  { h: 'se', x: right, y: bottom },
-                  { h: 'sw', x: left, y: bottom },
-                ];
-                for (const c of checks) {
-                  if (Math.abs(px - c.x) <= half && Math.abs(py - c.y) <= half) return c.h;
-                }
-                return null;
-              })();
+            const hitHandle = ((): ResizeHandle | null => {
+              const half = 7 / Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+              const checks: Array<{ h: ResizeHandle; x: number; y: number }> = [
+                { h: 'nw', x: left, y: top },
+                { h: 'ne', x: right, y: top },
+                { h: 'se', x: right, y: bottom },
+                { h: 'sw', x: left, y: bottom },
+              ];
+              for (const c of checks) {
+                if (Math.abs(px - c.x) <= half && Math.abs(py - c.y) <= half) return c.h;
+              }
+              return null;
+            })();
 
-              if (hitHandle) {
-                setSelectedItem(sel);
-                if (!item.locked) {
-                  resizeRef.current = { kind: sel.kind, id: sel.id, handle: hitHandle, startItem: item, startState: current, moved: false };
-                  canvas.setPointerCapture(evt.pointerId);
+            if (hitHandle) {
+              if (u.kind === 'item' && u.item) {
+                const it = u.item.kind === 'image' ? imageById.get(u.item.id) : textById.get(u.item.id);
+                if (!it || (it as any).locked) {
+                  redraw();
+                  return;
                 }
+                resizeRef.current = {
+                  kind: 'item',
+                  itemKind: u.item.kind,
+                  id: u.item.id,
+                  handle: hitHandle,
+                  startItem: it,
+                  startState: current,
+                  moved: false,
+                };
+                canvas.setPointerCapture(evt.pointerId);
+                redraw();
+                return;
+              }
+
+              if (u.kind === 'group' && u.groupId) {
+                const members = membersForGroup(u.groupId);
+                const startItems: Array<{ kind: MoodboardItemKind; id: string; x: number; y: number; w: number; h: number; locked?: boolean }> = [];
+                for (const m of members) {
+                  const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+                  if (!it || (it as any).hidden) continue;
+                  startItems.push({
+                    kind: m.kind,
+                    id: m.id,
+                    x: Number((it as any).x) || 0,
+                    y: Number((it as any).y) || 0,
+                    w: Number((it as any).w) || 0,
+                    h: Number((it as any).h) || 0,
+                    locked: !!(it as any).locked,
+                  });
+                }
+                if (!startItems.some((x) => !x.locked)) {
+                  redraw();
+                  return;
+                }
+                resizeRef.current = {
+                  kind: 'group',
+                  groupId: u.groupId,
+                  handle: hitHandle,
+                  startBounds: u.bounds,
+                  startItems,
+                  startState: current,
+                  moved: false,
+                };
+                canvas.setPointerCapture(evt.pointerId);
                 redraw();
                 return;
               }
@@ -781,7 +1000,7 @@ export function MoodboardCanvas({
           }
         }
 
-        const hit = ((): SelectedItem => {
+        const hit = ((): SelectedItem | null => {
           const texts = Array.isArray(current.texts) ? current.texts : [];
           for (let i = texts.length - 1; i >= 0; i--) {
             const t = texts[i];
@@ -813,29 +1032,99 @@ export function MoodboardCanvas({
         })();
 
         if (hit == null) {
-          setSelectedItem(null);
+          selectionRef.current = [];
+          setSelection([]);
           redraw();
           return;
         }
 
-        setSelectedItem(hit);
-        const item =
-          hit.kind === 'image'
-            ? (current.images || []).find((x) => x && x.id === hit.id)
-            : (current.texts || []).find((x) => x && x.id === hit.id);
-        if (!item || item.locked) {
+        const prevSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+        const prevSet = new Set(prevSel.map(keyOf));
+        const unitMembers = unitForHit(hit);
+        const unitKeys = new Set(unitMembers.map(keyOf));
+        const unitAllSelected = unitMembers.every((m) => prevSet.has(keyOf(m)));
+
+        if (evt.shiftKey) {
+          let next: Selection;
+          if (unitAllSelected) {
+            next = prevSel.filter((s) => !unitKeys.has(keyOf(s)));
+          } else {
+            const withoutHit = prevSel.filter((s) => keyOf(s) !== keyOf(hit));
+            const out: Selection = [hit, ...withoutHit];
+            const nextSet = new Set(out.map(keyOf));
+            for (const m of unitMembers) {
+              const k = keyOf(m);
+              if (nextSet.has(k)) continue;
+              out.push(m);
+              nextSet.add(k);
+            }
+            next = out;
+          }
+          selectionRef.current = next;
+          setSelection(next);
           redraw();
           return;
         }
 
-        dragRef.current = {
-          kind: hit.kind,
-          id: hit.id,
-          offsetX: (Number(item.x) || 0) - pt.x,
-          offsetY: (Number(item.y) || 0) - pt.y,
-          start: current,
-          moved: false,
-        };
+        let nextSel: Selection;
+        if (unitAllSelected) {
+          nextSel = [hit, ...prevSel.filter((s) => keyOf(s) !== keyOf(hit))];
+        } else {
+          nextSel = unitMembers;
+        }
+        selectionRef.current = nextSel;
+        setSelection(nextSel);
+
+        const hitItem = hit.kind === 'image' ? imageById.get(hit.id) : textById.get(hit.id);
+        if (!hitItem || (hitItem as any).locked) {
+          redraw();
+          return;
+        }
+
+        const units = buildSelectionUnits(nextSel);
+        const dragUnits: Array<{
+          key: string;
+          kind: 'group' | 'item';
+          groupId?: string;
+          bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
+          items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }>;
+        }> = [];
+        for (const u of units) {
+          const items: Array<{ kind: MoodboardItemKind; id: string; startX: number; startY: number }> = [];
+          let left = Infinity;
+          let top = Infinity;
+          let right = -Infinity;
+          let bottom = -Infinity;
+          for (const m of u.members) {
+            const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+            if (!it || (it as any).hidden || (it as any).locked) continue;
+            const cx = Number((it as any).x) || 0;
+            const cy = Number((it as any).y) || 0;
+            const w = Number((it as any).w) || 0;
+            const h = Number((it as any).h) || 0;
+            left = Math.min(left, cx - w / 2);
+            top = Math.min(top, cy - h / 2);
+            right = Math.max(right, cx + w / 2);
+            bottom = Math.max(bottom, cy + h / 2);
+            items.push({ kind: m.kind, id: m.id, startX: cx, startY: cy });
+          }
+          if (!items.length) continue;
+          const w = right - left;
+          const h = bottom - top;
+          dragUnits.push({
+            key: u.key,
+            kind: u.kind,
+            groupId: u.groupId,
+            bounds: { left, top, right, bottom, cx: left + w / 2, cy: top + h / 2, w, h },
+            items,
+          });
+        }
+        if (!dragUnits.length) {
+          redraw();
+          return;
+        }
+
+        dragRef.current = { startPt: pt, startState: current, units: dragUnits, moved: false };
         canvas.setPointerCapture(evt.pointerId);
         redraw();
         return;
@@ -857,7 +1146,8 @@ export function MoodboardCanvas({
         };
         const next = { ...cur, texts: [...(cur.texts || []), item] };
         commit(next);
-        setSelectedItem({ kind: 'text', id });
+        selectionRef.current = [{ kind: 'text', id }];
+        setSelection([{ kind: 'text', id }]);
         setTool('move');
         return;
       }
@@ -951,23 +1241,132 @@ export function MoodboardCanvas({
       const resizing = resizeRef.current;
       if (resizing) {
         const pt = pointFromEvent(evt, canvas, viewRef.current);
-        const basis = resizing.startItem;
-        if (!basis || basis.locked) return;
 
+        if (resizing.kind === 'item') {
+          const basis = resizing.startItem;
+          if (!basis || (basis as any).locked) return;
+
+          const minSize = 0.02;
+          const ratio = (basis as any).h > 0 ? (basis as any).w / (basis as any).h : 1;
+
+          const isShift = !!evt.shiftKey;
+          const isAlt = !!evt.altKey;
+
+          let nextX = Number((basis as any).x) || 0;
+          let nextY = Number((basis as any).y) || 0;
+          let nextW = Number((basis as any).w) || 0;
+          let nextH = Number((basis as any).h) || 0;
+
+          if (isAlt) {
+            let w = Math.abs(pt.x - nextX) * 2;
+            let h = Math.abs(pt.y - nextY) * 2;
+            if (isShift) {
+              if (h <= 0) h = minSize;
+              if (w / h > ratio) w = h * ratio;
+              else h = w / ratio;
+            }
+            nextW = Math.min(1, Math.max(minSize, w));
+            nextH = Math.min(1, Math.max(minSize, h));
+            nextX = clamp01(nextX);
+            nextY = clamp01(nextY);
+          } else {
+            const ax =
+              resizing.handle === 'nw' || resizing.handle === 'sw'
+                ? nextX + nextW / 2
+                : nextX - nextW / 2;
+            const ay =
+              resizing.handle === 'nw' || resizing.handle === 'ne'
+                ? nextY + nextH / 2
+                : nextY - nextH / 2;
+
+            let w = Math.abs(ax - pt.x);
+            let h = Math.abs(ay - pt.y);
+            if (isShift) {
+              if (h <= 0) h = minSize;
+              if (w / h > ratio) w = h * ratio;
+              else h = w / ratio;
+            }
+
+            nextW = Math.min(1, Math.max(minSize, w));
+            nextH = Math.min(1, Math.max(minSize, h));
+
+            if (resizing.handle === 'nw') {
+              nextX = ax - nextW / 2;
+              nextY = ay - nextH / 2;
+            } else if (resizing.handle === 'ne') {
+              nextX = ax + nextW / 2;
+              nextY = ay - nextH / 2;
+            } else if (resizing.handle === 'se') {
+              nextX = ax + nextW / 2;
+              nextY = ay + nextH / 2;
+            } else {
+              nextX = ax - nextW / 2;
+              nextY = ay + nextH / 2;
+            }
+
+            nextX = clamp01(nextX);
+            nextY = clamp01(nextY);
+          }
+
+          if (snapRef.current) {
+            const rect = canvas.getBoundingClientRect();
+            const stepX = rect.width > 0 ? 40 / rect.width : 0;
+            const stepY = rect.height > 0 ? 40 / rect.height : 0;
+            if (stepX > 0) {
+              nextX = clamp01(Math.round(nextX / stepX) * stepX);
+              nextW = Math.min(1, Math.max(minSize, Math.round(nextW / stepX) * stepX));
+            }
+            if (stepY > 0) {
+              nextY = clamp01(Math.round(nextY / stepY) * stepY);
+              nextH = Math.min(1, Math.max(minSize, Math.round(nextH / stepY) * stepY));
+            }
+          }
+
+          const cur = valueRef.current;
+          if (resizing.itemKind === 'image') {
+            const idx = (cur.images || []).findIndex((x) => x && x.id === resizing.id);
+            if (idx < 0) return;
+            const img = cur.images[idx];
+            if (!img || img.locked) return;
+            const changed = img.x !== nextX || img.y !== nextY || img.w !== nextW || img.h !== nextH;
+            if (!changed) return;
+            const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
+            const next = { ...cur, images: nextImages };
+            valueRef.current = next;
+            resizing.moved = true;
+            redraw();
+            return;
+          }
+
+          const texts = Array.isArray(cur.texts) ? cur.texts : [];
+          const idx = texts.findIndex((x) => x && x.id === resizing.id);
+          if (idx < 0) return;
+          const t = texts[idx];
+          if (!t || t.locked) return;
+          const changed = t.x !== nextX || t.y !== nextY || t.w !== nextW || t.h !== nextH;
+          if (!changed) return;
+          const nextTexts = texts.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
+          const next = { ...cur, texts: nextTexts };
+          valueRef.current = next;
+          resizing.moved = true;
+          redraw();
+          return;
+        }
+
+        const start = resizing.startBounds;
         const minSize = 0.02;
-        const ratio = basis.h > 0 ? basis.w / basis.h : 1;
-
+        const ratio = start.h > 0 ? start.w / start.h : 1;
         const isShift = !!evt.shiftKey;
         const isAlt = !!evt.altKey;
 
-        let nextX = basis.x;
-        let nextY = basis.y;
-        let nextW = basis.w;
-        let nextH = basis.h;
+        let nextCx = start.cx;
+        let nextCy = start.cy;
+        let nextW = start.w;
+        let nextH = start.h;
 
         if (isAlt) {
-          let w = Math.abs(pt.x - basis.x) * 2;
-          let h = Math.abs(pt.y - basis.y) * 2;
+          let w = Math.abs(pt.x - start.cx) * 2;
+          let h = Math.abs(pt.y - start.cy) * 2;
           if (isShift) {
             if (h <= 0) h = minSize;
             if (w / h > ratio) w = h * ratio;
@@ -975,41 +1374,63 @@ export function MoodboardCanvas({
           }
           nextW = Math.min(1, Math.max(minSize, w));
           nextH = Math.min(1, Math.max(minSize, h));
-          nextX = clamp01(basis.x);
-          nextY = clamp01(basis.y);
+          nextCx = clamp01(start.cx);
+          nextCy = clamp01(start.cy);
         } else {
-          const ax =
-            resizing.handle === 'nw' || resizing.handle === 'sw' ? (basis.x + basis.w / 2) : (basis.x - basis.w / 2);
-          const ay =
-            resizing.handle === 'nw' || resizing.handle === 'ne' ? (basis.y + basis.h / 2) : (basis.y - basis.h / 2);
+          const anchorX =
+            resizing.handle === 'nw' || resizing.handle === 'sw' ? start.right : start.left;
+          const anchorY =
+            resizing.handle === 'nw' || resizing.handle === 'ne' ? start.bottom : start.top;
 
-          let w = Math.abs(ax - pt.x);
-          let h = Math.abs(ay - pt.y);
+          let w = Math.abs(anchorX - pt.x);
+          let h = Math.abs(anchorY - pt.y);
           if (isShift) {
             if (h <= 0) h = minSize;
             if (w / h > ratio) w = h * ratio;
             else h = w / ratio;
           }
-
           nextW = Math.min(1, Math.max(minSize, w));
           nextH = Math.min(1, Math.max(minSize, h));
 
+          let left = 0;
+          let top = 0;
           if (resizing.handle === 'nw') {
-            nextX = ax - nextW / 2;
-            nextY = ay - nextH / 2;
+            left = anchorX - nextW;
+            top = anchorY - nextH;
           } else if (resizing.handle === 'ne') {
-            nextX = ax + nextW / 2;
-            nextY = ay - nextH / 2;
+            left = anchorX;
+            top = anchorY - nextH;
           } else if (resizing.handle === 'se') {
-            nextX = ax + nextW / 2;
-            nextY = ay + nextH / 2;
+            left = anchorX;
+            top = anchorY;
           } else {
-            nextX = ax - nextW / 2;
-            nextY = ay + nextH / 2;
+            left = anchorX - nextW;
+            top = anchorY;
+          }
+          let right = left + nextW;
+          let bottom = top + nextH;
+
+          if (left < 0) {
+            right -= left;
+            left = 0;
+          }
+          if (right > 1) {
+            left -= right - 1;
+            right = 1;
+          }
+          if (top < 0) {
+            bottom -= top;
+            top = 0;
+          }
+          if (bottom > 1) {
+            top -= bottom - 1;
+            bottom = 1;
           }
 
-          nextX = clamp01(nextX);
-          nextY = clamp01(nextY);
+          nextW = Math.max(minSize, right - left);
+          nextH = Math.max(minSize, bottom - top);
+          nextCx = clamp01(left + nextW / 2);
+          nextCy = clamp01(top + nextH / 2);
         }
 
         if (snapRef.current) {
@@ -1017,41 +1438,41 @@ export function MoodboardCanvas({
           const stepX = rect.width > 0 ? 40 / rect.width : 0;
           const stepY = rect.height > 0 ? 40 / rect.height : 0;
           if (stepX > 0) {
-            nextX = clamp01(Math.round(nextX / stepX) * stepX);
+            nextCx = clamp01(Math.round(nextCx / stepX) * stepX);
             nextW = Math.min(1, Math.max(minSize, Math.round(nextW / stepX) * stepX));
           }
           if (stepY > 0) {
-            nextY = clamp01(Math.round(nextY / stepY) * stepY);
+            nextCy = clamp01(Math.round(nextCy / stepY) * stepY);
             nextH = Math.min(1, Math.max(minSize, Math.round(nextH / stepY) * stepY));
           }
         }
 
-        const cur = valueRef.current;
-        if (resizing.kind === 'image') {
-          const idx = (cur.images || []).findIndex((x) => x && x.id === resizing.id);
-          if (idx < 0) return;
-          const img = cur.images[idx];
-          if (!img || img.locked) return;
-          const changed = img.x !== nextX || img.y !== nextY || img.w !== nextW || img.h !== nextH;
-          if (!changed) return;
-          const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
-          const next = { ...cur, images: nextImages };
-          valueRef.current = next;
-          resizing.moved = true;
-          redraw();
-          return;
-        }
+        const scaleX = start.w > 0 ? nextW / start.w : 1;
+        const scaleY = start.h > 0 ? nextH / start.h : 1;
 
-        const texts = Array.isArray(cur.texts) ? cur.texts : [];
-        const idx = texts.findIndex((x) => x && x.id === resizing.id);
-        if (idx < 0) return;
-        const t = texts[idx];
-        if (!t || t.locked) return;
-        const changed = t.x !== nextX || t.y !== nextY || t.w !== nextW || t.h !== nextH;
-        if (!changed) return;
-        const nextTexts = texts.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
-        const next = { ...cur, texts: nextTexts };
-        valueRef.current = next;
+        const updates = new Map<string, { x: number; y: number; w: number; h: number }>();
+        for (const it of resizing.startItems) {
+          if (it.locked) continue;
+          const relX = start.w > 0 ? (it.x - start.cx) / start.w : 0;
+          const relY = start.h > 0 ? (it.y - start.cy) / start.h : 0;
+          const x = clamp01(nextCx + relX * nextW);
+          const y = clamp01(nextCy + relY * nextH);
+          const w = Math.min(1, Math.max(minSize, (Number(it.w) || 0) * scaleX));
+          const h = Math.min(1, Math.max(minSize, (Number(it.h) || 0) * scaleY));
+          updates.set(`${it.kind}:${it.id}`, { x, y, w, h });
+        }
+        if (!updates.size) return;
+
+        const cur = valueRef.current;
+        const nextImages = (cur.images || []).map((img) => {
+          const u = updates.get(`image:${img.id}`);
+          return u ? { ...img, x: u.x, y: u.y, w: u.w, h: u.h } : img;
+        });
+        const nextTexts = (cur.texts || []).map((t) => {
+          const u = updates.get(`text:${t.id}`);
+          return u ? { ...t, x: u.x, y: u.y, w: u.w, h: u.h } : t;
+        });
+        valueRef.current = { ...cur, images: nextImages, texts: nextTexts };
         resizing.moved = true;
         redraw();
         return;
@@ -1060,43 +1481,61 @@ export function MoodboardCanvas({
       const dragging = dragRef.current;
       if (dragging) {
         const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const dx0 = pt.x - dragging.startPt.x;
+        const dy0 = pt.y - dragging.startPt.y;
+        if (!Number.isFinite(dx0) || !Number.isFinite(dy0)) return;
+
         const cur = valueRef.current;
-        let nextX = clamp01(pt.x + dragging.offsetX);
-        let nextY = clamp01(pt.y + dragging.offsetY);
+        const updates = new Map<string, { x: number; y: number }>();
 
-        if (snapRef.current) {
-          const rect = canvas.getBoundingClientRect();
-          const stepX = rect.width > 0 ? 40 / rect.width : 0;
-          const stepY = rect.height > 0 ? 40 / rect.height : 0;
-          if (stepX > 0) nextX = clamp01(Math.round(nextX / stepX) * stepX);
-          if (stepY > 0) nextY = clamp01(Math.round(nextY / stepY) * stepY);
+        for (const u of dragging.units) {
+          let dx = dx0;
+          let dy = dy0;
+
+          if (snapRef.current) {
+            const rect = canvas.getBoundingClientRect();
+            const stepX = rect.width > 0 ? 40 / rect.width : 0;
+            const stepY = rect.height > 0 ? 40 / rect.height : 0;
+            if (stepX > 0) {
+              const desired = u.bounds.cx + dx;
+              const snapped = Math.round(desired / stepX) * stepX;
+              dx = snapped - u.bounds.cx;
+            }
+            if (stepY > 0) {
+              const desired = u.bounds.cy + dy;
+              const snapped = Math.round(desired / stepY) * stepY;
+              dy = snapped - u.bounds.cy;
+            }
+          }
+
+          dx = Math.max(-u.bounds.left, Math.min(1 - u.bounds.right, dx));
+          dy = Math.max(-u.bounds.top, Math.min(1 - u.bounds.bottom, dy));
+
+          for (const it of u.items) {
+            const x = clamp01(it.startX + dx);
+            const y = clamp01(it.startY + dy);
+            updates.set(`${it.kind}:${it.id}`, { x, y });
+          }
         }
 
-        if (dragging.kind === 'image') {
-          const idx = (cur.images || []).findIndex((x) => x && x.id === dragging.id);
-          if (idx < 0) return;
-          const img = cur.images[idx];
-          if (!img || img.locked) return;
-          const changed = img.x !== nextX || img.y !== nextY;
-          if (!changed) return;
-          const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY } : x));
-          const next = { ...cur, images: nextImages };
-          valueRef.current = next;
-          dragging.moved = true;
-          redraw();
-          return;
-        }
+        if (!updates.size) return;
 
-        const texts = Array.isArray(cur.texts) ? cur.texts : [];
-        const idx = texts.findIndex((x) => x && x.id === dragging.id);
-        if (idx < 0) return;
-        const t = texts[idx];
-        if (!t || t.locked) return;
-        const changed = t.x !== nextX || t.y !== nextY;
+        let changed = false;
+        const nextImages = (cur.images || []).map((img) => {
+          const u = updates.get(`image:${img.id}`);
+          if (!u) return img;
+          if (img.x !== u.x || img.y !== u.y) changed = true;
+          return { ...img, x: u.x, y: u.y };
+        });
+        const nextTexts = (cur.texts || []).map((t) => {
+          const u = updates.get(`text:${t.id}`);
+          if (!u) return t;
+          if (t.x !== u.x || t.y !== u.y) changed = true;
+          return { ...t, x: u.x, y: u.y };
+        });
         if (!changed) return;
-        const nextTexts = texts.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY } : x));
-        const next = { ...cur, texts: nextTexts };
-        valueRef.current = next;
+
+        valueRef.current = { ...cur, images: nextImages, texts: nextTexts };
         dragging.moved = true;
         redraw();
         return;
@@ -1145,7 +1584,7 @@ export function MoodboardCanvas({
       if (dragging) {
         dragRef.current = null;
         if (dragging.moved) {
-          commit(valueRef.current, { historyPrev: dragging.start });
+          commit(valueRef.current, { historyPrev: dragging.startState });
           return;
         }
         redraw();
@@ -1260,8 +1699,211 @@ export function MoodboardCanvas({
     });
   }, []);
 
+  const buildSelectionUnitsForArrange = React.useCallback((state: MoodboardState, selList: Selection) => {
+    const images = Array.isArray(state.images) ? state.images : [];
+    const texts = Array.isArray(state.texts) ? state.texts : [];
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+
+    const membersForGroup = (gid: string): Selection => {
+      const out: Selection = [];
+      for (const t of texts) {
+        if (!t || t.hidden) continue;
+        if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
+      }
+      for (const img of images) {
+        if (!img || img.hidden) continue;
+        if (String((img as any).groupId ?? '') === gid) out.push({ kind: 'image', id: img.id });
+      }
+      return out;
+    };
+
+    const groupIds = new Set<string>();
+    for (const s of selList) {
+      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      const gid = String((it as any)?.groupId ?? '').trim();
+      if (gid) groupIds.add(gid);
+    }
+
+    const units: Array<{
+      kind: 'group' | 'item';
+      key: string;
+      groupId?: string;
+      members: Selection;
+      bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number; w: number; h: number };
+    }> = [];
+
+    for (const gid of groupIds) {
+      const members = membersForGroup(gid);
+      if (!members.length) continue;
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const m of members) {
+        const it = m.kind === 'image' ? imageById.get(m.id) : textById.get(m.id);
+        if (!it || (it as any).hidden) continue;
+        const cx = Number((it as any).x) || 0;
+        const cy = Number((it as any).y) || 0;
+        const w = Number((it as any).w) || 0;
+        const h = Number((it as any).h) || 0;
+        left = Math.min(left, cx - w / 2);
+        top = Math.min(top, cy - h / 2);
+        right = Math.max(right, cx + w / 2);
+        bottom = Math.max(bottom, cy + h / 2);
+      }
+      const w = right - left;
+      const h = bottom - top;
+      units.push({ kind: 'group', key: `g:${gid}`, groupId: gid, members, bounds: { left, top, right, bottom, cx: left + w / 2, cy: top + h / 2, w, h } });
+    }
+
+    for (const s of selList) {
+      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      if (!it || (it as any).hidden) continue;
+      const gid = String((it as any).groupId ?? '').trim();
+      if (gid && groupIds.has(gid)) continue;
+      const cx = Number((it as any).x) || 0;
+      const cy = Number((it as any).y) || 0;
+      const w = Number((it as any).w) || 0;
+      const h = Number((it as any).h) || 0;
+      units.push({ kind: 'item', key: `${s.kind}:${s.id}`, members: [s], bounds: { left: cx - w / 2, top: cy - h / 2, right: cx + w / 2, bottom: cy + h / 2, cx, cy, w, h } });
+    }
+
+    return units;
+  }, []);
+
+  const translateSelectionUnits = React.useCallback(
+    (mode: 'align-left' | 'align-center' | 'align-right' | 'align-top' | 'align-middle' | 'align-bottom' | 'dist-h' | 'dist-v' | 'tidy') => {
+      const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+      if (curSel.length < 2 && mode !== 'tidy') return;
+      const cur = valueRef.current;
+      const units = buildSelectionUnitsForArrange(cur, curSel);
+      if (units.length < 2 && mode !== 'tidy') return;
+
+      const updates = new Map<string, { x: number; y: number }>();
+      const getItem = (s: SelectedItem) => (s.kind === 'image' ? (cur.images || []).find((x) => x && x.id === s.id) : (cur.texts || []).find((x) => x && x.id === s.id));
+
+      const applyTranslate = (unit: (typeof units)[number], dx: number, dy: number) => {
+        const clampedDx = Math.max(-unit.bounds.left, Math.min(1 - unit.bounds.right, dx));
+        const clampedDy = Math.max(-unit.bounds.top, Math.min(1 - unit.bounds.bottom, dy));
+        for (const m of unit.members) {
+          const it: any = getItem(m);
+          if (!it || it.hidden || it.locked) continue;
+          updates.set(`${m.kind}:${m.id}`, { x: clamp01((Number(it.x) || 0) + clampedDx), y: clamp01((Number(it.y) || 0) + clampedDy) });
+        }
+      };
+
+      if (mode === 'align-left' || mode === 'align-center' || mode === 'align-right') {
+        const leftAll = Math.min(...units.map((u) => u.bounds.left));
+        const rightAll = Math.max(...units.map((u) => u.bounds.right));
+        const centerAll = leftAll + (rightAll - leftAll) / 2;
+        for (const u of units) {
+          const dx = mode === 'align-left' ? leftAll - u.bounds.left : mode === 'align-right' ? rightAll - u.bounds.right : centerAll - u.bounds.cx;
+          applyTranslate(u, dx, 0);
+        }
+      } else if (mode === 'align-top' || mode === 'align-middle' || mode === 'align-bottom') {
+        const topAll = Math.min(...units.map((u) => u.bounds.top));
+        const bottomAll = Math.max(...units.map((u) => u.bounds.bottom));
+        const midAll = topAll + (bottomAll - topAll) / 2;
+        for (const u of units) {
+          const dy = mode === 'align-top' ? topAll - u.bounds.top : mode === 'align-bottom' ? bottomAll - u.bounds.bottom : midAll - u.bounds.cy;
+          applyTranslate(u, 0, dy);
+        }
+      } else if (mode === 'dist-h') {
+        if (units.length < 3) return;
+        const sorted = units.slice().sort((a, b) => a.bounds.cx - b.bounds.cx);
+        const left = sorted[0].bounds.cx;
+        const right = sorted[sorted.length - 1].bounds.cx;
+        const step = (right - left) / (sorted.length - 1);
+        for (let i = 0; i < sorted.length; i++) {
+          const desired = left + step * i;
+          applyTranslate(sorted[i], desired - sorted[i].bounds.cx, 0);
+        }
+      } else if (mode === 'dist-v') {
+        if (units.length < 3) return;
+        const sorted = units.slice().sort((a, b) => a.bounds.cy - b.bounds.cy);
+        const top = sorted[0].bounds.cy;
+        const bottom = sorted[sorted.length - 1].bounds.cy;
+        const step = (bottom - top) / (sorted.length - 1);
+        for (let i = 0; i < sorted.length; i++) {
+          const desired = top + step * i;
+          applyTranslate(sorted[i], 0, desired - sorted[i].bounds.cy);
+        }
+      } else if (mode === 'tidy') {
+        if (!units.length) return;
+        const leftAll = Math.min(...units.map((u) => u.bounds.left));
+        const topAll = Math.min(...units.map((u) => u.bounds.top));
+        const maxW = Math.max(...units.map((u) => u.bounds.w));
+        const maxH = Math.max(...units.map((u) => u.bounds.h));
+        const gap = 0.02;
+        const cols = Math.max(1, Math.ceil(Math.sqrt(units.length)));
+        const sorted = units.slice().sort((a, b) => a.bounds.top - b.bounds.top || a.bounds.left - b.bounds.left || a.key.localeCompare(b.key));
+        for (let i = 0; i < sorted.length; i++) {
+          const row = Math.floor(i / cols);
+          const col = i % cols;
+          const desiredCx = leftAll + col * (maxW + gap) + maxW / 2;
+          const desiredCy = topAll + row * (maxH + gap) + maxH / 2;
+          applyTranslate(sorted[i], desiredCx - sorted[i].bounds.cx, desiredCy - sorted[i].bounds.cy);
+        }
+      }
+
+      if (!updates.size) return;
+      const nextImages = (cur.images || []).map((img) => {
+        const u = updates.get(`image:${img.id}`);
+        return u ? { ...img, x: u.x, y: u.y } : img;
+      });
+      const nextTexts = (cur.texts || []).map((t) => {
+        const u = updates.get(`text:${t.id}`);
+        return u ? { ...t, x: u.x, y: u.y } : t;
+      });
+      commit({ ...cur, images: nextImages, texts: nextTexts });
+    },
+    [buildSelectionUnitsForArrange, commit]
+  );
+
+  const groupSelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (curSel.length < 2) return;
+    const gid = makeMoodId('mbg_');
+    const cur = valueRef.current;
+    const keys = new Set(curSel.map((s) => `${s.kind}:${s.id}`));
+    const nextImages = (cur.images || []).map((img) => (keys.has(`image:${img.id}`) ? { ...img, groupId: gid } : img));
+    const nextTexts = (cur.texts || []).map((t) => (keys.has(`text:${t.id}`) ? { ...t, groupId: gid } : t));
+    commit({ ...cur, images: nextImages, texts: nextTexts });
+  }, [commit]);
+
+  const ungroupSelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (!curSel.length) return;
+    const cur = valueRef.current;
+    const images = Array.isArray(cur.images) ? cur.images : [];
+    const texts = Array.isArray(cur.texts) ? cur.texts : [];
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+    const groupIds = new Set<string>();
+    for (const s of curSel) {
+      const it = s.kind === 'image' ? imageById.get(s.id) : textById.get(s.id);
+      const gid = String((it as any)?.groupId ?? '').trim();
+      if (gid) groupIds.add(gid);
+    }
+    if (!groupIds.size) return;
+    const nextImages = images.map((img) => (img && groupIds.has(String((img as any).groupId ?? '')) ? { ...img, groupId: undefined } : img));
+    const nextTexts = texts.map((t) => (t && groupIds.has(String((t as any).groupId ?? '')) ? { ...t, groupId: undefined } : t));
+    commit({ ...cur, images: nextImages, texts: nextTexts });
+  }, [commit]);
+
+  const arrangeUnits = React.useMemo(() => buildSelectionUnitsForArrange(value, selection), [buildSelectionUnitsForArrange, value, selection]);
+  const canArrange = arrangeUnits.length >= 2;
+  const canDistribute = arrangeUnits.length >= 3;
+  const canGroup = selection.length >= 2;
+  const canUngroup = arrangeUnits.some((u) => u.kind === 'group');
+
   const selectedText =
-    selectedItem?.kind === 'text' ? (Array.isArray(value.texts) ? value.texts.find((t) => t && t.id === selectedItem.id) ?? null : null) : null;
+    selection.length === 1 && selection[0]?.kind === 'text'
+      ? Array.isArray(value.texts)
+        ? value.texts.find((t) => t && t.id === selection[0].id) ?? null
+        : null
+      : null;
 
   return (
       <div className={styles.root}>
@@ -1349,23 +1991,74 @@ export function MoodboardCanvas({
         <button
             className={styles.toolBtn}
             onClick={() => {
-              const sel = selectedItemRef.current;
-              if (!sel) return;
+              const sel = selectionRef.current;
+              if (!sel || sel.length === 0) return;
               const cur = valueRef.current;
-              if (sel.kind === 'image') {
-                const nextImages = (cur.images || []).filter((img) => img && img.id !== sel.id);
-                commit({ ...cur, images: nextImages });
-              } else {
-                const nextTexts = (cur.texts || []).filter((t) => t && t.id !== sel.id);
-                commit({ ...cur, texts: nextTexts });
-              }
-              setSelectedItem(null);
+              const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
+              const nextImages = (cur.images || []).filter((img) => img && !keys.has(`image:${img.id}`));
+              const nextTexts = (cur.texts || []).filter((t) => t && !keys.has(`text:${t.id}`));
+              commit({ ...cur, images: nextImages, texts: nextTexts });
+              selectionRef.current = [];
+              setSelection([]);
             }}
-            disabled={!selectedItem}
-            title="Delete selected item"
+            disabled={selection.length === 0}
+            title="Delete selected item(s)"
           >
             Delete
           </button>
+
+        <details
+          style={{
+            border: '1px solid var(--glass-border)',
+            padding: '6px 8px',
+            background: 'transparent',
+          }}
+        >
+          <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
+            Arrange{' '}
+            <span style={{ color: 'var(--text-secondary)' }}>
+              (<b>{arrangeUnits.length}</b> unit{arrangeUnits.length === 1 ? '' : 's'})
+            </span>
+          </summary>
+
+          <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>Shift+click to multi-select. Grouped items move/transform together.</div>
+
+          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-left')}>
+              Align L
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-center')}>
+              Align C
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-right')}>
+              Align R
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-top')}>
+              Top
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-middle')}>
+              Mid
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('align-bottom')}>
+              Bottom
+            </button>
+            <button className={styles.toolBtn} disabled={!canDistribute} onClick={() => translateSelectionUnits('dist-h')}>
+              Dist H
+            </button>
+            <button className={styles.toolBtn} disabled={!canDistribute} onClick={() => translateSelectionUnits('dist-v')}>
+              Dist V
+            </button>
+            <button className={styles.toolBtn} disabled={!canArrange} onClick={() => translateSelectionUnits('tidy')}>
+              Tidy
+            </button>
+            <button className={styles.toolBtn} disabled={!canGroup} onClick={groupSelection} title="Create a group (move/transform as a unit)">
+              Group
+            </button>
+            <button className={styles.toolBtn} disabled={!canUngroup} onClick={ungroupSelection} title="Remove grouping from selected groups">
+              Ungroup
+            </button>
+          </div>
+        </details>
 
         <label className={styles.toolLabel}>
           Size{' '}
@@ -1458,7 +2151,7 @@ export function MoodboardCanvas({
                 .map((img, idx) => ({ img, idx }))
                 .reverse()
                 .map(({ img, idx }) => {
-                  const isSelected = !!selectedItem && selectedItem.kind === 'image' && img.id === selectedItem.id;
+                  const isSelected = selection.some((s) => s.kind === 'image' && s.id === img.id);
                   return (
                     <div key={img.id} className={styles.layerRow} data-selected={isSelected ? '1' : '0'}>
                       <button
@@ -1466,7 +2159,27 @@ export function MoodboardCanvas({
                         type="button"
                         onClick={() => {
                           setTool('move');
-                          setSelectedItem({ kind: 'image', id: img.id });
+                          const gid = String((img as any).groupId ?? '').trim();
+                          if (gid) {
+                            const members: Selection = [];
+                            const texts = Array.isArray(value.texts) ? value.texts : [];
+                            for (const t of texts) {
+                              if (!t || t.hidden) continue;
+                              if (String((t as any).groupId ?? '') === gid) members.push({ kind: 'text', id: t.id });
+                            }
+                            for (const it of value.images || []) {
+                              if (!it || it.hidden) continue;
+                              if (String((it as any).groupId ?? '') === gid) members.push({ kind: 'image', id: it.id });
+                            }
+                            const hit: SelectedItem = { kind: 'image', id: img.id };
+                            const rest = members.filter((m) => !(m.kind === hit.kind && m.id === hit.id));
+                            const nextSel: Selection = [hit, ...rest];
+                            selectionRef.current = nextSel;
+                            setSelection(nextSel);
+                            return;
+                          }
+                          selectionRef.current = [{ kind: 'image', id: img.id }];
+                          setSelection([{ kind: 'image', id: img.id }]);
                         }}
                         title="Select layer"
                       >
@@ -1492,7 +2205,14 @@ export function MoodboardCanvas({
                             const nextHidden = !img.hidden;
                             const nextImages = value.images.map((x) => (x.id === img.id ? { ...x, hidden: nextHidden } : x));
                             commit({ ...value, images: nextImages });
-                            if (nextHidden && selectedItemRef.current?.kind === 'image' && selectedItemRef.current.id === img.id) setSelectedItem(null);
+                            if (nextHidden) {
+                              const prev = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+                              if (prev.some((s) => s.kind === 'image' && s.id === img.id)) {
+                                const nextSel = prev.filter((s) => !(s.kind === 'image' && s.id === img.id));
+                                selectionRef.current = nextSel;
+                                setSelection(nextSel);
+                              }
+                            }
                           }}
                           title={img.hidden ? 'Show layer' : 'Hide layer'}
                           type="button"
@@ -1587,7 +2307,15 @@ export function MoodboardCanvas({
           <div className={styles.textPanel} aria-label="Text">
             <div className={styles.textHeader}>
               <div>Text</div>
-              <button className={styles.layerBtn} type="button" onClick={() => setSelectedItem(null)} title="Close">
+              <button
+                className={styles.layerBtn}
+                type="button"
+                onClick={() => {
+                  selectionRef.current = [];
+                  setSelection([]);
+                }}
+                title="Close"
+              >
                 Close
               </button>
             </div>

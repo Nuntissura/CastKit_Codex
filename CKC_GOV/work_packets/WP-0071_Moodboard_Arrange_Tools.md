@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add basic arrange tools for moodboard selections: align, distribute, group/ungroup, and a simple auto-pack “tidy” action.
@@ -25,11 +25,11 @@ Add basic arrange tools for moodboard selections: align, distribute, group/ungro
 - Advanced snapping guides.
 
 ## Acceptance criteria
-- [ ] Arrange actions work on multi-select and are undoable.
-- [ ] Group behaves as a single unit for move/transform.
+- [x] Arrange actions work on multi-select and are undoable.
+- [x] Group behaves as a single unit for move/transform.
 
 ## Test plan
-- [ ] Manual: add 5+ items, align/distribute, group/ungroup, undo/redo.
+- [x] Manual: add 5+ items, align/distribute, group/ungroup, undo/redo.
 
 ## Notes
 - Do NOT touch `D:`.
