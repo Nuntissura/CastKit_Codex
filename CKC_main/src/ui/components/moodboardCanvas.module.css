@@ -270,3 +270,53 @@
   color: var(--text);
   font: inherit;
 }
+
+.rulerCorner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  z-index: 1;
+}
+
+.rulerTop {
+  position: absolute;
+  top: 0;
+  left: 26px;
+  right: 0;
+  height: 26px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--glass-border);
+  z-index: 1;
+  cursor: crosshair;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.25) 0,
+    rgba(0, 0, 0, 0.25) 1px,
+    transparent 1px,
+    transparent 20px
+  );
+}
+
+.rulerLeft {
+  position: absolute;
+  top: 26px;
+  left: 0;
+  bottom: 0;
+  width: 26px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--glass-border);
+  z-index: 1;
+  cursor: crosshair;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.25) 0,
+    rgba(0, 0, 0, 0.25) 1px,
+    transparent 1px,
+    transparent 20px
+  );
+}

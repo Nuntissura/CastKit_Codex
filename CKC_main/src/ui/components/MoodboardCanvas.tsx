@@ -112,6 +112,14 @@ export type MoodboardConnector = {
   locked?: boolean;
 };
 
+export type MoodboardGuide = {
+  id: string;
+  axis: 'x' | 'y';
+  pos: number; // normalized 0..1
+  hidden?: boolean;
+  locked?: boolean;
+};
+
 export type MoodboardState = {
   version: 1;
   background?:
@@ -123,6 +131,7 @@ export type MoodboardState = {
   connectors?: MoodboardConnector[];
   images: MoodboardImage[];
   texts?: MoodboardText[];
+  guides?: MoodboardGuide[];
   strokesHidden?: boolean;
   strokesLocked?: boolean;
 };
@@ -230,6 +239,33 @@ function pointInRotatedEllipse(pt: { x: number; y: number }, box: { x: number; y
   return nx * nx + ny * ny <= 1;
 }
 
+function bestSnapDelta(
+  targets: number[],
+  points: number[],
+  tol: number
+): null | { delta: number; line: number } {
+  if (!Number.isFinite(tol) || tol <= 0) return null;
+  let bestAbs = Infinity;
+  let bestDelta = 0;
+  let bestLine = 0;
+  for (const t of targets) {
+    const tt = Number(t);
+    if (!Number.isFinite(tt)) continue;
+    for (const p of points) {
+      const pp = Number(p);
+      if (!Number.isFinite(pp)) continue;
+      const d = tt - pp;
+      const ad = Math.abs(d);
+      if (ad <= tol && ad < bestAbs) {
+        bestAbs = ad;
+        bestDelta = d;
+        bestLine = tt;
+      }
+    }
+  }
+  return bestAbs < Infinity ? { delta: bestDelta, line: bestLine } : null;
+}
+
 type ViewTransform = { zoom: number; panX: number; panY: number };
 
 function pointFromEvent(evt: PointerEvent, canvas: HTMLCanvasElement, view?: ViewTransform): { x: number; y: number } {
@@ -252,6 +288,26 @@ function pointFromEvent(evt: PointerEvent, canvas: HTMLCanvasElement, view?: Vie
   return { x: clamp01(sx / rect.width), y: clamp01(sy / rect.height) };
 }
 
+function pointFromClient(clientX: number, clientY: number, canvas: HTMLCanvasElement, view?: ViewTransform): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+  const sx = clientX - rect.left;
+  const sy = clientY - rect.top;
+
+  if (view && (view.zoom !== 1 || view.panX !== 0 || view.panY !== 0)) {
+    const zoom = Math.max(0.01, Number(view.zoom) || 1);
+    const panX = Number(view.panX) || 0;
+    const panY = Number(view.panY) || 0;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const px = (sx - cx - panX) / zoom + cx;
+    const py = (sy - cy - panY) / zoom + cy;
+    return { x: clamp01(px / rect.width), y: clamp01(py / rect.height) };
+  }
+
+  return { x: clamp01(sx / rect.width), y: clamp01(sy / rect.height) };
+}
+
 function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   const images = Array.isArray(value.images) ? value.images : [];
   const texts = Array.isArray(value.texts) ? value.texts : [];
@@ -259,6 +315,8 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   const shapes = Array.isArray(rawShapes) ? (rawShapes as MoodboardShape[]) : [];
   const rawConnectors = (value as any)?.connectors;
   const connectors = Array.isArray(rawConnectors) ? (rawConnectors as MoodboardConnector[]) : [];
+  const rawGuides = (value as any)?.guides;
+  const guides = Array.isArray(rawGuides) ? (rawGuides as MoodboardGuide[]) : [];
   let changed = false;
   const nextImages = images.map((img) => {
     if (img && typeof img.id === 'string' && img.id.trim().length) return img;
@@ -290,13 +348,24 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
     return { ...(t as any), id: hasId ? (t as any).id : makeMoodId('mbt_'), text: nextText } as MoodboardText;
   });
 
+  const nextGuides = guides.map((g: any) => {
+    const hasId = !!(g && typeof g.id === 'string' && g.id.trim().length);
+    const axis = g?.axis === 'y' ? 'y' : 'x';
+    const pos = clamp01(Number(g?.pos) || 0);
+    if (hasId && (g?.axis === 'x' || g?.axis === 'y') && Number.isFinite(Number(g?.pos))) return g as MoodboardGuide;
+    changed = true;
+    return { ...(g as any), id: hasId ? String(g.id) : makeMoodId('mbg_'), axis, pos } as MoodboardGuide;
+  });
+
   if (rawShapes !== undefined && !Array.isArray(rawShapes)) changed = true;
   if (rawConnectors !== undefined && !Array.isArray(rawConnectors)) changed = true;
+  if (rawGuides !== undefined && !Array.isArray(rawGuides)) changed = true;
   if (!changed) return value;
   const next: MoodboardState = { ...value, images: nextImages };
   if (shapes.length || rawShapes !== undefined) next.shapes = nextShapes;
   if (connectors.length || rawConnectors !== undefined) next.connectors = nextConnectors;
   if (texts.length || value.texts) next.texts = nextTexts;
+  if (guides.length || rawGuides !== undefined) next.guides = nextGuides;
   return next;
 }
 
@@ -407,12 +476,16 @@ export function MoodboardCanvas({
   const isSpaceDownRef = React.useRef<boolean>(false);
   const gridRef = React.useRef<boolean>(false);
   const snapRef = React.useRef<boolean>(false);
+  const snapGuidesRef = React.useRef<boolean>(true);
+  const snapObjectsRef = React.useRef<boolean>(true);
   const boxSelectRef = React.useRef<
     null | { startPt: { x: number; y: number }; curPt: { x: number; y: number }; startSel: Selection; additive: boolean; moved: boolean }
   >(null);
   const clipboardRef = React.useRef<ClipboardPayload | null>(null);
   const pasteSerialRef = React.useRef<number>(0);
   const contextMenuElRef = React.useRef<HTMLDivElement | null>(null);
+  const guideDragRef = React.useRef<null | { guideId: string; axis: 'x' | 'y'; startState: MoodboardState; moved: boolean }>(null);
+  const snapPreviewRef = React.useRef<null | { xs: number[]; ys: number[] }>(null);
 
   const [tool, setTool] = React.useState<MoodboardTool>('pen');
   const [size, setSize] = React.useState<number>(3);
@@ -428,6 +501,9 @@ export function MoodboardCanvas({
   const [selection, setSelection] = React.useState<Selection>([]);
   const [showLayers, setShowLayers] = React.useState<boolean>(false);
   const [showInspector, setShowInspector] = React.useState<boolean>(false);
+  const [showRulers, setShowRulers] = React.useState<boolean>(false);
+  const [snapGuides, setSnapGuides] = React.useState<boolean>(true);
+  const [snapObjects, setSnapObjects] = React.useState<boolean>(true);
   const [contextMenu, setContextMenu] = React.useState<null | { x: number; y: number }>(null);
   const [, setHistoryVersion] = React.useState<number>(0);
 
@@ -465,6 +541,8 @@ export function MoodboardCanvas({
     if (tool !== 'shape') shapeDragRef.current = null;
     if (tool !== 'connector') connectorDragRef.current = null;
     if (tool !== 'move') boxSelectRef.current = null;
+    if (tool !== 'move' && tool !== 'transform') guideDragRef.current = null;
+    snapPreviewRef.current = null;
     setContextMenu(null);
   }, [tool]);
 
@@ -705,6 +783,57 @@ export function MoodboardCanvas({
       ctx.stroke();
       ctx.restore();
      }
+
+    const guides = Array.isArray(current.guides) ? current.guides : [];
+    if (guides.length) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 2 * invZoom;
+      ctx.setLineDash([4 * invZoom, 4 * invZoom]);
+      for (const g of guides) {
+        if (!g || (g as any).hidden) continue;
+        const pos = Number((g as any).pos) || 0;
+        if ((g as any).axis === 'y') {
+          const y = pos * rect.height;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(rect.width, y);
+          ctx.stroke();
+        } else {
+          const x = pos * rect.width;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, rect.height);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    const snapPrev = snapPreviewRef.current;
+    if (snapPrev && (snapPrev.xs.length || snapPrev.ys.length)) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 69, 0, 0.65)';
+      ctx.lineWidth = 2 * invZoom;
+      ctx.setLineDash([]);
+      for (const x0 of snapPrev.xs) {
+        const x = Number(x0) * rect.width;
+        if (!Number.isFinite(x)) continue;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, rect.height);
+        ctx.stroke();
+      }
+      for (const y0 of snapPrev.ys) {
+        const y = Number(y0) * rect.height;
+        if (!Number.isFinite(y)) continue;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(rect.width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     const drawShapeItem = (s: MoodboardShape) => {
       if (!s) return;
@@ -1268,6 +1397,8 @@ export function MoodboardCanvas({
     dragRef.current = null;
     resizeRef.current = null;
     rotateRef.current = null;
+    guideDragRef.current = null;
+    snapPreviewRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
     connectorDragRef.current = null;
@@ -1292,6 +1423,8 @@ export function MoodboardCanvas({
     dragRef.current = null;
     resizeRef.current = null;
     rotateRef.current = null;
+    guideDragRef.current = null;
+    snapPreviewRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
     connectorDragRef.current = null;
@@ -1786,6 +1919,37 @@ export function MoodboardCanvas({
                 return;
               }
             }
+          }
+        }
+
+        const guides = Array.isArray(current.guides) ? current.guides : [];
+        if (guides.length) {
+          const rect = canvas.getBoundingClientRect();
+          const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+          const tol = 6 / zoom;
+          const px = pt.x * rect.width;
+          const py = pt.y * rect.height;
+
+          let best: MoodboardGuide | null = null;
+          let bestDist = Infinity;
+          for (const g of guides) {
+            if (!g || (g as any).hidden || (g as any).locked) continue;
+            const pos = Number((g as any).pos) || 0;
+            const axis = (g as any).axis === 'y' ? 'y' : 'x';
+            const dist = axis === 'y' ? Math.abs(py - pos * rect.height) : Math.abs(px - pos * rect.width);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = g;
+            }
+          }
+
+          if (best && bestDist <= tol) {
+            guideDragRef.current = { guideId: best.id, axis: best.axis, startState: current, moved: false };
+            snapPreviewRef.current = null;
+            setContextMenu(null);
+            canvas.setPointerCapture(evt.pointerId);
+            redraw();
+            return;
           }
         }
 
@@ -2285,6 +2449,19 @@ export function MoodboardCanvas({
           const dyPx = (pt.y - boxSel.startPt.y) * rect.height * zoom;
           if (Math.hypot(dxPx, dyPx) >= 4) boxSel.moved = true;
         }
+        redraw();
+        return;
+      }
+
+      const guideDrag = guideDragRef.current;
+      if (guideDrag) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const pos = guideDrag.axis === 'y' ? pt.y : pt.x;
+        const startGuides = Array.isArray(guideDrag.startState.guides) ? guideDrag.startState.guides : [];
+        const nextGuides = startGuides.map((g) => (g && g.id === guideDrag.guideId ? { ...g, pos } : g));
+        valueRef.current = { ...guideDrag.startState, guides: nextGuides };
+        guideDrag.moved = true;
+        snapPreviewRef.current = null;
         redraw();
         return;
       }
@@ -2848,26 +3025,107 @@ export function MoodboardCanvas({
         if (!Number.isFinite(dx0) || !Number.isFinite(dy0)) return;
 
         const cur = valueRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+        const stepX = rect.width > 0 ? 40 / rect.width : 0;
+        const stepY = rect.height > 0 ? 40 / rect.height : 0;
+        const tolX = rect.width > 0 ? (8 / zoom) / rect.width : 0;
+        const tolY = rect.height > 0 ? (8 / zoom) / rect.height : 0;
+
+        const selList = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+        const selSet = new Set(selList.map((s) => `${s.kind}:${s.id}`));
+
+        const candX: number[] = [];
+        const candY: number[] = [];
+        const curGuides = Array.isArray(cur.guides) ? cur.guides : [];
+        if (snapGuidesRef.current) {
+          for (const g of curGuides) {
+            if (!g || (g as any).hidden) continue;
+            const pos = Number((g as any).pos);
+            if (!Number.isFinite(pos)) continue;
+            if ((g as any).axis === 'y') candY.push(pos);
+            else candX.push(pos);
+          }
+        }
+
+        if (snapObjectsRef.current) {
+          const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          for (const s of shapes) {
+            if (!s || (s as any).hidden) continue;
+            if (selSet.has(`shape:${s.id}`)) continue;
+            const cx = Number((s as any).x) || 0;
+            const cy = Number((s as any).y) || 0;
+            const w = Number((s as any).w) || 0;
+            const h = Number((s as any).h) || 0;
+            if (w <= 0 || h <= 0) continue;
+            candX.push(cx - w / 2, cx, cx + w / 2);
+            candY.push(cy - h / 2, cy, cy + h / 2);
+          }
+
+          const images = Array.isArray(cur.images) ? cur.images : [];
+          for (const img of images) {
+            if (!img || (img as any).hidden) continue;
+            if (selSet.has(`image:${img.id}`)) continue;
+            const cx = Number((img as any).x) || 0;
+            const cy = Number((img as any).y) || 0;
+            const w = Number((img as any).w) || 0;
+            const h = Number((img as any).h) || 0;
+            if (w <= 0 || h <= 0) continue;
+            candX.push(cx - w / 2, cx, cx + w / 2);
+            candY.push(cy - h / 2, cy, cy + h / 2);
+          }
+
+          const texts = Array.isArray(cur.texts) ? cur.texts : [];
+          for (const t of texts) {
+            if (!t || (t as any).hidden) continue;
+            if (selSet.has(`text:${t.id}`)) continue;
+            const cx = Number((t as any).x) || 0;
+            const cy = Number((t as any).y) || 0;
+            const w = Number((t as any).w) || 0;
+            const h = Number((t as any).h) || 0;
+            if (w <= 0 || h <= 0) continue;
+            candX.push(cx - w / 2, cx, cx + w / 2);
+            candY.push(cy - h / 2, cy, cy + h / 2);
+          }
+        }
+
         const updates = new Map<
           string,
           | { kind: 'pos'; x: number; y: number }
           | { kind: 'connector'; ax: number; ay: number; bx: number; by: number }
         >();
 
+        const snapXs: number[] = [];
+        const snapYs: number[] = [];
+
         for (const u of dragging.units) {
           let dx = dx0;
           let dy = dy0;
+          let snappedX: number | null = null;
+          let snappedY: number | null = null;
+
+          if (snapRef.current && (snapGuidesRef.current || snapObjectsRef.current)) {
+            const sx = bestSnapDelta(candX, [u.bounds.left + dx, u.bounds.cx + dx, u.bounds.right + dx], tolX);
+            if (sx) {
+              dx += sx.delta;
+              snappedX = sx.line;
+              snapXs.push(sx.line);
+            }
+            const sy = bestSnapDelta(candY, [u.bounds.top + dy, u.bounds.cy + dy, u.bounds.bottom + dy], tolY);
+            if (sy) {
+              dy += sy.delta;
+              snappedY = sy.line;
+              snapYs.push(sy.line);
+            }
+          }
 
           if (snapRef.current) {
-            const rect = canvas.getBoundingClientRect();
-            const stepX = rect.width > 0 ? 40 / rect.width : 0;
-            const stepY = rect.height > 0 ? 40 / rect.height : 0;
-            if (stepX > 0) {
+            if (stepX > 0 && snappedX == null) {
               const desired = u.bounds.cx + dx;
               const snapped = Math.round(desired / stepX) * stepX;
               dx = snapped - u.bounds.cx;
             }
-            if (stepY > 0) {
+            if (stepY > 0 && snappedY == null) {
               const desired = u.bounds.cy + dy;
               const snapped = Math.round(desired / stepY) * stepY;
               dy = snapped - u.bounds.cy;
@@ -2890,6 +3148,14 @@ export function MoodboardCanvas({
               updates.set(`${it.kind}:${it.id}`, { kind: 'pos', x, y });
             }
           }
+        }
+
+        if (snapRef.current) {
+          const xs = Array.from(new Set(snapXs.map((n) => Number(n)).filter((n) => Number.isFinite(n))));
+          const ys = Array.from(new Set(snapYs.map((n) => Number(n)).filter((n) => Number.isFinite(n))));
+          snapPreviewRef.current = xs.length || ys.length ? { xs, ys } : null;
+        } else {
+          snapPreviewRef.current = null;
         }
 
         if (!updates.size) return;
@@ -3162,9 +3428,22 @@ export function MoodboardCanvas({
         return;
       }
 
+      const guideDrag = guideDragRef.current;
+      if (guideDrag) {
+        guideDragRef.current = null;
+        snapPreviewRef.current = null;
+        if (guideDrag.moved) {
+          commit(valueRef.current, { historyPrev: guideDrag.startState });
+          return;
+        }
+        redraw();
+        return;
+      }
+
       const rotating = rotateRef.current;
       if (rotating) {
         rotateRef.current = null;
+        snapPreviewRef.current = null;
         if (rotating.moved) {
           commit(valueRef.current, { historyPrev: rotating.startState });
           return;
@@ -3176,6 +3455,7 @@ export function MoodboardCanvas({
       const resizing = resizeRef.current;
       if (resizing) {
         resizeRef.current = null;
+        snapPreviewRef.current = null;
         if (resizing.moved) {
           commit(valueRef.current, { historyPrev: resizing.startState });
           return;
@@ -3187,6 +3467,7 @@ export function MoodboardCanvas({
       const dragging = dragRef.current;
       if (dragging) {
         dragRef.current = null;
+        snapPreviewRef.current = null;
         if (dragging.moved) {
           commit(valueRef.current, { historyPrev: dragging.startState });
           return;
@@ -3299,6 +3580,22 @@ export function MoodboardCanvas({
     setSnapToGrid((v) => {
       const next = !v;
       snapRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const toggleSnapGuides = React.useCallback(() => {
+    setSnapGuides((v) => {
+      const next = !v;
+      snapGuidesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const toggleSnapObjects = React.useCallback(() => {
+    setSnapObjects((v) => {
+      const next = !v;
+      snapObjectsRef.current = next;
       return next;
     });
   }, []);
@@ -4270,6 +4567,16 @@ export function MoodboardCanvas({
     [commit, selectedBoxSel]
   );
 
+  const addGuide = React.useCallback(
+    (axis: 'x' | 'y', pos: number) => {
+      const cur = valueRef.current;
+      const guides = Array.isArray(cur.guides) ? cur.guides : [];
+      const g: MoodboardGuide = { id: makeMoodId('mbg_'), axis, pos: clamp01(Number(pos) || 0) };
+      commit({ ...cur, guides: [...guides, g] });
+    },
+    [commit]
+  );
+
   return (
       <div className={styles.root}>
         <div className={styles.toolbar}>
@@ -4341,6 +4648,25 @@ export function MoodboardCanvas({
           </button>
           <button className={styles.toolBtn} data-active={snapToGrid ? '1' : '0'} onClick={toggleSnap} title="Snap move/transform to grid">
             Snap
+          </button>
+          <button className={styles.toolBtn} data-active={showRulers ? '1' : '0'} onClick={() => setShowRulers((v) => !v)} title="Show rulers (click to add guides)">
+            Rulers
+          </button>
+          <button
+            className={styles.toolBtn}
+            data-active={snapGuides ? '1' : '0'}
+            onClick={toggleSnapGuides}
+            title="Snap to guides (when Snap is on)"
+          >
+            Guidesnap
+          </button>
+          <button
+            className={styles.toolBtn}
+            data-active={snapObjects ? '1' : '0'}
+            onClick={toggleSnapObjects}
+            title="Snap to other objects (when Snap is on)"
+          >
+            Align
           </button>
           <button className={styles.toolBtn} onClick={() => setZoomAnchored(viewZoom / 1.15)} title="Zoom out (mouse wheel)">
             -
@@ -4514,6 +4840,33 @@ export function MoodboardCanvas({
       </div>
 
       <div className={styles.canvasWrap}>
+        {showRulers ? (
+          <>
+            <div className={styles.rulerCorner} aria-hidden="true" />
+            <div
+              className={styles.rulerTop}
+              title="Ruler (top). Click to add a vertical guide."
+              onPointerDown={(e) => {
+                e.preventDefault();
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const pt = pointFromClient(e.clientX, e.clientY, canvas, viewRef.current);
+                addGuide('x', pt.x);
+              }}
+            />
+            <div
+              className={styles.rulerLeft}
+              title="Ruler (left). Click to add a horizontal guide."
+              onPointerDown={(e) => {
+                e.preventDefault();
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const pt = pointFromClient(e.clientX, e.clientY, canvas, viewRef.current);
+                addGuide('y', pt.y);
+              }}
+            />
+          </>
+        ) : null}
         {showLayers ? (
           <div className={styles.layersPanel} aria-label="Layers">
             <div className={styles.layersHeader}>Layers</div>
