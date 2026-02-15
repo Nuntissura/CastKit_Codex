@@ -52,7 +52,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0034 | Security: remediate `npm audit` HIGH (release builds) | DONE | Codex | Clear HIGH vulnerabilities (esp. `tar`) for prod + stage packaging trees. |
 | WP-0035 | Startup: global carousel IPC crash + cold-start library load | DONE | Codex | Renderer waits for `ckc:initialize` before rendering; DB helpers throw `CKC_DB_NOT_READY` instead of `TypeError`; regression test added. |
 | WP-0036 | Backup task: no popups (background) + easy enable/disable | DONE | Codex | Add `unregister_backup_task.ps1` (+ docs) to disable/enable/remove the scheduled task. |
-| WP-0037 | Character ID: fixed format rule + migration strategy | BACKLOG | Codex | Define/enforce human-friendly Character ID rule; document + test migration. |
+| WP-0037 | Character ID: fixed format rule + migration strategy | IN_PROGRESS | Codex | Implement human-friendly public Character ID + safe migration (no folder renames by default). |
 | WP-0038 | Docs mode middle pane polish | DONE | Codex | Clean up Notes + Stories/Moodboard middle panel layout (no behavior change). |
 | WP-0039 | Local model integration spike (experimental) | DONE | Codex | Add minimal local LLM plumbing (OpenAI-compatible HTTP) + Tools UI to test prompts. |
 | WP-0040 | Screenshot reference folder | DONE | Codex | Add `CKC_GOV/references/screenshots/` drop zone (ignored by default) + `keep/` for committed assets. |
