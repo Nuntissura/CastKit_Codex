@@ -27,6 +27,31 @@
   align-items: center;
 }
 
+.opacityGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.02);
+  padding: 6px 8px;
+}
+
+.opacityLabel {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.opacitySlider {
+  width: 120px;
+}
+
+.opacityValue {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  min-width: 44px;
+  text-align: right;
+}
+
 .btn {
   border: 1px solid var(--glass-border);
   background: rgba(0, 0, 0, 0.02);
@@ -49,6 +74,15 @@
   color: rgba(255, 255, 255, 0.92);
 }
 
+.hint {
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .body {
   flex: 1;
   min-height: 0;
@@ -67,4 +101,3 @@
 .placeholder {
   color: var(--text-secondary);
 }
-

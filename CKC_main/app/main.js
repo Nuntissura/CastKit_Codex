@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, clipboard, globalShortcut } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -438,8 +438,12 @@ function createWindow() {
 
 function getReferenceWindowPrefs() {
     const rw = appConfig?.referenceWindow && typeof appConfig.referenceWindow === 'object' ? appConfig.referenceWindow : {};
+    const opacityRaw = typeof rw.opacity === 'number' ? rw.opacity : NaN;
+    const opacity = Number.isFinite(opacityRaw) ? Math.max(0.15, Math.min(1, opacityRaw)) : 1;
     return {
         alwaysOnTop: !!rw.alwaysOnTop,
+        clickThrough: !!rw.clickThrough,
+        opacity,
     };
 }
 
@@ -455,6 +459,8 @@ function sendReferenceWindowState() {
         isOpen: true,
         imageId: referenceSelection.imageId ?? null,
         alwaysOnTop: !!prefs.alwaysOnTop,
+        clickThrough: !!prefs.clickThrough,
+        opacity: prefs.opacity,
     });
 }
 
@@ -474,6 +480,16 @@ function createReferenceWindow() {
 
     referenceWindow.setMenuBarVisibility(false);
     referenceWindow.setAlwaysOnTop(!!prefs.alwaysOnTop);
+    try {
+        referenceWindow.setOpacity(prefs.opacity);
+    } catch {
+        // ignore (platform support)
+    }
+    try {
+        referenceWindow.setIgnoreMouseEvents(!!prefs.clickThrough);
+    } catch {
+        // ignore
+    }
 
     referenceWindow.on('closed', () => {
         referenceWindow = null;
@@ -487,6 +503,40 @@ function createReferenceWindow() {
     const isDev = !app.isPackaged;
     if (isDev) referenceWindow.loadURL('http://localhost:5173?ref=1');
     else referenceWindow.loadFile(path.join(__dirname, '../dist/index.html'), { search: '?ref=1' });
+}
+
+function toggleReferenceWindowClickThrough() {
+    const prev = appConfig?.referenceWindow && typeof appConfig.referenceWindow === 'object' ? appConfig.referenceWindow : {};
+    const next = { ...prev, clickThrough: !prev.clickThrough };
+    appConfig = { ...appConfig, referenceWindow: next };
+    saveConfig(appConfigPath, appConfig);
+    if (referenceWindow && !referenceWindow.isDestroyed()) {
+        try {
+            referenceWindow.setIgnoreMouseEvents(!!next.clickThrough);
+        } catch {
+            // ignore
+        }
+        sendReferenceWindowState();
+    }
+}
+
+function registerReferenceWindowShortcuts() {
+    try {
+        globalShortcut.unregister('CommandOrControl+Alt+T');
+    } catch {
+        // ignore
+    }
+    try {
+        globalShortcut.register('CommandOrControl+Alt+T', () => {
+            try {
+                toggleReferenceWindowClickThrough();
+            } catch {
+                // ignore
+            }
+        });
+    } catch {
+        // ignore
+    }
 }
 
 function registerIpcHandlers() {
@@ -537,6 +587,8 @@ function registerIpcHandlers() {
             isOpen: !!(referenceWindow && !referenceWindow.isDestroyed()),
             imageId: referenceSelection.imageId ?? null,
             alwaysOnTop: !!prefs.alwaysOnTop,
+            clickThrough: !!prefs.clickThrough,
+            opacity: prefs.opacity,
         };
     });
 
@@ -546,16 +598,33 @@ function registerIpcHandlers() {
         const next = { ...prev };
 
         if (p.alwaysOnTop !== undefined) next.alwaysOnTop = !!p.alwaysOnTop;
+        if (p.clickThrough !== undefined) next.clickThrough = !!p.clickThrough;
+        if (p.opacity !== undefined) {
+            const o = Number(p.opacity);
+            if (Number.isFinite(o)) next.opacity = Math.max(0.15, Math.min(1, o));
+        }
 
         appConfig = { ...appConfig, referenceWindow: next };
         saveConfig(appConfigPath, appConfig);
 
         if (referenceWindow && !referenceWindow.isDestroyed()) {
             referenceWindow.setAlwaysOnTop(!!next.alwaysOnTop);
+            try {
+                const prefs = getReferenceWindowPrefs();
+                referenceWindow.setOpacity(prefs.opacity);
+            } catch {
+                // ignore
+            }
+            try {
+                referenceWindow.setIgnoreMouseEvents(!!next.clickThrough);
+            } catch {
+                // ignore
+            }
             sendReferenceWindowState();
         }
 
-        return { ok: true, state: { alwaysOnTop: !!next.alwaysOnTop } };
+        const prefs = getReferenceWindowPrefs();
+        return { ok: true, state: { alwaysOnTop: !!prefs.alwaysOnTop, clickThrough: !!prefs.clickThrough, opacity: prefs.opacity } };
     });
 
     ipcMain.handle('ckc:setReferenceSelection', async (_evt, params) => {
@@ -1288,6 +1357,7 @@ app.whenReady().then(async () => {
     registerIpcHandlers();
     registerProtocolHandlers();
     createWindow();
+    registerReferenceWindowShortcuts();
 
     // Initialize the library eagerly so the renderer cannot observe a partially-initialized instance.
     try {
@@ -1310,6 +1380,14 @@ app.whenReady().then(async () => {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+});
+
+app.on('will-quit', () => {
+    try {
+        globalShortcut.unregisterAll();
+    } catch {
+        // ignore
+    }
 });
 
 app.on('window-all-closed', () => {
