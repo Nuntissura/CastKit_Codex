@@ -84,7 +84,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0066 | Color tools (palettes + search) | DONE | Codex | Cache dominant palettes in `ImageAsset.palette_json`; palette chips + color filter UI shipped. |
 | WP-0067 | Near-duplicate finder (perceptual) | DONE | Codex | Cancellable perceptual scan + safe review UI (dHash cache, open + tag redundant). |
 | WP-0068 | Reference window power modes | DONE | Codex | Persisted opacity + click-through + hotkey toggle. |
-| WP-0069 | Collections / playlists | BACKLOG | Codex | Curated cross-character image sets + slideshow/export. |
+| WP-0069 | Collections / playlists | IN_PROGRESS | Codex | Curated cross-character image sets + slideshow/export. |
 | WP-0070 | Character relationship map | BACKLOG | Codex | Structured edges + graph view. |
 | WP-0071 | Moodboard arrange tools | BACKLOG | Codex | Align/distribute/group/tidy (undoable). |
 | WP-0072 | Command palette (Ctrl+K) | BACKLOG | Codex | Keyboard-first navigation + actions. |

@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add named collections of images across characters, with slideshow playback and export.
@@ -10,7 +10,7 @@ Add named collections of images across characters, with slideshow playback and e
 ## Why
 - “Casting” and vibe passes are inherently cross-character.
 - Collections are a simple primitive that unlocks many workflows.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.16.
+- Spec: `CastKit_Codex_Spec_v00.045.md` §11.16.
 
 ## Scope
 ### In
@@ -33,4 +33,3 @@ Add named collections of images across characters, with slideshow playback and e
 
 ## Notes
 - Do NOT touch `D:`.
-
