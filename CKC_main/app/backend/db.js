@@ -2,6 +2,14 @@ const sqlite3 = require('sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+function dbNotReady(methodName) {
+  const err = new Error(
+    `SQLite DB not initialized (missing db.${methodName}). Did you forget to call/await library.initialize()?`
+  );
+  err.code = 'CKC_DB_NOT_READY';
+  return err;
+}
+
 function openDb(dbPath) {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -15,6 +23,7 @@ function openDb(dbPath) {
 }
 
 function run(db, sql, params = []) {
+  if (!db || typeof db.run !== 'function') throw dbNotReady('run');
   return new Promise((resolve, reject) => {
     db.run(sql, params, function onRun(err) {
       if (err) reject(err);
@@ -24,6 +33,7 @@ function run(db, sql, params = []) {
 }
 
 function get(db, sql, params = []) {
+  if (!db || typeof db.get !== 'function') throw dbNotReady('get');
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) reject(err);
@@ -33,6 +43,7 @@ function get(db, sql, params = []) {
 }
 
 function all(db, sql, params = []) {
+  if (!db || typeof db.all !== 'function') throw dbNotReady('all');
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) reject(err);
@@ -42,6 +53,7 @@ function all(db, sql, params = []) {
 }
 
 async function exec(db, sql) {
+  if (!db || typeof db.exec !== 'function') throw dbNotReady('exec');
   return new Promise((resolve, reject) => {
     db.exec(sql, (err) => {
       if (err) reject(err);

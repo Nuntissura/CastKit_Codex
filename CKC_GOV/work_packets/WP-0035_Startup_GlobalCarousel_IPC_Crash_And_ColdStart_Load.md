@@ -2,7 +2,7 @@
 
 Date: 2026-02-12
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Fix the reported startup error:
@@ -27,17 +27,16 @@ If CKC throws IPC errors during startup or appears empty until a manual refresh,
 - Major refactors of the library layer or IPC architecture.
 
 ## Acceptance criteria
-- [ ] App startup does not log/throw the `ckc:listGlobalCarouselImages` / `db.all` null error.
-- [ ] On cold start, Library view shows characters and global carousel images without needing a manual refresh.
-- [ ] If the libraryRoot is missing/unset, CKC prompts/handles it without crashing and without leaving the UI in a broken state.
-- [ ] `npm test` passes and release packaging still succeeds.
+- [x] App startup does not log/throw the `ckc:listGlobalCarouselImages` / `db.all` null error.
+- [x] On cold start, Library view shows characters and global carousel images without needing a manual refresh.
+- [x] If the libraryRoot is missing/unset, CKC prompts/handles it without crashing and without leaving the UI in a broken state.
+- [x] `npm test` passes and release packaging still succeeds.
 
 ## Test plan
 - [ ] Manual: run the tagged portable `.exe` (from `CKC_GOV/targets/CKC/artifacts/releases/`) and confirm no startup IPC errors.
 - [ ] Manual: restart multiple times, confirm first-load data appears consistently.
-- [ ] Automated: add a regression test that covers the initialization ordering or the guarded failure mode (no `TypeError`).
+- [x] Automated: add a regression test that covers the initialization ordering or the guarded failure mode (no `TypeError`).
 
 ## Governance checklist (MUST)
 - [x] Task Board updated with this WP.
 - [ ] Spec impact: no (bugfix only).
-

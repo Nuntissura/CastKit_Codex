@@ -56,7 +56,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.034.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.039.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -68,6 +68,7 @@ Path: `<CKC_ROOT>\\CKC_GOV`
 - `scripts/`
   - `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
+  - `unregister_backup_task.ps1` — disable/enable/remove the scheduled backup task
 - `targets/`
   - `CKC/artifacts/` — build outputs (**not** stored in git)
     - `CKC/artifacts/dev/` — local/debug builds (folder `buildId` includes timestamp+git SHA)
@@ -184,6 +185,7 @@ git push origin main
 Scripts live in `CKC_GOV/scripts/`:
 - `backup_to_mir.ps1` — mirror `<CKC_ROOT>` to NAS (ROBOCOPY `/MIR`) and also mirror the active CKC `libraryRoot` when it is outside `<CKC_ROOT>`
 - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
+- `unregister_backup_task.ps1` — easy toggle for the scheduled task (disable/enable/remove)
 Note: the backup script reads the active CKC `libraryRoot` from `%APPDATA%\\castkit-codex\\ckc-config.json` and mirrors it to a separate destination folder (default: `<CKC_BACKUP_DEST>__libraryRoot`, override via `CKC_BACKUP_DEST_LIBRARY`). If `libraryRoot` is configured but missing on disk, the backup exits non-zero to make the risk explicit.
 
 Run a backup now:
@@ -197,6 +199,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\script
 ```
 This creates a Scheduled Task that runs the mirror backup every 30 minutes while logged in.
 The task runs with a hidden PowerShell window to avoid focus-stealing.
+Verify: Task Scheduler -> Task -> Properties -> Actions should include `-WindowStyle Hidden`, and Settings should have "Hidden" enabled.
+
+Disable/enable/remove the Scheduled Task:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\unregister_backup_task.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\unregister_backup_task.ps1" -Enable
+powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\unregister_backup_task.ps1" -Delete
+```
 
 Backup status/logs:
 - `<CKC_ROOT>\\CKC_GOV\\targets\\backup_logs\\LAST_RUN.txt`

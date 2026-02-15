@@ -11,6 +11,15 @@ type Page = 'library' | 'character' | 'exports';
 type NonExportPage = 'library' | 'character';
 type DrawerMode = 'none' | 'menu' | 'library';
 
+type InitState =
+  | { status: 'loading' }
+  | { status: 'ready' }
+  | { status: 'error'; message: string };
+
+function formatInitError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function App() {
   const isReferenceWindow = new URLSearchParams(window.location.search).get('ref') === '1';
   if (isReferenceWindow) return <ReferenceApp />;
@@ -18,6 +27,7 @@ export function App() {
 }
 
 function MainApp() {
+  const [init, setInit] = React.useState<InitState>({ status: 'loading' });
   const [page, setPage] = React.useState<Page>('library');
   const [exportsReturnPage, setExportsReturnPage] = React.useState<NonExportPage>('library');
   const [selectedCharacterId, setSelectedCharacterId] = React.useState<string | null>(null);
@@ -33,9 +43,37 @@ function MainApp() {
     onCloseOverlays: () => setDrawerMode('none'),
   });
 
-  React.useEffect(() => {
-    void window.ckc.initialize();
+  const runInit = React.useCallback(() => {
+    setInit({ status: 'loading' });
+    window.ckc
+      .initialize()
+      .then(() => setInit({ status: 'ready' }))
+      .catch((err: unknown) => setInit({ status: 'error', message: formatInitError(err) }));
   }, []);
+
+  React.useEffect(() => {
+    runInit();
+  }, [runInit]);
+
+  if (init.status !== 'ready') {
+    return (
+      <div className={styles.root}>
+        <div className={styles.loadingWrap}>
+          <div className={styles.loadingTitle}>Loading library...</div>
+          {init.status === 'error' ? (
+            <>
+              <div className={styles.loadingError}>{init.message}</div>
+              <button className={styles.loadingButton} onClick={runInit}>
+                Retry
+              </button>
+            </>
+          ) : (
+            <div className={styles.loadingHint}>If this takes long, the app may be waiting for a folder selection dialog.</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.root}>
@@ -116,9 +154,39 @@ function MainApp() {
 }
 
 function ReferenceApp() {
-  React.useEffect(() => {
-    void window.ckc.initialize();
+  const [init, setInit] = React.useState<InitState>({ status: 'loading' });
+
+  const runInit = React.useCallback(() => {
+    setInit({ status: 'loading' });
+    window.ckc
+      .initialize()
+      .then(() => setInit({ status: 'ready' }))
+      .catch((err: unknown) => setInit({ status: 'error', message: formatInitError(err) }));
   }, []);
+
+  React.useEffect(() => {
+    runInit();
+  }, [runInit]);
+
+  if (init.status !== 'ready') {
+    return (
+      <div className={styles.root}>
+        <div className={styles.content}>
+          <div className={styles.loadingWrap}>
+            <div className={styles.loadingTitle}>Loading library...</div>
+            {init.status === 'error' ? (
+              <>
+                <div className={styles.loadingError}>{init.message}</div>
+                <button className={styles.loadingButton} onClick={runInit}>
+                  Retry
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.root}>
