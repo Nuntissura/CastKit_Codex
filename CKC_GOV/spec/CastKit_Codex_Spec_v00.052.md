@@ -1,4 +1,4 @@
-# Technical Specification — CastKit Codex (CKC) — v00.051
+# Technical Specification — CastKit Codex (CKC) — v00.052
 
 Date: 2026-02-15  
 GitHub repo: https://github.com/Nuntissura/CastKit_Codex
@@ -53,6 +53,7 @@ When a new spec version file is created, the previous version MUST be moved into
 - **v00.049 (2026-02-15):** Command palette: add a global `Ctrl+K` palette to search characters/docs/tags and run common actions.
 - **v00.050 (2026-02-15):** Backup/restore wizard: Export Hub snapshot+restore jobs with progress/cancel, `manifest.json` + `SHA256SUMS.txt`, restore integrity validation before writes, overwrite confirmation token, and refusal to touch `D:`.
 - **v00.051 (2026-02-15):** Moodboard powerhouse roadmap (WP-0074..WP-0082): vector shapes (with per-shape solid/gradient fills), vector masks/clipping frames, lasso+copy/paste+nudge, rotate+numeric inspector, guides/rulers/smart snapping, layer folders/search/tags, richer styling (opacity/blend/shadow), and export upgrades (hi-res/selection/PDF).
+- **v00.052 (2026-02-15):** High-ROI next-generation features (WP-0083..WP-0090): global full-text search with FTS5, AI-assisted image tagging with CLIP/BLIP, character templates and cloning, macOS build support, web portfolio static HTML export, performance optimization for large libraries (virtualization, lazy loading, indexing), visual similarity search with embeddings, and batch character operations (multi-select, bulk edit, batch export/delete). Candidate dependencies (per-WP, if/when implemented): @xenova/transformers, sharp, react-window, better-sqlite3.
 
 ## 1. Non-negotiables (summary)
 
@@ -581,6 +582,590 @@ This section defines planned near-term features that are likely low-effort/high-
 - Export at chosen resolution (hi-res) without UI scaling artifacts.
 - Export selected layers only.
 - PDF export/print.
+
+---
+
+## 12. Next-Generation Features (High-ROI)
+
+This section documents planned high-ROI features (WP-0083..WP-0090) that significantly expand CKC's capabilities for power users, large libraries, and cross-platform deployment.
+
+### 12.1 Global full-text search (WP-0083)
+
+**Purpose**: Search across all content types (character sheets, notes, stories, moodboard text, image metadata) from a single unified interface.
+
+**Core requirements**:
+- SQLite FTS5 (Full-Text Search) indexes for all searchable content.
+- Global search hotkey: `Ctrl+Shift+F` or accessible via Command Palette.
+- Search scope toggle: "Current Character" vs "Entire Library".
+- Results grouped by content type (Characters, Notes, Stories, Images).
+- Context preview: show surrounding text with match highlighting.
+- Jump-to-result: click to open source and scroll to match.
+
+**FTS5 implementation**:
+- Create FTS5 virtual tables for each content type:
+  - `character_fts` — character sheet fields
+  - `note_fts` — notes content
+  - `story_fts` — stories content
+  - `moodboard_fts` — moodboard text layers
+  - `image_fts` — image tags, notes, source notes
+- Triggers to keep FTS indexes synchronized with source tables.
+- Use `snippet()` function for context extraction with highlighting.
+- Porter stemming + Unicode tokenization: `tokenize='porter unicode61'`
+
+**Search UI**:
+- Live results (debounced 300ms).
+- Result limit: 50 per category with "Show more" pagination.
+- Phrase search: `"exact match"` quotes.
+- Boolean operators: AND, OR, NOT (FTS5 native syntax).
+- Result display: title + context snippet + match count + entity icon.
+
+**Performance targets**:
+- Search latency: <100ms for libraries with 10,000+ searchable items.
+- Index size overhead: ~10% of source data size.
+
+**Database schema additions**:
+```sql
+-- Example FTS5 table for character fields
+CREATE VIRTUAL TABLE character_fts USING fts5(
+  character_id UNINDEXED,
+  field_id UNINDEXED,
+  content,
+  tokenize='porter unicode61'
+);
+
+-- Trigger to keep FTS in sync
+CREATE TRIGGER character_field_insert AFTER INSERT ON CharacterField BEGIN
+  INSERT INTO character_fts(character_id, field_id, content)
+  VALUES (new.character_id, new.field_id, new.value_text);
+END;
+```
+
+---
+
+### 12.2 AI-assisted image tagging (WP-0084)
+
+**Purpose**: Automate image tagging using AI vision models to 10x speed up library organization.
+
+**Core requirements**:
+- Auto-tag images on import (optional, user-configurable).
+- Bulk tag existing untagged/under-tagged images.
+- Local-first privacy: use local CLIP/BLIP models (no cloud required).
+- Optional cloud API support (OpenAI Vision, Google Cloud Vision).
+- Tag suggestions with confidence scores.
+- User review/edit UI before applying tags.
+
+**Model architecture**:
+- **Primary (local)**: CLIP (Contrastive Language-Image Pretraining)
+  - Zero-shot image classification
+  - Model: `Xenova/clip-vit-base-patch32` (~400MB)
+  - Runs via `@xenova/transformers` (ONNX Runtime in Node.js)
+- **Alternative (local)**: BLIP (image captioning → extract keywords)
+- **Optional (cloud)**: OpenAI GPT-4 Vision, Google Cloud Vision API
+
+**Implementation**:
+- Candidate label taxonomy: ~200 curated tags for worldbuilding
+  - Examples: fantasy, sci-fi, modern, portrait, landscape, action, peaceful, dark, light, colorful, monochrome, indoor, outdoor, character, creature, vehicle, weapon, armor, magic, technology, nature, urban, etc.
+- User can add custom candidate labels.
+- Auto-tagging workflow:
+  1. Preprocess image (resize to 224×224 for CLIP).
+  2. Compute CLIP embeddings for image.
+  3. Compare to candidate label embeddings (cosine similarity).
+  4. Return top N tags with scores >0.5 threshold.
+  5. Store in `ImageAsset.suggested_tags_json`.
+  6. User reviews/edits in Tag Suggestion Panel.
+  7. User confirms → tags written to `ImageAsset.tags_json`.
+
+**Database schema additions**:
+```sql
+-- Add fields to ImageAsset table
+ALTER TABLE ImageAsset ADD COLUMN suggested_tags_json TEXT; -- JSON array of {tag, score}
+ALTER TABLE ImageAsset ADD COLUMN auto_tagged_at TEXT; -- ISO timestamp
+```
+
+**Model storage**:
+- Models downloaded to: `<CKC_ROOT>/CKC_GOV/targets/cache/ai-models/`
+- First-run download with progress UI.
+- Models are reused across AI features (tagging + similarity search).
+
+**UI components**:
+- Settings → AI Models: choose provider (local/cloud), manage API keys.
+- Import dialog: "Auto-tag images" checkbox.
+- Library toolbar: "Bulk Tag Untagged Images..." action.
+- Tag Suggestion Panel: grid of suggested tags with confidence %, batch accept/reject.
+
+**Performance targets**:
+- Tagging speed: 5-10 images/second on modern CPU.
+- Bulk tagging 100 images: <30 seconds with progress UI and cancel support.
+
+---
+
+### 12.3 Character templates & cloning (WP-0085)
+
+**Purpose**: Speed up character creation with reusable templates and quick cloning for variations (AU characters, NPC archetypes, character families).
+
+**Core requirements**:
+- Save any character as a template (with/without images).
+- Create new characters from templates (pre-filled fields).
+- Clone existing characters (full or sheet-only).
+- Built-in template library shipped with CKC.
+- Batch character creation from template (e.g., 10 NPCs at once).
+
+**Template storage**:
+- User templates: `<libraryRoot>/templates/*.json`
+- Built-in templates: `CKC_main/app/templates/*.json` (read-only)
+
+**Template JSON schema**:
+```json
+{
+  "template_id": "tpl-dnd-npc-v1",
+  "name": "D&D NPC",
+  "description": "Basic NPC template for D&D campaigns",
+  "version": "1.0",
+  "category": "Fantasy",
+  "fields": [
+    { "field_id": "CHAR-NAME-001", "value": "" },
+    { "field_id": "CHAR-SPECIES-001", "value": "Human" },
+    { "field_id": "CHAR-ROLE-001", "value": "Commoner" },
+    { "field_id": "CHAR-CLASS-001", "value": "Commoner" },
+    { "field_id": "CHAR-ALIGNMENT-001", "value": "Neutral" }
+  ],
+  "include_images": false,
+  "reference_images": []
+}
+```
+
+**Built-in templates** (ship with CKC):
+1. **Blank Character** — empty sheet
+2. **D&D NPC** — Name, Species, Role, Class, Alignment
+3. **Modern Human** — Name, Age, Occupation, Location
+4. **Fantasy Creature** — Name, Species, Powers, Weaknesses
+5. **Sci-Fi Character** — Name, Species, Homeworld, Tech Level
+6. **Romance Lead** — Name, Age, Personality, Love Language
+7. **Villain** — Name, Motivation, Powers, Weakness
+
+**Template operations**:
+- **Save as Template**: Character → Actions → "Save as Template..."
+  - Choose template name + description
+  - Option: "Include reference images" (copies N images into template)
+  - Saves to `<libraryRoot>/templates/<template_id>.json`
+- **New from Template**: Library → "New from Template..." button
+  - Template picker dialog (grid with thumbnail + name + description)
+  - Select template → character created with pre-filled fields
+  - Character ID auto-generated (CHAR-NNNNNN)
+- **Clone Character**: Character → Actions → "Clone Character..."
+  - Options: "Clone with images" or "Clone sheet only"
+  - Optional: customize which fields to inherit (checkboxes)
+  - Clone creates new character folder with copied data
+
+**Batch character creation**:
+- Template picker: "Create N characters from this template" input
+- Generates N characters with sequential IDs
+- Useful for creating NPC rosters (e.g., 20 villagers)
+
+**UI components**:
+- `TemplatePickerDialog.tsx` — grid of templates with preview
+- `CloneCharacterDialog.tsx` — clone options (fields to inherit, with/without images)
+- Library toolbar: "New from Template" button
+
+---
+
+### 12.4 Cross-platform support: macOS (WP-0086)
+
+**Purpose**: Expand user base 2-3x by supporting macOS (target demographic skews heavily macOS for creative tools).
+
+**Core requirements**:
+- electron-builder macOS targets: DMG + .app bundle.
+- Packaging scripts: `npm run package:mac` (equivalent to Windows workflow).
+- GitHub Actions workflow for automated macOS builds on tag push.
+- macOS-specific icon (convert existing icon to `.icns` format).
+- Portable-friendly defaults for macOS (library near .app bundle).
+
+**electron-builder config additions** (package.json):
+```json
+{
+  "build": {
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity",
+      "icon": "app/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}
+```
+
+**macOS-specific considerations**:
+- Default `libraryRoot`:
+  - Option 1: `~/Documents/CastKit Libraries/` (user-friendly)
+  - Option 2: Relative to .app bundle (portable, matches Windows behavior)
+  - **Choose Option 2** for consistency with Windows portable mode.
+- File paths: already using forward slashes (cross-platform compatible).
+- Code signing: optional for v1 (users can bypass Gatekeeper with Ctrl+Click).
+  - If needed later: add ad-hoc signing with `codesign --force --deep --sign - "CastKit Codex.app"`
+- Notarization: deferred (requires Apple Developer account $99/year).
+
+**Packaging scripts** (new files):
+- `CKC_main/scripts/package_mac.sh` — bash script for macOS packaging
+- `CKC_main/scripts/release_mac.sh` — version bump + tag + package + push (macOS)
+
+**GitHub Actions workflow** (`.github/workflows/release-mac.yml`):
+```yaml
+name: Release (macOS)
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: cd CKC_main && npm ci
+      - run: cd CKC_main && npm run package:mac:raw
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: CKC_GOV/targets/CKC/artifacts/**/*.dmg
+```
+
+**Linux support** (future consideration):
+- electron-builder already supports Linux (AppImage, deb, rpm).
+- Defer to separate WP after macOS validation.
+
+---
+
+### 12.5 Web portfolio export (WP-0087)
+
+**Purpose**: Export CKC libraries as static HTML websites for publishing on GitHub Pages, Netlify, or local viewing. Enables sharing/portfolio presentation without giving full CKC access.
+
+**Core requirements**:
+- Export wizard in Export Hub.
+- Select characters, images, and fields to include.
+- Two export formats:
+  - **Portfolio** (image-focused): large galleries, minimal text
+  - **Codex** (text-focused): full sheets, thumbnail galleries
+- Generated static site (no build step, no server required).
+- Responsive design (mobile-friendly).
+- Theme: CKC default (dark mode, sharp corners).
+- Output: single folder with HTML/CSS/JS + optimized images.
+
+**Export options**:
+- Character selection: all, or multi-select specific characters.
+- Image selection per character: all, carousel only, frontpage only.
+- Field selection: all fields, or custom field filtering (like LLM export).
+- Image optimization: resize to max 2048px, 80% JPEG quality.
+- Include README.txt with usage instructions.
+
+**Output structure**:
+```
+<exportRoot>/web-portfolio-<timestamp>/
+  index.html                 # Homepage (character grid)
+  characters/
+    CHAR-000001.html         # Character detail pages
+    CHAR-000002.html
+  images/
+    CHAR-000001/
+      image1.jpg
+      image2.jpg
+    CHAR-000002/
+      ...
+  assets/
+    style.css                # Shared styles
+    app.js                   # Minimal client-side navigation
+    icons/                   # Character icons
+  README.txt                 # Usage instructions
+```
+
+**Static site architecture**:
+- Single-page app (SPA) feel with anchor navigation: `index.html#CHAR-000001`
+- JavaScript intercepts clicks and loads character content dynamically.
+- Fallback: each character has its own `.html` file for no-JS browsers.
+- No external CDN dependencies (fully offline-capable).
+
+**Templates** (stored in `CKC_main/app/templates/web-portfolio/`):
+- `index.html` — Homepage template (character grid)
+- `character.html` — Character detail template
+- `style.css` — CKC theme CSS
+- `app.js` — Navigation logic
+
+**Template rendering** (simple string replacement, no complex engine needed):
+```javascript
+const characterHtml = characterTemplate
+  .replace('{{CHARACTER_NAME}}', character.name)
+  .replace('{{CHARACTER_ID}}', character.public_id)
+  .replace('{{FIELDS}}', renderFields(character.fields))
+  .replace('{{IMAGES}}', renderImageGallery(character.images));
+```
+
+**Image optimization** (using `sharp`):
+```javascript
+await sharp(imagePath)
+  .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+  .jpeg({ quality: 80 })
+  .toFile(outputPath);
+```
+
+**UI components**:
+- Export Hub: "Web Portfolio" export type
+- Export wizard: character/image/field selection + format chooser
+- Progress UI with cancel support
+
+**Future enhancements**:
+- Search functionality in exported site (client-side JavaScript index).
+- Custom CSS override support (user drops `custom.css` into export).
+- Theme chooser (light mode, custom color schemes).
+
+---
+
+### 12.6 Performance & scalability: large libraries (WP-0088)
+
+**Purpose**: Optimize CKC for power users with 1000+ characters and 10,000+ images. Prevent slowdowns that cause user churn.
+
+**Core optimizations**:
+
+#### 12.6.1 Virtualized lists
+- Use `react-window` for character grid, image gallery, notes/stories lists.
+- Render only visible rows/items (not entire dataset).
+- Target: 60fps scrolling with 10,000+ items.
+
+**Example (character grid)**:
+```tsx
+import { FixedSizeGrid } from 'react-window';
+
+const LibraryGrid = ({ characters }) => (
+  <FixedSizeGrid
+    columnCount={4}
+    columnWidth={250}
+    height={window.innerHeight - 100}
+    rowCount={Math.ceil(characters.length / 4)}
+    rowHeight={300}
+    width={window.innerWidth}
+  >
+    {({ columnIndex, rowIndex, style }) => {
+      const index = rowIndex * 4 + columnIndex;
+      const char = characters[index];
+      return <CharacterCard character={char} style={style} />;
+    }}
+  </FixedSizeGrid>
+);
+```
+
+#### 12.6.2 Lazy loading (images)
+- Use Intersection Observer API to load images on scroll.
+- Show placeholder/skeleton while loading.
+
+**Example**:
+```tsx
+const LazyImage = ({ src }) => {
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef();
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setLoaded(true);
+        observer.disconnect();
+      }
+    });
+    observer.observe(imgRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return <img ref={imgRef} src={loaded ? src : placeholder} />;
+};
+```
+
+#### 12.6.3 Database indexing
+- Add indexes for frequently-queried columns.
+
+**Schema additions**:
+```sql
+CREATE INDEX IF NOT EXISTS idx_character_public_id ON Character(public_id);
+CREATE INDEX IF NOT EXISTS idx_character_created_at ON Character(created_at);
+CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id);
+CREATE INDEX IF NOT EXISTS idx_image_created_at ON ImageAsset(created_at);
+CREATE INDEX IF NOT EXISTS idx_image_tags ON ImageAsset(tags_json); -- for tag filters
+CREATE INDEX IF NOT EXISTS idx_field_character_id ON CharacterField(character_id);
+CREATE INDEX IF NOT EXISTS idx_field_field_id ON CharacterField(field_id);
+```
+
+#### 12.6.4 Query optimization
+- Use `SELECT` column subsets (not `SELECT *`).
+- Batch IPC queries (fewer round-trips between renderer and main process).
+- Cache frequently-accessed data (character list, tag list) in renderer.
+
+#### 12.6.5 Thumbnail pre-generation
+- Generate thumbnails on import (background worker).
+- Don't wait for first render to generate thumbs.
+- Queue-based thumbnail generation with progress UI.
+
+#### 12.6.6 Pagination (fallback)
+- For extremely large lists (5000+ items), offer pagination.
+- Default: 100 characters per page, 200 images per page.
+- "Load more" button or infinite scroll.
+
+**Performance targets**:
+- Character library with 1000 characters: scrolls at 60fps.
+- Image gallery with 10,000 images: loads in <2s (virtualized).
+- Database queries: <50ms for 10k+ row tables.
+- Thumbnail generation: 100 images in <30s.
+- Memory usage: <500MB for large libraries.
+
+**Consider better-sqlite3 migration**:
+- `better-sqlite3` has faster synchronous API (no async overhead).
+- Benchmark: compare query performance vs current `sqlite3`.
+- Migrate if >20% performance improvement on large queries.
+
+---
+
+### 12.7 Visual similarity search (WP-0089)
+
+**Purpose**: Find visually similar images using perceptual embeddings. Helps users discover forgotten references and find alternatives when text tags aren't sufficient.
+
+**Core requirements**:
+- Compute CLIP embeddings (512-dim vectors) for all images.
+- "Find similar" action: right-click image → "Find similar".
+- Show top 20 most similar images sorted by similarity score.
+- Similarity threshold slider (0.5 - 0.95).
+- Bulk embedding generation with progress/cancel.
+
+**CLIP embeddings**:
+- Model: `Xenova/clip-vit-base-patch32` (shared with AI tagging, WP-0084).
+- Embedding size: 512 floats × 4 bytes = 2KB per image.
+- Storage: `ImageAsset.clip_embedding` (BLOB or JSON).
+
+**Implementation**:
+```javascript
+import { pipeline } from '@xenova/transformers';
+
+const extractor = await pipeline('feature-extraction', 'Xenova/clip-vit-base-patch32');
+const embedding = await extractor(imageBuffer, { pooling: 'mean', normalize: true });
+// embedding is a 512-dim float32 array
+```
+
+**Similarity search** (cosine similarity):
+```javascript
+function cosineSimilarity(a, b) {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magA * magB);
+}
+
+function findSimilar(targetEmbedding, allEmbeddings, threshold = 0.7) {
+  return allEmbeddings
+    .map((emb, idx) => ({ idx, score: cosineSimilarity(targetEmbedding, emb) }))
+    .filter(({ score }) => score >= threshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+}
+```
+
+**Database schema additions**:
+```sql
+ALTER TABLE ImageAsset ADD COLUMN clip_embedding TEXT; -- JSON array of 512 floats
+ALTER TABLE ImageAsset ADD COLUMN embedding_version TEXT; -- track model version
+```
+
+**UI components**:
+- Right-click image → "Find Similar Images..."
+- `SimilarImagesPanel.tsx` — results grid with similarity scores
+- Tools menu: "Generate Embeddings for All Images..." (bulk job)
+
+**Performance considerations**:
+- For 10k images: 10k × 512 floats = ~5MB of embeddings (easily fits in memory).
+- Brute-force cosine similarity is fast enough for v1.
+- Future: use FAISS or Annoy for approximate nearest neighbors (10x faster for 100k+ images).
+
+**Performance target**:
+- Similarity search: <500ms for 10,000 image library.
+
+---
+
+### 12.8 Batch character operations (WP-0090)
+
+**Purpose**: Enable bulk editing for power users managing 50+ characters. Common workflows: "Set Universe: Cyberpunk for all NPCs", "Export all main cast", "Delete all test characters".
+
+**Core requirements**:
+- Multi-select characters in Library view.
+- Batch operations toolbar (appears when >0 selected).
+- Bulk field edit: apply same value to all selected.
+- Batch export: export all selected (sheet + images).
+- Batch delete: delete all selected with confirmation.
+
+**Multi-select UI**:
+- `Ctrl+Click`: toggle selection.
+- `Shift+Click`: range selection.
+- `Ctrl+A`: select all (respecting current filter).
+- Visual selection indicator: checkbox or highlight border.
+
+**Batch operations toolbar**:
+- Appears at top of Library view when >0 selected.
+- Actions:
+  - "Bulk Edit Fields..."
+  - "Batch Export..."
+  - "Batch Delete..."
+  - "Deselect All"
+- Shows selection count: "25 characters selected"
+
+**Bulk field edit UI** (`BulkFieldEditDialog.tsx`):
+1. Pick a field ID (dropdown of all field IDs in library).
+2. Choose operation:
+   - "Set to..." — overwrite with new value
+   - "Append to..." — append to existing value
+   - "Clear" — set to empty string
+3. Enter new value (text input).
+4. Preview: "This will update 25 characters".
+5. Confirm → apply.
+
+**Bulk field update query**:
+```sql
+UPDATE CharacterField
+SET value_text = ?
+WHERE character_id IN (?, ?, ..., ?) AND field_id = ?;
+```
+
+**Batch export**:
+- Use existing export formats (canonical, LLM-friendly, web portfolio).
+- Progress UI with cancel support.
+- Output folder: `<libraryRoot>/exports/batch-<timestamp>/`
+- Each character exported to its own subfolder.
+
+**Batch delete**:
+- Soft delete: set `Character.deleted_at` timestamp.
+- Deleted characters hidden from library view.
+- "Trash" folder in Library sidebar (shows deleted characters).
+- "Empty Trash" action for permanent delete.
+- Undo: restore from trash (clear `deleted_at` timestamp).
+
+**Database schema additions**:
+```sql
+ALTER TABLE Character ADD COLUMN deleted_at TEXT; -- ISO timestamp for soft delete
+```
+
+**UI components**:
+- `LibraryView.tsx` — multi-select state management
+- `BatchOperationsToolbar.tsx` — batch actions toolbar
+- `BulkFieldEditDialog.tsx` — bulk field edit UI
+- `TrashView.tsx` — show deleted characters
+
+**Keyboard shortcuts**:
+- `Ctrl+A`: select all
+- `Escape`: deselect all
+
+**Performance targets**:
+- Bulk field edit: 100 characters in <1s.
+- Batch export: 50 characters with 500 images in <30s (with progress UI).
+- Batch delete: 100 characters in <1s (soft delete is fast).
 
 ---
 
