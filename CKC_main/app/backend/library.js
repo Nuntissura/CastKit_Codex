@@ -3840,6 +3840,83 @@ class CKCLibrary {
     return { ok: true };
   }
 
+  async getImageAnnotations({ imageId } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const normalize = (raw) => {
+      const obj = raw && typeof raw === 'object' ? raw : {};
+      const pinsRaw = Array.isArray(obj.pins) ? obj.pins : [];
+      const pins = [];
+      for (const p of pinsRaw) {
+        const pin = p && typeof p === 'object' ? p : {};
+        const x = Number(pin.x);
+        const y = Number(pin.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        const clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));
+        pins.push({
+          id: String(pin.id ?? '').trim() || randomId('pin_'),
+          x: clamp01(x),
+          y: clamp01(y),
+          text: String(pin.text ?? ''),
+        });
+      }
+      return { version: 1, pins };
+    };
+
+    const row = await get(this.db, `SELECT annotations_json FROM ImageAnnotation WHERE image_id = ?`, [id]);
+    if (!row) return { ok: true, imageId: id, annotations: { version: 1, pins: [] } };
+
+    try {
+      const parsed = JSON.parse(row.annotations_json ?? '{}');
+      return { ok: true, imageId: id, annotations: normalize(parsed) };
+    } catch {
+      return { ok: true, imageId: id, annotations: { version: 1, pins: [] } };
+    }
+  }
+
+  async setImageAnnotations({ imageId, annotations } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const normalize = (raw) => {
+      const obj = raw && typeof raw === 'object' ? raw : {};
+      const pinsRaw = Array.isArray(obj.pins) ? obj.pins : [];
+      const pins = [];
+      const clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));
+      for (const p of pinsRaw) {
+        const pin = p && typeof p === 'object' ? p : {};
+        const x = Number(pin.x);
+        const y = Number(pin.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        pins.push({
+          id: String(pin.id ?? '').trim() || randomId('pin_'),
+          x: clamp01(x),
+          y: clamp01(y),
+          text: String(pin.text ?? ''),
+        });
+      }
+      return { version: 1, pins };
+    };
+
+    const cleaned = normalize(annotations);
+    const json = JSON.stringify(cleaned);
+    const row = await get(this.db, 'SELECT character_id FROM ImageAsset WHERE image_id = ?', [id]);
+
+    await run(
+      this.db,
+      `INSERT INTO ImageAnnotation(image_id, annotations_json, updated_at)
+       VALUES(?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(image_id) DO UPDATE SET
+         annotations_json = excluded.annotations_json,
+         updated_at = CURRENT_TIMESTAMP`,
+      [id, json]
+    );
+
+    await this._audit('image.setAnnotations', row?.character_id ?? null, { imageId: id, pins: cleaned.pins.length });
+    return { ok: true };
+  }
+
   async setImagesMetaBatch({ imageIds, favorite, rating, addTags = [], removeTags = [] } = {}) {
     const rawIds = Array.isArray(imageIds) ? imageIds : [];
     const ids = [];

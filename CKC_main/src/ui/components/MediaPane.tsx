@@ -123,6 +123,11 @@ export function MediaPane({
   const [imageBacklinks, setImageBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [imageBacklinksError, setImageBacklinksError] = React.useState<string | null>(null);
   const [imageBacklinksBusy, setImageBacklinksBusy] = React.useState<boolean>(false);
+  const [showPins, setShowPins] = React.useState<boolean>(false);
+  const [pinMode, setPinMode] = React.useState<boolean>(false);
+  const [pins, setPins] = React.useState<CKCImageAnnotations['pins']>([]);
+  const [pinsBusy, setPinsBusy] = React.useState<boolean>(false);
+  const [pinsError, setPinsError] = React.useState<string | null>(null);
   const [busyBatch, setBusyBatch] = React.useState<boolean>(false);
   const [filterFavoriteOnly, setFilterFavoriteOnly] = React.useState<boolean>(false);
   const [filterRatingOp, setFilterRatingOp] = React.useState<RatingOp>('any');
@@ -137,6 +142,9 @@ export function MediaPane({
   const altLeftDownRef = React.useRef<boolean>(false);
   const selectionAnchorRef = React.useRef<string | null>(images[0]?.id ?? null);
   const externalSelectAppliedRef = React.useRef<string | null>(null);
+  const viewerRef = React.useRef<HTMLDivElement | null>(null);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const [fitRect, setFitRect] = React.useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const tagsDatalistId = React.useId();
 
   React.useEffect(() => {
@@ -159,6 +167,37 @@ export function MediaPane({
       window.removeEventListener('blur', onBlur);
     };
   }, []);
+
+  const recalcFitRect = React.useCallback(() => {
+    const viewer = viewerRef.current;
+    const img = imgRef.current;
+    if (!viewer || !img) {
+      setFitRect(null);
+      return;
+    }
+
+    const cw = viewer.clientWidth;
+    const ch = viewer.clientHeight;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    if (!(cw > 0 && ch > 0 && iw > 0 && ih > 0)) {
+      setFitRect(null);
+      return;
+    }
+
+    const scale = Math.min(cw / iw, ch / ih);
+    const w = iw * scale;
+    const h = ih * scale;
+    const x = (cw - w) / 2;
+    const y = (ch - h) / 2;
+    setFitRect({ x, y, w, h });
+  }, []);
+
+  React.useEffect(() => {
+    const onResize = () => recalcFitRect();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [recalcFitRect]);
 
   const filteredImages = React.useMemo(() => {
     return images.filter((img) => {
@@ -215,9 +254,72 @@ export function MediaPane({
     void window.ckc.setReferenceSelection({ imageId: primarySelectedId });
   }, [primarySelectedId]);
 
-  const isBusy = busyBatch || !!busyImageId;
+  React.useEffect(() => {
+    if (!showPins) {
+      if (pinMode) setPinMode(false);
+      if (pinsError) setPinsError(null);
+    }
+    if (selectionCount !== 1 && pinMode) setPinMode(false);
+  }, [showPins, selectionCount, pinMode, pinsError]);
+
+  React.useEffect(() => {
+    if (!showPins) return;
+    if (selectionCount !== 1 || !primarySelectedId) {
+      setPins([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPinsError(null);
+    setPinsBusy(true);
+    window.ckc
+      .getImageAnnotations({ imageId: primarySelectedId })
+      .then((res: any) => {
+        if (cancelled) return;
+        const nextPins = Array.isArray(res?.annotations?.pins) ? res.annotations.pins : [];
+        setPins(nextPins);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPinsError(err instanceof Error ? err.message : String(err));
+        setPins([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPinsBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showPins, selectionCount, primarySelectedId]);
+
+  React.useEffect(() => {
+    if (!showPins) return;
+    recalcFitRect();
+  }, [showPins, primarySelectedId, recalcFitRect]);
+
+  const isBusy = busyBatch || !!busyImageId || pinsBusy;
   const notesIsDirty = selectionCount === 1 && !!primarySelected && String(draftNotes ?? '') !== String(primarySelected.notes ?? '');
   const didInitialSelectionRef = React.useRef<boolean>(false);
+
+  const savePins = React.useCallback(
+    async (nextPins: CKCImageAnnotations['pins']) => {
+      const id = String(primarySelectedId ?? '').trim();
+      if (!id) return;
+      setPins(nextPins);
+      setPinsError(null);
+      setPinsBusy(true);
+      try {
+        await window.ckc.setImageAnnotations({ imageId: id, annotations: { version: 1, pins: nextPins } });
+      } catch (err: unknown) {
+        setPinsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setPinsBusy(false);
+      }
+    },
+    [primarySelectedId]
+  );
 
   const clearFilters = React.useCallback(() => {
     setFilterFavoriteOnly(false);
@@ -769,7 +871,38 @@ export function MediaPane({
         </div>
       ) : null}
 
-      <div className={styles.viewer}>
+      <div
+        className={styles.viewer}
+        ref={viewerRef}
+        onClick={(e) => {
+          if (!pinMode) return;
+          if (selectionCount !== 1 || !primarySelectedId) return;
+          if (!fitRect) return;
+
+          e.preventDefault();
+          e.stopPropagation();
+
+          const viewer = viewerRef.current;
+          if (!viewer) return;
+          const bounds = viewer.getBoundingClientRect();
+          const xPx = e.clientX - bounds.left;
+          const yPx = e.clientY - bounds.top;
+
+          const rx = (xPx - fitRect.x) / fitRect.w;
+          const ry = (yPx - fitRect.y) / fitRect.h;
+          if (rx < 0 || rx > 1 || ry < 0 || ry > 1) return;
+
+          const proposed = window.prompt('Pin text:', '');
+          if (proposed == null) return;
+          const text = String(proposed || '').trim();
+          if (!text) return;
+
+          const id = `pin_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+          const next = [...pins, { id, x: rx, y: ry, text }];
+          void savePins(next);
+          setPinMode(false);
+        }}
+      >
         {noMatches ? (
           <div className={styles.noMatches}>
             <div className={styles.noMatchesTitle}>No images match filters.</div>
@@ -781,12 +914,14 @@ export function MediaPane({
           <img
             className={styles.viewerImg}
             src={`ckc://image/${encodeURIComponent(primarySelected.id)}?r=${reloadToken}`}
+            ref={imgRef}
             alt=""
             onClick={() => {
               if (!autoOpenControlsOnSelect) return;
               if (showControls) return;
               setShowControls(true);
             }}
+            onLoad={() => recalcFitRect()}
             onError={() => setViewerError(true)}
           />
         ) : primarySelected && viewerError ? (
@@ -827,6 +962,41 @@ export function MediaPane({
         ) : (
           <div className={styles.empty}>{emptyLabel}</div>
         )}
+
+        {showPins && selectionCount === 1 && primarySelected && !viewerError && fitRect ? (
+          <div className={styles.pinLayer} aria-label="Pins">
+            {pinMode ? <div className={styles.pinHint}>Click on the image to place a pin…</div> : null}
+            {pins.map((p) => {
+              const left = fitRect.x + Number(p.x) * fitRect.w;
+              const top = fitRect.y + Number(p.y) * fitRect.h;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={styles.pinMarker}
+                  style={{ left, top }}
+                  title={String(p.text || '')}
+                  onClick={(evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    const proposed = window.prompt('Pin text (blank deletes):', String(p.text || ''));
+                    if (proposed == null) return;
+                    const nextText = String(proposed || '').trim();
+                    if (!nextText) {
+                      if (!window.confirm('Delete pin?')) return;
+                      void savePins(pins.filter((x) => x.id !== p.id));
+                      return;
+                    }
+                    void savePins(pins.map((x) => (x.id === p.id ? { ...x, text: nextText } : x)));
+                  }}
+                >
+                  <div className={styles.pinDot} />
+                  {String(p.text || '').trim() ? <div className={styles.pinLabel}>{String(p.text || '')}</div> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {selectionCount > 0 && showControls ? (
           <div className={styles.bottomBar} aria-label="Image metadata">
@@ -873,6 +1043,34 @@ export function MediaPane({
                       Clear
                     </button>
                   </div>
+
+                  <button
+                    className={styles.tagBtn}
+                    data-active={showPins ? '1' : '0'}
+                    disabled={isBusy || selectionCount !== 1}
+                    onClick={() =>
+                      setShowPins((v) => {
+                        const next = !v;
+                        if (v && !next) setPinMode(false);
+                        return next;
+                      })
+                    }
+                    title="Show/hide pins"
+                  >
+                    {pinsBusy ? 'Pins…' : showPins ? `Pins (${pins.length})` : 'Pins'}
+                  </button>
+
+                  {showPins ? (
+                    <button
+                      className={styles.tagBtn}
+                      data-active={pinMode ? '1' : '0'}
+                      disabled={isBusy || selectionCount !== 1}
+                      onClick={() => setPinMode((v) => !v)}
+                      title="Add a pin"
+                    >
+                      {pinMode ? 'Cancel pin' : 'Add pin'}
+                    </button>
+                  ) : null}
                 </div>
 
                 {selectionCount === 1 && primarySelected ? (
@@ -957,6 +1155,8 @@ export function MediaPane({
                 </datalist>
               </div>
             </div>
+
+            {showPins && pinsError ? <div style={{ color: 'rgba(255, 0, 0, 0.85)', marginTop: 10 }}>{pinsError}</div> : null}
 
             <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }} aria-label="Backlinks">
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>

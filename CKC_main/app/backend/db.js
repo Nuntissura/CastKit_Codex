@@ -191,6 +191,22 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_link_source ON LinkIndex(source_type, source_id);
   `
   );
+
+  // Image annotations / pins (non-destructive overlays per image).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS ImageAnnotation (
+      image_id TEXT PRIMARY KEY,
+      annotations_json TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_image_annotation_updated ON ImageAnnotation(updated_at DESC);
+  `
+  );
 }
 
 async function initSchema(db) {

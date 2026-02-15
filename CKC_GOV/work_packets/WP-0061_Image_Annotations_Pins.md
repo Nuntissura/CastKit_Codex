@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add non-destructive annotations on top of images (pins + simple shapes) stored as JSON per image.
@@ -10,7 +10,7 @@ Add non-destructive annotations on top of images (pins + simple shapes) stored a
 ## Why
 - High ROI for reference work: mark details, colors, outfit parts, etc.
 - Keeps originals untouched while adding meaning inside CKC.
-- Spec: `CastKit_Codex_Spec_v00.038.md` §11.8.
+- Spec: `CastKit_Codex_Spec_v00.039.md` §11.8.
 
 ## Scope
 ### In
@@ -55,4 +55,3 @@ Drop annotation table/column and remove overlay UI.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

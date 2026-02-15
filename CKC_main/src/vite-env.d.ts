@@ -187,6 +187,16 @@ type CKCTagStats = {
   characterCount: number;
 };
 
+type CKCImageAnnotations = {
+  version: number;
+  pins: Array<{
+    id: string;
+    x: number;
+    y: number;
+    text: string;
+  }>;
+};
+
 type CKCConfigInfo = {
   configPath: string;
   config: unknown;
@@ -448,6 +458,8 @@ interface Window {
     deleteImages: (params: { imageIds: string[]; deleteFiles?: boolean }) => Promise<CKCDeleteImagesResult>;
     repairMissingImagesByHash: (params: { scanDir: string; includeSubdirs?: boolean; dryRun?: boolean }) => Promise<CKCRepairMissingImagesByHashResult>;
     setImageMeta: (params: unknown) => Promise<unknown>;
+    getImageAnnotations: (params: { imageId: string }) => Promise<{ ok: true; imageId: string; annotations: CKCImageAnnotations }>;
+    setImageAnnotations: (params: { imageId: string; annotations: CKCImageAnnotations }) => Promise<{ ok: true }>;
     setImagesMetaBatch: (params: unknown) => Promise<unknown>;
     addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;

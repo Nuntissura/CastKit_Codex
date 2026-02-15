@@ -82,6 +82,60 @@
   -webkit-user-drag: none;
 }
 
+.pinLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pinHint {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-secondary);
+}
+
+.pinMarker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.pinDot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 120, 120, 0.35);
+  border-radius: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.pinLabel {
+  position: absolute;
+  left: 16px;
+  top: -8px;
+  display: none;
+  max-width: min(360px, 50vw);
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.pinMarker:hover .pinLabel {
+  display: block;
+}
+
 .empty {
   color: var(--text-secondary);
   padding: 24px;
