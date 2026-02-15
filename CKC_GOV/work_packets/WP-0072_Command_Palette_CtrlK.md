@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add a keyboard-first command palette (`Ctrl+K`) to jump to characters/docs/tags and run common actions.
@@ -10,7 +10,7 @@ Add a keyboard-first command palette (`Ctrl+K`) to jump to characters/docs/tags 
 ## Why
 - Big speed multiplier for power users.
 - Helps keep UI minimal while still making everything reachable.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.19.
+- Spec: `CastKit_Codex_Spec_v00.048.md` §11.19.
 
 ## Scope
 ### In
@@ -34,4 +34,3 @@ Add a keyboard-first command palette (`Ctrl+K`) to jump to characters/docs/tags 
 
 ## Notes
 - Do NOT touch `D:`.
-

@@ -87,7 +87,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0069 | Collections / playlists | DONE | Codex | Collections CRUD + slideshow + export (Export Hub + Character action). |
 | WP-0070 | Character relationship map | DONE | Codex | Structured edges + graph view (Character → Tools editor + Library graph). |
 | WP-0071 | Moodboard arrange tools | DONE | Codex | Multi-select arrange + group/ungroup + tidy (undoable). |
-| WP-0072 | Command palette (Ctrl+K) | BACKLOG | Codex | Keyboard-first navigation + actions. |
+| WP-0072 | Command palette (Ctrl+K) | IN_PROGRESS | Codex | Keyboard-first navigation + actions. |
 | WP-0073 | Backup/restore wizard | BACKLOG | Codex | Snapshot + restore with manifest/checksums. |
 
 ## Current focus
