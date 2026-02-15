@@ -5011,6 +5011,92 @@ class CKCLibrary {
     }));
   }
 
+  async listCharacterRelations({ characterId = null } = {}) {
+    const cid = characterId == null ? null : String(characterId ?? '').trim();
+    const params = [];
+    let where = '';
+    if (cid) {
+      where = 'WHERE r.source_character_id = ?';
+      params.push(cid);
+    }
+
+    const rows = await all(
+      this.db,
+      `
+      SELECT r.relation_id, r.source_character_id, r.target_character_id, r.rel_type, r.notes, r.created_at, r.updated_at,
+             cs.display_name AS source_name,
+             ct.display_name AS target_name
+      FROM CharacterRelation r
+      JOIN Character cs ON cs.character_id = r.source_character_id
+      JOIN Character ct ON ct.character_id = r.target_character_id
+      ${where}
+      ORDER BY r.created_at DESC
+    `,
+      params
+    );
+
+    return rows.map((r) => ({
+      id: String(r.relation_id ?? ''),
+      sourceCharacterId: String(r.source_character_id ?? ''),
+      sourceCharacterName: String(r.source_name ?? ''),
+      targetCharacterId: String(r.target_character_id ?? ''),
+      targetCharacterName: String(r.target_name ?? ''),
+      relType: String(r.rel_type ?? ''),
+      notes: String(r.notes ?? ''),
+      createdAt: String(r.created_at ?? ''),
+      updatedAt: String(r.updated_at ?? ''),
+    }));
+  }
+
+  async createCharacterRelation({ sourceCharacterId, targetCharacterId, relType = '', notes = '' } = {}) {
+    const sourceId = String(sourceCharacterId ?? '').trim();
+    const targetId = String(targetCharacterId ?? '').trim();
+    if (!sourceId) throw new Error('sourceCharacterId is required');
+    if (!targetId) throw new Error('targetCharacterId is required');
+    if (sourceId === targetId) throw new Error('source and target must be different characters');
+
+    const src = await get(this.db, `SELECT character_id FROM Character WHERE character_id = ?`, [sourceId]);
+    if (!src) throw new Error('Source character not found');
+    const tgt = await get(this.db, `SELECT character_id FROM Character WHERE character_id = ?`, [targetId]);
+    if (!tgt) throw new Error('Target character not found');
+
+    const id = randomId('rel_');
+    await run(
+      this.db,
+      `INSERT INTO CharacterRelation(relation_id, source_character_id, target_character_id, rel_type, notes)
+       VALUES(?, ?, ?, ?, ?)`,
+      [id, sourceId, targetId, String(relType ?? ''), String(notes ?? '')]
+    );
+
+    await this._audit('relation.create', sourceId, { relationId: id, targetCharacterId: targetId });
+    return { ok: true, id };
+  }
+
+  async updateCharacterRelation({ relationId, relType, notes } = {}) {
+    const id = String(relationId ?? '').trim();
+    if (!id) throw new Error('relationId is required');
+
+    await run(
+      this.db,
+      `UPDATE CharacterRelation
+       SET rel_type = COALESCE(?, rel_type),
+           notes = COALESCE(?, notes),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE relation_id = ?`,
+      [relType !== undefined ? String(relType ?? '') : null, notes !== undefined ? String(notes ?? '') : null, id]
+    );
+    await this._audit('relation.update', null, { relationId: id });
+    return { ok: true };
+  }
+
+  async deleteCharacterRelation({ relationId } = {}) {
+    const id = String(relationId ?? '').trim();
+    if (!id) throw new Error('relationId is required');
+    await run(this.db, `DELETE FROM CharacterRelation WHERE relation_id = ?`, [id]);
+    await this._audit('relation.delete', null, { relationId: id });
+    return { ok: true };
+  }
+
   async getImageAnnotations({ imageId } = {}) {
     const id = String(imageId ?? '').trim();
     if (!id) throw new Error('imageId is required');

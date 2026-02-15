@@ -756,6 +756,26 @@ function registerIpcHandlers() {
         return lib.removeImagesFromCollection(params || {});
     });
 
+    ipcMain.handle('ckc:listCharacterRelations', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listCharacterRelations(params || {});
+    });
+
+    ipcMain.handle('ckc:createCharacterRelation', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.createCharacterRelation(params || {});
+    });
+
+    ipcMain.handle('ckc:updateCharacterRelation', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.updateCharacterRelation(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteCharacterRelation', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteCharacterRelation(params || {});
+    });
+
     ipcMain.handle('ckc:listTagStats', async () => {
         const lib = await ensureLibrary();
         return lib.listTagStats();

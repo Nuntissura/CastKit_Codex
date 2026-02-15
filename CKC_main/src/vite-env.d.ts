@@ -330,6 +330,18 @@ type CKCCollectionImage = {
   addedToCollectionAt: string;
 };
 
+type CKCCharacterRelation = {
+  id: string;
+  sourceCharacterId: string;
+  sourceCharacterName: string;
+  targetCharacterId: string;
+  targetCharacterName: string;
+  relType: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CKCRepairMissingImagesByHashResult = {
   ok: true;
   reportPath: string;
@@ -493,6 +505,15 @@ interface Window {
       listCollectionImages: (params: { collectionId: string }) => Promise<CKCCollectionImage[]>;
       addImagesToCollection: (params: { collectionId: string; imageIds: string[] }) => Promise<{ ok: true; inserted: number; skipped: number }>;
       removeImagesFromCollection: (params: { collectionId: string; imageIds: string[] }) => Promise<{ ok: true; removed: number }>;
+      listCharacterRelations: (params: { characterId?: string | null } | null) => Promise<CKCCharacterRelation[]>;
+      createCharacterRelation: (params: {
+        sourceCharacterId: string;
+        targetCharacterId: string;
+        relType?: string;
+        notes?: string;
+      }) => Promise<{ ok: true; id: string }>;
+      updateCharacterRelation: (params: { relationId: string; relType?: string; notes?: string }) => Promise<{ ok: true }>;
+      deleteCharacterRelation: (params: { relationId: string }) => Promise<{ ok: true }>;
       listTagStats: () => Promise<CKCTagStats[]>;
       mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
       renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;

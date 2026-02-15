@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add explicit character→character relationship edges (type + notes) and a lightweight graph view to browse and navigate.
@@ -28,12 +28,12 @@ Add explicit character→character relationship edges (type + notes) and a light
 - Complex layout controls (beyond basic zoom/pan).
 
 ## Acceptance criteria
-- [ ] Relationships persist in DB.
-- [ ] Graph view renders and navigation works.
+- [x] Relationships persist in DB.
+- [x] Graph view renders and navigation works.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] Manual: create relationships, reopen app, verify graph matches.
+- [x] `cd CKC_main; npm test`
+- [x] Manual: create relationships, reopen app, verify graph matches.
 
 ## Notes
 - Do NOT touch `D:`.

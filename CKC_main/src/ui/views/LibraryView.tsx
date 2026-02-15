@@ -29,6 +29,69 @@ function formatBytes(bytes: number): string {
   return `${n.toFixed(fixed)} ${units[u]}`;
 }
 
+function buildRelationshipCircleLayout(
+  chars: CKCCharacterListItem[],
+  edges: CKCCharacterRelation[]
+): {
+  width: number;
+  height: number;
+  nodes: Array<{ id: string; label: string; x: number; y: number; degree: number }>;
+  edges: Array<{ id: string; sourceId: string; targetId: string; label: string }>;
+} {
+  const degree = new Map<string, number>();
+  for (const e of edges || []) {
+    const s = String(e?.sourceCharacterId ?? '').trim();
+    const t = String(e?.targetCharacterId ?? '').trim();
+    if (!s || !t) continue;
+    degree.set(s, (degree.get(s) || 0) + 1);
+    degree.set(t, (degree.get(t) || 0) + 1);
+  }
+
+  const nodes = (chars || [])
+    .map((c) => {
+      const id = String(c?.id ?? '').trim();
+      const label = String(c?.displayName ?? id).trim() || id;
+      return { id, label, degree: degree.get(id) || 0, x: 0, y: 0 };
+    })
+    .filter((n) => !!n.id);
+
+  nodes.sort((a, b) => b.degree - a.degree || a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+
+  const n = Math.max(1, nodes.length);
+  const spacing = 84;
+  const radius = Math.max(220, Math.min(1400, (n * spacing) / (2 * Math.PI)));
+  const pad = 120;
+  const cx = radius + pad;
+  const cy = radius + pad;
+  for (let i = 0; i < nodes.length; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    nodes[i].x = cx + Math.cos(angle) * radius;
+    nodes[i].y = cy + Math.sin(angle) * radius;
+  }
+
+  const pos = new Map<string, { x: number; y: number }>();
+  for (const node of nodes) pos.set(node.id, { x: node.x, y: node.y });
+
+  const outEdges: Array<{ id: string; sourceId: string; targetId: string; label: string }> = [];
+  for (let i = 0; i < (edges || []).length; i++) {
+    const e = edges[i];
+    const sourceId = String(e?.sourceCharacterId ?? '').trim();
+    const targetId = String(e?.targetCharacterId ?? '').trim();
+    if (!sourceId || !targetId) continue;
+    if (!pos.has(sourceId) || !pos.has(targetId)) continue;
+    const st = String(e?.relType ?? '').trim();
+    const label = st ? `${sourceId} → ${targetId} — ${st}` : `${sourceId} → ${targetId}`;
+    outEdges.push({
+      id: String(e?.id ?? `edge_${i}`),
+      sourceId,
+      targetId,
+      label,
+    });
+  }
+
+  return { width: Math.round(cx * 2), height: Math.round(cy * 2), nodes, edges: outEdges };
+}
+
 function isEditableActiveElement(): boolean {
   const active = document.activeElement;
   if (!active) return false;
@@ -167,6 +230,10 @@ export function LibraryView({
   const [nearDupThreshold, setNearDupThreshold] = React.useState<number>(10);
   const [nearDupMaxImages, setNearDupMaxImages] = React.useState<number>(2500);
   const nearDupPollRef = React.useRef<number | null>(null);
+  const [relGraphChars, setRelGraphChars] = React.useState<CKCCharacterListItem[] | null>(null);
+  const [relGraphEdges, setRelGraphEdges] = React.useState<CKCCharacterRelation[] | null>(null);
+  const [relGraphBusy, setRelGraphBusy] = React.useState<boolean>(false);
+  const [relGraphError, setRelGraphError] = React.useState<string | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
   const [exportRootOverride, setExportRootOverride] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
@@ -606,6 +673,37 @@ export function LibraryView({
       setNearDupError(err instanceof Error ? err.message : String(err));
     }
   }, []);
+
+  const reloadRelationshipGraph = React.useCallback(async () => {
+    setRelGraphError(null);
+    setRelGraphBusy(true);
+    try {
+      const [chars, edges] = await Promise.all([
+        window.ckc.listCharacters({ queryText: '', tagFilters: [] }),
+        window.ckc.listCharacterRelations({ characterId: null }),
+      ]);
+      setRelGraphChars(Array.isArray(chars) ? chars : []);
+      setRelGraphEdges(Array.isArray(edges) ? edges : []);
+    } catch (err: unknown) {
+      setRelGraphError(err instanceof Error ? err.message : String(err));
+      setRelGraphChars([]);
+      setRelGraphEdges([]);
+    } finally {
+      setRelGraphBusy(false);
+    }
+  }, []);
+
+  const relGraphLayout = React.useMemo(() => {
+    if (!relGraphChars || !relGraphEdges) return null;
+    return buildRelationshipCircleLayout(relGraphChars, relGraphEdges);
+  }, [relGraphChars, relGraphEdges]);
+
+  const relGraphNodeById = React.useMemo(() => {
+    if (!relGraphLayout) return null;
+    const m = new Map<string, { id: string; label: string; x: number; y: number; degree: number }>();
+    for (const n of relGraphLayout.nodes) m.set(n.id, n);
+    return m;
+  }, [relGraphLayout]);
 
   const deleteDuplicateExtras = React.useCallback(
     async (group: CKCDuplicateGroup) => {
@@ -1612,6 +1710,89 @@ export function LibraryView({
             ) : (
               <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
                 Scan to find visually similar images by perceptual hash (safe: no auto-delete).
+              </div>
+            )}
+          </details>
+
+          <details style={{ marginTop: 12 }}>
+            <summary>Relationship map</summary>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={relGraphBusy} onClick={() => void reloadRelationshipGraph()}>
+                {relGraphBusy ? 'Working…' : relGraphLayout ? 'Refresh graph' : 'Load graph'}
+              </button>
+              {relGraphLayout ? (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  nodes <b>{relGraphLayout.nodes.length}</b> • edges <b>{relGraphLayout.edges.length}</b>
+                </span>
+              ) : null}
+            </div>
+
+            {relGraphError ? <div className={styles.error}>{relGraphError}</div> : null}
+
+            {relGraphLayout ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  border: '1px solid var(--glass-border)',
+                  background: 'var(--glass)',
+                  height: 420,
+                  overflow: 'auto',
+                }}
+              >
+                <svg width={relGraphLayout.width} height={relGraphLayout.height} style={{ display: 'block' }}>
+                  <defs>
+                    <marker id="ckc_rel_arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--glass-border)" />
+                    </marker>
+                  </defs>
+
+                  {relGraphLayout.edges.map((e) => {
+                    const s = relGraphNodeById?.get(e.sourceId);
+                    const t = relGraphNodeById?.get(e.targetId);
+                    if (!s || !t) return null;
+                    const r = 14;
+                    const dx = t.x - s.x;
+                    const dy = t.y - s.y;
+                    const len = Math.max(1e-6, Math.sqrt(dx * dx + dy * dy));
+                    const ux = dx / len;
+                    const uy = dy / len;
+                    const x1 = s.x + ux * r;
+                    const y1 = s.y + uy * r;
+                    const x2 = t.x - ux * r;
+                    const y2 = t.y - uy * r;
+                    return (
+                      <line
+                        key={e.id}
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="var(--glass-border)"
+                        strokeWidth={1.2}
+                        markerEnd="url(#ckc_rel_arrow)"
+                      >
+                        <title>{e.label}</title>
+                      </line>
+                    );
+                  })}
+
+                  {relGraphLayout.nodes.map((n) => (
+                    <g key={n.id} style={{ cursor: 'pointer' }} onClick={() => onOpenCharacter(n.id)}>
+                      <circle cx={n.x} cy={n.y} r={14} style={{ fill: 'var(--glass)', stroke: 'var(--glass-border)' }} />
+                      <text x={n.x} y={n.y + 28} textAnchor="middle" fontSize={12} fill="var(--text-primary)">
+                        {n.label.length > 22 ? `${n.label.slice(0, 22)}…` : n.label}
+                      </text>
+                      <title>
+                        {n.label} ({n.id})
+                      </title>
+                    </g>
+                  ))}
+                </svg>
+              </div>
+            ) : (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+                Load to render a simple global map of character relationships (click node to open).
               </div>
             )}
           </details>

@@ -229,6 +229,14 @@ export function CharacterView({
   const [isTagSaving, setIsTagSaving] = React.useState<boolean>(false);
   const [allTags, setAllTags] = React.useState<string[]>([]);
   const tagsDatalistId = React.useId();
+
+  const [relations, setRelations] = React.useState<CKCCharacterRelation[] | null>(null);
+  const [relationsBusy, setRelationsBusy] = React.useState<boolean>(false);
+  const [relationsError, setRelationsError] = React.useState<string | null>(null);
+  const [relationDraftTargetId, setRelationDraftTargetId] = React.useState<string>('');
+  const [relationDraftType, setRelationDraftType] = React.useState<string>('');
+  const [relationDraftNotes, setRelationDraftNotes] = React.useState<string>('');
+  const [relationCharacters, setRelationCharacters] = React.useState<CKCCharacterListItem[]>([]);
   const docsTagsDatalistId = React.useId();
 
   const [docsLowerType, setDocsLowerType] = React.useState<'stories' | 'moodboard'>('stories');
@@ -614,6 +622,107 @@ export function CharacterView({
   }, []);
 
   React.useEffect(() => {
+    window.ckc
+      .listCharacters({ queryText: '', tagFilters: [] })
+      .then((rows: any) => setRelationCharacters(Array.isArray(rows) ? rows : []))
+      .catch(() => setRelationCharacters([]));
+  }, []);
+
+  const reloadRelations = React.useCallback(async () => {
+    const cid = String(characterId ?? '').trim();
+    if (!cid) {
+      setRelations([]);
+      return;
+    }
+    setRelationsError(null);
+    setRelationsBusy(true);
+    try {
+      const rows = await window.ckc.listCharacterRelations({ characterId: cid });
+      setRelations(Array.isArray(rows) ? rows : []);
+    } catch (err: unknown) {
+      setRelationsError(err instanceof Error ? err.message : String(err));
+      setRelations([]);
+    } finally {
+      setRelationsBusy(false);
+    }
+  }, [characterId]);
+
+  React.useEffect(() => {
+    void reloadRelations();
+  }, [reloadRelations]);
+
+  const addRelation = React.useCallback(async () => {
+    const sourceId = String(characterId ?? '').trim();
+    const targetId = String(relationDraftTargetId ?? '').trim();
+    if (!sourceId) return;
+    if (!targetId) {
+      setRelationsError('Pick a target character.');
+      return;
+    }
+    if (sourceId === targetId) {
+      setRelationsError('Target must be a different character.');
+      return;
+    }
+
+    setRelationsBusy(true);
+    setRelationsError(null);
+    try {
+      await window.ckc.createCharacterRelation({
+        sourceCharacterId: sourceId,
+        targetCharacterId: targetId,
+        relType: String(relationDraftType ?? ''),
+        notes: String(relationDraftNotes ?? ''),
+      });
+      setRelationDraftTargetId('');
+      setRelationDraftType('');
+      setRelationDraftNotes('');
+      await reloadRelations();
+    } catch (err: unknown) {
+      setRelationsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRelationsBusy(false);
+    }
+  }, [characterId, relationDraftTargetId, relationDraftType, relationDraftNotes, reloadRelations]);
+
+  const saveRelation = React.useCallback(
+    async (relationId: string, relType: string, notes: string) => {
+      const id = String(relationId ?? '').trim();
+      if (!id) return;
+      setRelationsBusy(true);
+      setRelationsError(null);
+      try {
+        await window.ckc.updateCharacterRelation({ relationId: id, relType: String(relType ?? ''), notes: String(notes ?? '') });
+        await reloadRelations();
+      } catch (err: unknown) {
+        setRelationsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRelationsBusy(false);
+      }
+    },
+    [reloadRelations]
+  );
+
+  const deleteRelation = React.useCallback(
+    async (relationId: string) => {
+      const id = String(relationId ?? '').trim();
+      if (!id) return;
+      const ok = window.confirm('Delete relationship?');
+      if (!ok) return;
+      setRelationsBusy(true);
+      setRelationsError(null);
+      try {
+        await window.ckc.deleteCharacterRelation({ relationId: id });
+        await reloadRelations();
+      } catch (err: unknown) {
+        setRelationsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRelationsBusy(false);
+      }
+    },
+    [reloadRelations]
+  );
+
+  React.useEffect(() => {
     if (!characterId) return;
     if (!character) return;
     setIconDraftImageId(character.iconImageId ?? null);
@@ -829,14 +938,15 @@ export function CharacterView({
       const name = String(proposed || '').trim();
       if (!name) return;
 
-      let target = list.find((c: any) => String(c?.name ?? '').toLowerCase() === name.toLowerCase()) || null;
-      if (!target) {
+      const existing = list.find((c: any) => String(c?.name ?? '').toLowerCase() === name.toLowerCase()) || null;
+      let collectionId = existing ? String((existing as any)?.id ?? '').trim() : '';
+      if (!collectionId) {
         const ok = window.confirm(`Create new collection "${name}"?`);
         if (!ok) return;
-        target = await window.ckc.createCollection({ name });
+        const created = await window.ckc.createCollection({ name });
+        collectionId = String((created as any)?.id ?? '').trim();
       }
 
-      const collectionId = String((target as any)?.id ?? '').trim();
       if (!collectionId) throw new Error('Invalid collection id');
       await window.ckc.addImagesToCollection({ collectionId, imageIds: ids });
     } catch (err: unknown) {
@@ -2989,6 +3099,149 @@ export function CharacterView({
                         </div>
                       ) : null}
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div className={styles.sectionTitle}>Relationships</div>
+                    <div className={styles.muted}>
+                      Structured characterâ†’character edges (type + notes). See the global graph in Library â†’ Tools.
+                    </div>
+
+                    <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <select
+                        value={relationDraftTargetId}
+                        onChange={(e) => setRelationDraftTargetId(e.target.value)}
+                        disabled={relationsBusy || !characterId}
+                        style={{ border: '1px solid var(--glass-border)', background: 'transparent', padding: '8px 10px', minWidth: 240 }}
+                      >
+                        <option value="">Target characterâ€¦</option>
+                        {(relationCharacters || [])
+                          .filter((c) => c.id !== characterId)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.displayName || c.id}
+                            </option>
+                          ))}
+                      </select>
+
+                      <input
+                        value={relationDraftType}
+                        onChange={(e) => setRelationDraftType(e.target.value)}
+                        disabled={relationsBusy || !characterId}
+                        placeholder="Type (optional)"
+                        style={{ border: '1px solid var(--glass-border)', background: 'transparent', padding: '8px 10px', minWidth: 180 }}
+                      />
+
+                      <input
+                        value={relationDraftNotes}
+                        onChange={(e) => setRelationDraftNotes(e.target.value)}
+                        disabled={relationsBusy || !characterId}
+                        placeholder="Notes (optional)"
+                        style={{ border: '1px solid var(--glass-border)', background: 'transparent', padding: '8px 10px', minWidth: 260, flex: 1 }}
+                      />
+
+                      <button
+                        className={styles.btnSecondary}
+                        onClick={() => void addRelation()}
+                        disabled={relationsBusy || !characterId || !relationDraftTargetId}
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {relationsError ? (
+                      <div className={styles.error} style={{ marginTop: 10 }}>
+                        {relationsError}
+                      </div>
+                    ) : null}
+
+                    {relations ? (
+                      relations.length === 0 ? (
+                        <div className={styles.muted} style={{ marginTop: 10 }}>
+                          (none)
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {relations.map((r) => (
+                            <div key={r.id} style={{ border: '1px solid var(--glass-border)', padding: 10 }}>
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <div style={{ fontWeight: 900 }}>
+                                  {r.targetCharacterName || r.targetCharacterId}
+                                </div>
+                                <button
+                                  className={styles.btnSecondary}
+                                  onClick={() => onNavigateCharacter(r.targetCharacterId)}
+                                  disabled={relationsBusy || !r.targetCharacterId}
+                                  title="Open target character"
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  className={styles.btnSecondary}
+                                  onClick={() => void saveRelation(r.id, r.relType, r.notes)}
+                                  disabled={relationsBusy}
+                                  title="Save changes"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  className={styles.btnSecondary}
+                                  onClick={() => void deleteRelation(r.id)}
+                                  disabled={relationsBusy}
+                                  title="Delete relationship"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+
+                              <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                  Type
+                                  <input
+                                    value={r.relType}
+                                    onChange={(e) =>
+                                      setRelations((prev) =>
+                                        prev ? prev.map((x) => (x.id === r.id ? { ...x, relType: e.target.value } : x)) : prev
+                                      )
+                                    }
+                                    disabled={relationsBusy}
+                                    style={{ border: '1px solid var(--glass-border)', background: 'transparent', padding: '6px 8px', minWidth: 220 }}
+                                  />
+                                </label>
+                              </div>
+
+                              <div style={{ marginTop: 8 }}>
+                                <div className={styles.muted} style={{ marginBottom: 6 }}>
+                                  Notes
+                                </div>
+                                <textarea
+                                  value={r.notes}
+                                  onChange={(e) =>
+                                    setRelations((prev) =>
+                                      prev ? prev.map((x) => (x.id === r.id ? { ...x, notes: e.target.value } : x)) : prev
+                                    )
+                                  }
+                                  disabled={relationsBusy}
+                                  style={{
+                                    width: '100%',
+                                    height: 60,
+                                    resize: 'vertical',
+                                    border: '1px solid var(--glass-border)',
+                                    background: 'transparent',
+                                    padding: '8px 10px',
+                                    fontFamily: 'inherit',
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    ) : (
+                      <div className={styles.muted} style={{ marginTop: 10 }}>
+                        Loadingâ€¦
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 18 }}>

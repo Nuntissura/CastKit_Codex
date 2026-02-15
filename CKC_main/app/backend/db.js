@@ -270,6 +270,27 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_collection_item_order ON CollectionItem(collection_id, sort_order, added_at);
   `
   );
+
+  // Character relationships (explicit structured edges).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS CharacterRelation (
+      relation_id TEXT PRIMARY KEY,
+      source_character_id TEXT NOT NULL,
+      target_character_id TEXT NOT NULL,
+      rel_type TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(source_character_id) REFERENCES Character(character_id) ON DELETE CASCADE,
+      FOREIGN KEY(target_character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_relation_source ON CharacterRelation(source_character_id);
+    CREATE INDEX IF NOT EXISTS idx_relation_target ON CharacterRelation(target_character_id);
+  `
+  );
 }
 
 async function initSchema(db) {
