@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Compute and store dominant color palettes for images and add a “filter by color” control.
@@ -10,7 +10,7 @@ Compute and store dominant color palettes for images and add a “filter by colo
 ## Why
 - High ROI browsing for visual reference libraries.
 - Enables fast “find images with this vibe color” workflows.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.13.
+- Spec: `CastKit_Codex_Spec_v00.042.md` §11.13.
 
 ## Scope
 ### In
@@ -34,4 +34,3 @@ Compute and store dominant color palettes for images and add a “filter by colo
 
 ## Notes
 - Do NOT touch `D:`.
-
