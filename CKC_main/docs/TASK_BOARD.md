@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-02-14
+Last updated: 2026-02-15
 
 This is the single source of truth for work status.
 
@@ -79,7 +79,17 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0061 | Image annotations / pins (non-destructive) | BACKLOG | Codex | Text pins + simple overlays stored as JSON per image; show/hide. |
 | WP-0062 | Stories corkboard / outliner | BACKLOG | Codex | Story cards with drag reorder + links to chars/images. |
 | WP-0063 | Export hub (moodboards + image sets + share packs) | BACKLOG | Codex | Central export UI; moodboard PNG; image set export; share packs under `<libraryRoot>/exports/`. |
+| WP-0064 | Web import (URL capture) | BACKLOG | Codex | Import from URL; store provenance metadata. |
+| WP-0065 | Smart Folders 2.0 (rule-based saved searches) | BACKLOG | Codex | Editable rules + live results. |
+| WP-0066 | Color tools (palettes + search) | BACKLOG | Codex | Extract palette + filter by color. |
+| WP-0067 | Near-duplicate finder (perceptual) | BACKLOG | Codex | Visually similar scan + safe review. |
+| WP-0068 | Reference window power modes | BACKLOG | Codex | Opacity + click-through + hotkeys. |
+| WP-0069 | Collections / playlists | BACKLOG | Codex | Curated cross-character image sets + slideshow/export. |
+| WP-0070 | Character relationship map | BACKLOG | Codex | Structured edges + graph view. |
+| WP-0071 | Moodboard arrange tools | BACKLOG | Codex | Align/distribute/group/tidy (undoable). |
+| WP-0072 | Command palette (Ctrl+K) | BACKLOG | Codex | Keyboard-first navigation + actions. |
+| WP-0073 | Backup/restore wizard | BACKLOG | Codex | Snapshot + restore with manifest/checksums. |
 
 ## Current focus
-- Current: High-ROI roadmap (WP-0054..WP-0063).
+- Current: High-ROI roadmap (WP-0054..WP-0063), then post-0063 backlog (WP-0064..WP-0073).
 - Next: WP-0035, WP-0036, WP-0037.
