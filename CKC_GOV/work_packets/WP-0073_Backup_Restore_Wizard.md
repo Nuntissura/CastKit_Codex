@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add a guided backup/restore UX for a CKC libraryRoot (snapshot + restore), with manifests and checksums.
@@ -10,7 +10,7 @@ Add a guided backup/restore UX for a CKC libraryRoot (snapshot + restore), with 
 ## Why
 - High stakes data deserves one-click safety nets.
 - Portable libraries need easy “pack up and move” flows.
-- Spec: `CastKit_Codex_Spec_v00.039.md` §11.20.
+- Spec: `CastKit_Codex_Spec_v00.049.md` §11.20.
 
 ## Scope
 ### In
@@ -36,4 +36,3 @@ Add a guided backup/restore UX for a CKC libraryRoot (snapshot + restore), with 
 
 ## Notes
 - Do NOT touch `D:`.
-
