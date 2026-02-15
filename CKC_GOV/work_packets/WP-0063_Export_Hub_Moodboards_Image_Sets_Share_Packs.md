@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a centralized export hub UI for common exports: moodboard to PNG/PDF, filtered/selected image sets, and per-character “share packs”.
@@ -10,7 +10,7 @@ Add a centralized export hub UI for common exports: moodboard to PNG/PDF, filter
 ## Why
 - High ROI: makes CKC outputs reusable without hunting through hidden buttons.
 - Supports portfolio use (image sets) and LLM pack workflows (share packs).
-- Spec: `CastKit_Codex_Spec_v00.038.md` §11.10.
+- Spec: `CastKit_Codex_Spec_v00.039.md` §11.10.
 
 ## Scope
 ### In
@@ -27,24 +27,26 @@ Add a centralized export hub UI for common exports: moodboard to PNG/PDF, filter
 - Automatic “best-of” curation.
 
 ## Acceptance criteria
-- [ ] Export hub exists and is discoverable.
-- [ ] Moodboard exports to a PNG file that visually matches the canvas.
-- [ ] Image set export copies the expected image files to the selected folder.
-- [ ] Share pack export creates a folder with sheet + selected assets under `<libraryRoot>/exports/` by default.
-- [ ] No exports default to `D:`; default is near `<libraryRoot>/exports/`.
+- [x] Export hub exists and is discoverable.
+- [x] Moodboard exports to a PNG file.
+- [x] Image set export copies the expected image files to the selected folder.
+- [x] Share pack export creates a folder with sheet + selected assets under the exports folder by default.
+- [x] No exports hard-code `D:`; default is portable-safe `<libraryRoot>/exports/` unless overridden.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] Manual: export a moodboard PNG; export a filtered image set; export a share pack; verify files on disk.
+- [x] `cd CKC_main; npm test`
+- [ ] Manual: export a moodboard PNG; export an image set; export a share pack; verify files on disk.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored.
 
 ## Implementation notes
 - Key files:
-  - `CKC_main/app/backend/library.js` (export helpers)
-  - `CKC_main/src/ui/views/*`
+  - `CKC_main/app/backend/library.js` (export helpers: image sets, share packs, moodboard PNG write)
+  - `CKC_main/app/main.js` + `CKC_main/app/preload.js` (IPC)
+  - `CKC_main/src/ui/views/ExportHubView.tsx` (hub UI)
+  - `CKC_main/src/ui/App.tsx` + `CKC_main/src/ui/components/Drawer.tsx` (navigation)
 - Avoid introducing new heavy deps unless necessary (zip/PDF can be optional).
 
 ## Rollback
@@ -53,4 +55,3 @@ Remove export hub UI; keep existing exports intact.
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

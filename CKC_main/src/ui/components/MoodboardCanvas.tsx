@@ -125,12 +125,15 @@ export function MoodboardCanvas({
   value,
   onChange,
   onRequestAddImage,
+  canvasRefOverride,
 }: {
   value: MoodboardState;
   onChange: (next: MoodboardState) => void;
   onRequestAddImage?: () => void;
+  canvasRefOverride?: React.RefObject<HTMLCanvasElement | null>;
 }) {
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const internalCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = canvasRefOverride ?? internalCanvasRef;
   const drawingRef = React.useRef<boolean>(false);
   const strokeRef = React.useRef<MoodboardStroke | null>(null);
   const imageCacheRef = React.useRef<Map<string, HTMLImageElement>>(new Map());

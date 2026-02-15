@@ -3118,6 +3118,170 @@ class CKCLibrary {
     };
   }
 
+  async exportImageSet({ characterId = null, imageIds = [], outDir = null, setName = null } = {}) {
+    const idsRaw = Array.isArray(imageIds) ? imageIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    if (ids.length === 0) throw new Error('imageIds is required');
+
+    let character = null;
+    const cid = characterId == null ? null : String(characterId ?? '').trim();
+    if (cid) character = await this.getCharacter(cid);
+
+    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    const safeSetName =
+      String(setName ?? '').trim() ||
+      (character ? `${character.displayName}__${shortStableIdForPath(cid)}` : 'image_set');
+    const exportDir = path.join(
+      exportRoot,
+      'image_sets',
+      sanitizeFileName(null, `${safeSetName}__${toIsoSafeTimestamp()}`)
+    );
+    ensureDir(exportDir);
+
+    const written = [];
+    const skipped = [];
+    for (const imageId of ids) {
+      const srcAbs = await this.getImageAbsPath({ imageId, kind: 'original' });
+      if (!srcAbs || !fs.existsSync(srcAbs)) {
+        skipped.push({ imageId, reason: 'missing' });
+        continue;
+      }
+
+      const srcBase = path.basename(srcAbs);
+      const ext = path.extname(srcBase) || '';
+      const safeSrcBase = sanitizeFileName(srcBase, `image_${shortStableIdForPath(imageId)}${ext}`);
+      const destName = sanitizeFileName(null, `${shortStableIdForPath(imageId)}__${safeSrcBase}`);
+      const destAbs = uniquePath(exportDir, destName);
+      fs.copyFileSync(srcAbs, destAbs);
+      written.push({ imageId, path: destAbs });
+    }
+
+    await this._audit('imageSet.export', cid || null, { outDir: exportDir, requested: ids.length, written: written.length });
+    return { ok: true, outDir: exportDir, written, skipped };
+  }
+
+  async exportSharePack({
+    characterId,
+    outDir = null,
+    includeSheet = true,
+    imageIds = [],
+    docIdsByType = {},
+  } = {}) {
+    const cid = String(characterId ?? '').trim();
+    if (!cid) throw new Error('characterId is required');
+
+    const character = await this.getCharacter(cid);
+    if (!character) throw new Error('Character not found');
+
+    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    const packDir = path.join(
+      exportRoot,
+      'share_packs',
+      sanitizeFileName(null, `${character.displayName}__${shortStableIdForPath(cid)}__${toIsoSafeTimestamp()}`)
+    );
+    ensureDir(packDir);
+
+    const sheetDir = path.join(packDir, 'sheet');
+    const imagesDir = path.join(packDir, 'images');
+    const docsDir = path.join(packDir, 'docs');
+    ensureDir(sheetDir);
+    ensureDir(imagesDir);
+    ensureDir(docsDir);
+
+    const manifest = {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      character: {
+        id: cid,
+        displayName: character.displayName,
+        templateId: character.templateId,
+      },
+      includeSheet: !!includeSheet,
+      images: [],
+      docs: {
+        notes: [],
+        stories: [],
+        moodboard: [],
+      },
+    };
+
+    if (includeSheet) {
+      const paths = this.getCharacterPaths(cid);
+      const sheetOut = path.join(sheetDir, 'character.txt');
+      fs.copyFileSync(paths.sheetTxtPath, sheetOut);
+    }
+
+    const idsRaw = Array.isArray(imageIds) ? imageIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    for (const imageId of ids) {
+      const srcAbs = await this.getImageAbsPath({ imageId, kind: 'original' });
+      if (!srcAbs || !fs.existsSync(srcAbs)) continue;
+      const srcBase = path.basename(srcAbs);
+      const ext = path.extname(srcBase) || '';
+      const safeSrcBase = sanitizeFileName(srcBase, `image_${shortStableIdForPath(imageId)}${ext}`);
+      const destName = sanitizeFileName(null, `${shortStableIdForPath(imageId)}__${safeSrcBase}`);
+      const destAbs = uniquePath(imagesDir, destName);
+      fs.copyFileSync(srcAbs, destAbs);
+      manifest.images.push({ imageId, path: `images/${path.basename(destAbs)}` });
+    }
+
+    const wantedDocs = docIdsByType && typeof docIdsByType === 'object' ? docIdsByType : {};
+    const types = [
+      { docType: 'notes', ext: 'txt' },
+      { docType: 'stories', ext: 'txt' },
+      { docType: 'moodboard', ext: 'json' },
+    ];
+
+    for (const { docType, ext } of types) {
+      const listRaw = Array.isArray(wantedDocs[docType]) ? wantedDocs[docType] : [];
+      const docIds = Array.from(new Set(listRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+      for (const docId of docIds) {
+        const doc = await this.getDoc({ docType, docId });
+        if (!doc) continue;
+        const titleSafe = sanitizeFileName(String(doc.title ?? ''), docType);
+        const baseName = sanitizeFileName(null, `${docType}__${titleSafe}__${shortStableIdForPath(doc.id)}.${ext}`);
+        const destAbs = uniquePath(docsDir, baseName);
+        fs.writeFileSync(destAbs, String(doc.content ?? ''), 'utf8');
+        manifest.docs[docType].push({ docId: doc.id, title: doc.title, path: `docs/${path.basename(destAbs)}` });
+      }
+    }
+
+    const manifestPath = path.join(packDir, 'manifest.json');
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+    await this._audit('sharePack.export', cid, {
+      outDir: packDir,
+      includeSheet: !!includeSheet,
+      imageCount: manifest.images.length,
+      noteCount: manifest.docs.notes.length,
+      storyCount: manifest.docs.stories.length,
+      moodboardCount: manifest.docs.moodboard.length,
+    });
+    return { ok: true, outDir: packDir, manifestPath };
+  }
+
+  async exportMoodboardPng({ docId = null, title = 'Moodboard', pngBase64, outDir = null } = {}) {
+    const base64 = String(pngBase64 ?? '').trim();
+    if (!base64) throw new Error('pngBase64 is required');
+    const prefix = 'data:image/png;base64,';
+    const cleaned = base64.startsWith(prefix) ? base64.slice(prefix.length) : base64;
+    const bytes = Buffer.from(cleaned, 'base64');
+    if (!bytes.length) throw new Error('pngBase64 is invalid');
+
+    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    const safeTitle = sanitizeFileName(String(title ?? '').trim() || 'moodboard', 'moodboard');
+    const idPart = docId ? shortStableIdForPath(docId) : 'mood';
+    const fileName = sanitizeFileName(null, `${safeTitle}__${idPart}__${toIsoSafeTimestamp()}.png`);
+
+    const exportDir = path.join(exportRoot, 'moodboards');
+    ensureDir(exportDir);
+    const outPath = uniquePath(exportDir, fileName);
+    fs.writeFileSync(outPath, bytes);
+
+    await this._audit('moodboard.exportPng', null, { outPath, docId: docId ? String(docId) : null });
+    return { ok: true, path: outPath };
+  }
+
   _sheetTextToMarkdown(sheetText) {
     // Deterministic: wrap in fenced code block to preserve bytes.
     return ['# CastKit Codex Export', '', '```text', sheetText.replaceAll('\r\n', '\n').replaceAll('\r', '\n'), '```', ''].join('\n');

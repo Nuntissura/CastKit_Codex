@@ -156,6 +156,7 @@ export function CharacterView({
   onOpenLibraryDrawer,
   isLibraryDrawerOpen,
   onCloseLibraryDrawer,
+  onOpenExports,
 }: {
   characterId: string | null;
   onBack: () => void;
@@ -165,6 +166,7 @@ export function CharacterView({
   onOpenLibraryDrawer: () => void;
   isLibraryDrawerOpen: boolean;
   onCloseLibraryDrawer: () => void;
+  onOpenExports?: (ctx?: { characterId?: string | null; moodboardDocId?: string | null }) => void;
 }) {
   const [character, setCharacter] = React.useState<CKCCharacter | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -280,6 +282,7 @@ export function CharacterView({
     defaultLibraryRoot: string;
   } | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
+  const [exportRootOverride, setExportRootOverride] = React.useState<string | null>(null);
   const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
   const [selectedSpinOffId, setSelectedSpinOffId] = React.useState<string | null>(null);
   const [packIncludeValues, setPackIncludeValues] = React.useState<boolean>(true);
@@ -305,8 +308,8 @@ export function CharacterView({
   const [isLlmBusy, setIsLlmBusy] = React.useState<boolean>(false);
 
   const defaultExportsDir = React.useMemo(() => {
-    return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
-  }, [libraryRoot]);
+    return exportRootOverride || (libraryRoot ? joinPath(libraryRoot, 'exports') : null);
+  }, [exportRootOverride, libraryRoot]);
 
   React.useEffect(() => {
     return () => {
@@ -360,6 +363,8 @@ export function CharacterView({
       .getConfig()
       .then((cfg: any) => {
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+        if (typeof cfg?.exportRoot === 'string') setExportRootOverride(cfg.exportRoot);
+        else setExportRootOverride(null);
         const l2 = (cfg?.layoutCharacter2 && typeof cfg.layoutCharacter2 === 'object' ? cfg.layoutCharacter2 : null) as any;
         if (typeof l2?.leftFrac === 'number') setCharacterLeftFrac2(clamp01(l2.leftFrac));
 
@@ -3045,6 +3050,16 @@ export function CharacterView({
                       >
                         Open folder
                       </button>
+                      {onOpenExports ? (
+                        <button
+                          className={styles.btnSecondary}
+                          onClick={() => onOpenExports({ characterId, moodboardDocId })}
+                          disabled={isExporting}
+                          title="Open the centralized Export Hub"
+                        >
+                          Export hub…
+                        </button>
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>

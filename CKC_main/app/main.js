@@ -957,6 +957,21 @@ function registerIpcHandlers() {
         return { txtPath, mdPath, pdfPath };
     });
 
+    ipcMain.handle('ckc:exportImageSet', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportImageSet(params || {});
+    });
+
+    ipcMain.handle('ckc:exportSharePack', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportSharePack(params || {});
+    });
+
+    ipcMain.handle('ckc:exportMoodboardPng', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportMoodboardPng(params || {});
+    });
+
     ipcMain.handle('ckc:listVersions', async (_evt, characterId) => {
         const lib = await ensureLibrary();
         return lib.listVersions(characterId);

@@ -78,7 +78,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0060 | Pop-out reference window (always-on-top) | DONE | Codex | Separate viewer window synced to selection; always-on-top toggle. |
 | WP-0061 | Image annotations / pins (non-destructive) | DONE | Codex | Text pins + simple overlays stored as JSON per image; show/hide. |
 | WP-0062 | Stories corkboard / outliner | DONE | Codex | Story cards with drag reorder + links to chars/images. |
-| WP-0063 | Export hub (moodboards + image sets + share packs) | BACKLOG | Codex | Central export UI; moodboard PNG; image set export; share packs under `<libraryRoot>/exports/`. |
+| WP-0063 | Export hub (moodboards + image sets + share packs) | DONE | Codex | Central export UI; moodboard PNG; image set export; share packs under `<libraryRoot>/exports/`. |
 | WP-0064 | Web import (URL capture) | BACKLOG | Codex | Import from URL; store provenance metadata. |
 | WP-0065 | Smart Folders 2.0 (rule-based saved searches) | BACKLOG | Codex | Editable rules + live results. |
 | WP-0066 | Color tools (palettes + search) | BACKLOG | Codex | Extract palette + filter by color. |

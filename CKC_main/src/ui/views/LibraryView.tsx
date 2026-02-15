@@ -61,8 +61,10 @@ function dedupeTagsCaseInsensitive(tags: string[]): string[] {
 
 export function LibraryView({
   onOpenCharacter,
+  onOpenExports,
 }: {
   onOpenCharacter: (characterId: string, selectImageId?: string | null) => void;
+  onOpenExports?: () => void;
 }) {
   const splitterPx = 10;
   const minLeftPx = 360;
@@ -153,6 +155,7 @@ export function LibraryView({
   const [dupBusy, setDupBusy] = React.useState<boolean>(false);
   const [dupError, setDupError] = React.useState<string | null>(null);
   const [exportDir, setExportDir] = React.useState<string | null>(null);
+  const [exportRootOverride, setExportRootOverride] = React.useState<string | null>(null);
   const [templateAst, setTemplateAst] = React.useState<CKCTemplateAst | null>(null);
   const [exportSections, setExportSections] = React.useState<string[] | null>(null);
   const [spinOffs, setSpinOffs] = React.useState<CKCSpinOffListItem[] | null>(null);
@@ -162,8 +165,8 @@ export function LibraryView({
   const [isExporting, setIsExporting] = React.useState<boolean>(false);
 
   const defaultExportsDir = React.useMemo(() => {
-    return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
-  }, [libraryRoot]);
+    return exportRootOverride || (libraryRoot ? joinPath(libraryRoot, 'exports') : null);
+  }, [exportRootOverride, libraryRoot]);
 
   React.useEffect(() => {
     libraryLeftFracRef.current = libraryLeftFrac;
@@ -180,6 +183,8 @@ export function LibraryView({
         setConfigPath(typeof info?.configPath === 'string' ? info.configPath : null);
         const cfg: any = info?.config ?? null;
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+        if (typeof cfg?.exportRoot === 'string') setExportRootOverride(cfg.exportRoot);
+        else setExportRootOverride(null);
         if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
         if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
         const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
@@ -190,6 +195,8 @@ export function LibraryView({
           .getConfig()
           .then((cfg: any) => {
             if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
+            if (typeof cfg?.exportRoot === 'string') setExportRootOverride(cfg.exportRoot);
+            else setExportRootOverride(null);
             if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
             if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
             const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
@@ -1745,6 +1752,11 @@ export function LibraryView({
               >
                 Open folder
               </button>
+              {onOpenExports ? (
+                <button onClick={onOpenExports} title="Open the centralized Export Hub">
+                  Export hub…
+                </button>
+              ) : null}
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1754,7 +1766,8 @@ export function LibraryView({
                   setExportError(null);
                   setIsExporting(true);
                   try {
-                    const res = await window.ckc.exportEmptyTemplate({ outDir: exportDir });
+                    const outDir = exportDir || defaultExportsDir;
+                    const res = await window.ckc.exportEmptyTemplate({ outDir });
                     setLastExportPath(res.path);
                   } catch (err: unknown) {
                     setExportError(err instanceof Error ? err.message : String(err));
@@ -1788,8 +1801,9 @@ export function LibraryView({
                   setExportError(null);
                   setIsExporting(true);
                   try {
+                    const outDir = exportDir || defaultExportsDir;
                     const res = await window.ckc.exportTemplateFieldPack({
-                      outDir: exportDir,
+                      outDir,
                       spinoffId: selectedSpinOffId,
                       includeSections: exportSections,
                     });

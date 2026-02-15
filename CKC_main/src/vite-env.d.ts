@@ -456,6 +456,25 @@ interface Window {
       name: string;
     }>;
     exportBundle: (params?: unknown) => Promise<{ txtPath: string; mdPath: string; pdfPath: string }>;
+    exportImageSet: (params: {
+      characterId?: string | null;
+      imageIds: string[];
+      outDir?: string | null;
+      setName?: string | null;
+    }) => Promise<{ ok: true; outDir: string; written: Array<{ imageId: string; path: string }>; skipped: Array<{ imageId: string; reason: string }> }>;
+    exportSharePack: (params: {
+      characterId: string;
+      outDir?: string | null;
+      includeSheet?: boolean;
+      imageIds?: string[];
+      docIdsByType?: { notes?: string[]; stories?: string[]; moodboard?: string[] };
+    }) => Promise<{ ok: true; outDir: string; manifestPath: string }>;
+    exportMoodboardPng: (params: {
+      docId?: string | null;
+      title?: string;
+      pngBase64: string;
+      outDir?: string | null;
+    }) => Promise<{ ok: true; path: string }>;
     exportFieldPack: (params?: unknown) => Promise<{ path: string; lineCount: number; spinoffId: string | null; name: string }>;
     openPath: (filePath: string) => Promise<{ ok: true }>;
     copyText: (text: string) => void;

@@ -343,6 +343,13 @@ This section defines planned near-term features that are likely low-effort/high-
   - Export filtered/selected image sets to a chosen folder (and optionally zip)
   - Export “share pack” per character (sheet + selected images + selected docs)
 - Default export destination is under `<libraryRoot>/exports/` unless user chooses otherwise.
+- Export hub provides a persistent “Exports folder” setting:
+  - Default is `<libraryRoot>/exports/` (portable-safe)
+  - User can override via folder picker (applies to all exports)
+- Exports are organized into subfolders under the exports folder:
+  - `moodboards/`
+  - `image_sets/`
+  - `share_packs/`
 - Exports must respect non-negotiables (no rewriting; canonical template bytes preserved).
 
 ### 11.11 Web import / URL capture (WP-0064)
