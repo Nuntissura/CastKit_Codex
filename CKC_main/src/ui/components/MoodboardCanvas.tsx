@@ -47,6 +47,7 @@ export type MoodboardImage = {
   y: number; // normalized center y
   w: number; // normalized width
   h: number; // normalized height
+  rot?: number; // degrees (clockwise)
   z?: number; // z-order (higher draws on top)
   name?: string;
   mask?: { shapeId: string }; // clip this image to a shape frame (optional)
@@ -61,6 +62,7 @@ export type MoodboardText = {
   y: number; // normalized center y
   w: number; // normalized width
   h: number; // normalized height
+  rot?: number; // degrees (clockwise)
   z?: number; // z-order (higher draws on top)
   name?: string;
   text: string;
@@ -84,6 +86,7 @@ export type MoodboardShape = {
   y: number; // normalized center y
   w: number; // normalized width
   h: number; // normalized height
+  rot?: number; // degrees (clockwise)
   z?: number; // z-order (higher draws on top)
   fill?: MoodboardFill;
   stroke?: { color: string; width: number };
@@ -165,6 +168,66 @@ function compareZAsc(
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+function normalizeAngleDeg(deg: number): number {
+  const n = Number(deg);
+  if (!Number.isFinite(n)) return 0;
+  let d = n % 360;
+  if (d < 0) d += 360;
+  if (Object.is(d, -0)) d = 0;
+  return d;
+}
+
+function degToRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+function toLocalXY(x: number, y: number, cx: number, cy: number, rotDeg: number): { x: number; y: number } {
+  const rot = normalizeAngleDeg(rotDeg);
+  if (!rot) return { x: x - cx, y: y - cy };
+  const rad = degToRad(rot);
+  const cos = Math.cos(-rad);
+  const sin = Math.sin(-rad);
+  const dx = x - cx;
+  const dy = y - cy;
+  return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+}
+
+function fromLocalXY(x: number, y: number, cx: number, cy: number, rotDeg: number): { x: number; y: number } {
+  const rot = normalizeAngleDeg(rotDeg);
+  if (!rot) return { x: cx + x, y: cy + y };
+  const rad = degToRad(rot);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { x: cx + x * cos - y * sin, y: cy + x * sin + y * cos };
+}
+
+function pointInRotatedRect(pt: { x: number; y: number }, box: { x: number; y: number; w: number; h: number; rot?: number }): boolean {
+  const w = Number(box.w) || 0;
+  const h = Number(box.h) || 0;
+  if (w <= 0 || h <= 0) return false;
+  const cx = Number(box.x) || 0;
+  const cy = Number(box.y) || 0;
+  const rotDeg = Number((box as any).rot) || 0;
+  const local = toLocalXY(pt.x, pt.y, cx, cy, rotDeg);
+  return Math.abs(local.x) <= w / 2 && Math.abs(local.y) <= h / 2;
+}
+
+function pointInRotatedEllipse(pt: { x: number; y: number }, box: { x: number; y: number; w: number; h: number; rot?: number }): boolean {
+  const w = Number(box.w) || 0;
+  const h = Number(box.h) || 0;
+  if (w <= 0 || h <= 0) return false;
+  const cx = Number(box.x) || 0;
+  const cy = Number(box.y) || 0;
+  const rotDeg = Number((box as any).rot) || 0;
+  const local = toLocalXY(pt.x, pt.y, cx, cy, rotDeg);
+  const rx = w / 2;
+  const ry = h / 2;
+  if (rx <= 0 || ry <= 0) return false;
+  const nx = local.x / rx;
+  const ny = local.y / ry;
+  return nx * nx + ny * ny <= 1;
 }
 
 type ViewTransform = { zoom: number; panX: number; panY: number };
@@ -295,6 +358,18 @@ export function MoodboardCanvas({
         moved: boolean;
       }
   >(null);
+  const rotateRef = React.useRef<
+    | null
+    | {
+        itemKind: Exclude<MoodboardItemKind, 'connector'>;
+        id: string;
+        startItem: MoodboardImage | MoodboardText | MoodboardShape;
+        startState: MoodboardState;
+        startAngleRad: number;
+        startRotDeg: number;
+        moved: boolean;
+      }
+  >(null);
   const valueRef = React.useRef<MoodboardState>(value);
   const toolRef = React.useRef<MoodboardTool>('pen');
   const sizeRef = React.useRef<number>(3);
@@ -352,6 +427,7 @@ export function MoodboardCanvas({
   const [snapToGrid, setSnapToGrid] = React.useState<boolean>(false);
   const [selection, setSelection] = React.useState<Selection>([]);
   const [showLayers, setShowLayers] = React.useState<boolean>(false);
+  const [showInspector, setShowInspector] = React.useState<boolean>(false);
   const [contextMenu, setContextMenu] = React.useState<null | { x: number; y: number }>(null);
   const [, setHistoryVersion] = React.useState<number>(0);
 
@@ -383,6 +459,7 @@ export function MoodboardCanvas({
     toolRef.current = tool;
     if (tool !== 'move' && tool !== 'transform') dragRef.current = null;
     if (tool !== 'transform') resizeRef.current = null;
+    if (tool !== 'transform') rotateRef.current = null;
     if (tool !== 'transform') connectorEditRef.current = null;
     if (tool !== 'gradient') gradientDragRef.current = null;
     if (tool !== 'shape') shapeDragRef.current = null;
@@ -641,6 +718,13 @@ export function MoodboardCanvas({
       const top = cy - h / 2;
 
       ctx.save();
+      const rotDeg = normalizeAngleDeg(Number(s.rot) || 0);
+      if (rotDeg) {
+        const rad = degToRad(rotDeg);
+        ctx.translate(cx, cy);
+        ctx.rotate(rad);
+        ctx.translate(-cx, -cy);
+      }
       ctx.beginPath();
       if (s.shape === 'ellipse') ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
       else ctx.rect(left, top, w, h);
@@ -755,6 +839,21 @@ export function MoodboardCanvas({
       const dx = cx - dw / 2;
       const dy = cy - dh / 2;
 
+      const imgRotDeg = normalizeAngleDeg(Number(img.rot) || 0);
+      const imgRot = imgRotDeg ? degToRad(imgRotDeg) : 0;
+      const drawImage = () => {
+        if (!imgRot) {
+          ctx.drawImage(el, dx, dy, dw, dh);
+          return;
+        }
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(imgRot);
+        ctx.translate(-cx, -cy);
+        ctx.drawImage(el, dx, dy, dw, dh);
+        ctx.restore();
+      };
+
       const maskShapeId = (img as any)?.mask?.shapeId;
       const maskShape =
         typeof maskShapeId === 'string' && maskShapeId.trim() ? (shapeById.get(maskShapeId.trim()) as MoodboardShape | undefined) : undefined;
@@ -768,17 +867,26 @@ export function MoodboardCanvas({
           const mleft = mcx - mw / 2;
           const mtop = mcy - mh / 2;
           ctx.save();
+          ctx.save();
+          const maskRotDeg = normalizeAngleDeg(Number(maskShape.rot) || 0);
+          if (maskRotDeg) {
+            const rad = degToRad(maskRotDeg);
+            ctx.translate(mcx, mcy);
+            ctx.rotate(rad);
+            ctx.translate(-mcx, -mcy);
+          }
           ctx.beginPath();
           if (maskShape.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
           else ctx.rect(mleft, mtop, mw, mh);
+          ctx.restore();
           ctx.clip();
-          ctx.drawImage(el, dx, dy, dw, dh);
+          drawImage();
           ctx.restore();
           return;
         }
       }
 
-      ctx.drawImage(el, dx, dy, dw, dh);
+      drawImage();
     };
 
     const drawTextItem = (t: MoodboardText) => {
@@ -799,6 +907,13 @@ export function MoodboardCanvas({
       const bottomLimit = top + h - padding;
 
       ctx.save();
+      const rotDeg = normalizeAngleDeg(Number(t.rot) || 0);
+      if (rotDeg) {
+        const rad = degToRad(rotDeg);
+        ctx.translate(cx, cy);
+        ctx.rotate(rad);
+        ctx.translate(-cx, -cy);
+      }
       ctx.fillStyle = t.bg || 'rgba(253, 245, 230, 0.96)';
       ctx.strokeStyle = 'rgba(0,0,0,0.25)';
       ctx.lineWidth = invZoom;
@@ -973,7 +1088,43 @@ export function MoodboardCanvas({
     }
 
     if (selectionUnits.length) {
+      const onlySel = selection.length === 1 ? selection[0] : null;
+      const onlyBoxItem =
+        onlySel?.kind === 'image'
+          ? imageById.get(onlySel.id)
+          : onlySel?.kind === 'text'
+            ? textById.get(onlySel.id)
+            : onlySel?.kind === 'shape'
+              ? shapeById.get(onlySel.id)
+              : null;
+
       for (const u of selectionUnits) {
+        if (onlySel && onlyBoxItem && u.key === `${onlySel.kind}:${onlySel.id}`) {
+          const cx = (Number((onlyBoxItem as any).x) || 0) * rect.width;
+          const cy = (Number((onlyBoxItem as any).y) || 0) * rect.height;
+          const w = (Number((onlyBoxItem as any).w) || 0) * rect.width;
+          const h = (Number((onlyBoxItem as any).h) || 0) * rect.height;
+          if (w <= 0 || h <= 0) continue;
+          const rotDeg = normalizeAngleDeg(Number((onlyBoxItem as any).rot) || 0);
+          const nw = fromLocalXY(-w / 2, -h / 2, cx, cy, rotDeg);
+          const ne = fromLocalXY(w / 2, -h / 2, cx, cy, rotDeg);
+          const se = fromLocalXY(w / 2, h / 2, cx, cy, rotDeg);
+          const sw = fromLocalXY(-w / 2, h / 2, cx, cy, rotDeg);
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+          ctx.lineWidth = 2 * invZoom;
+          ctx.setLineDash([6 * invZoom, 5 * invZoom]);
+          ctx.beginPath();
+          ctx.moveTo(nw.x, nw.y);
+          ctx.lineTo(ne.x, ne.y);
+          ctx.lineTo(se.x, se.y);
+          ctx.lineTo(sw.x, sw.y);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.restore();
+          continue;
+        }
+
         const left = u.bounds.left * rect.width;
         const top = u.bounds.top * rect.height;
         const right = u.bounds.right * rect.width;
@@ -999,6 +1150,7 @@ export function MoodboardCanvas({
         const handleSize = 10 * invZoom;
         const half = handleSize / 2;
         const handles: Array<{ x: number; y: number }> = [];
+        let rotateHandle: null | { x: number; y: number; topMidX: number; topMidY: number } = null;
         const only = selection.length === 1 ? selection[0] : null;
         if (only?.kind === 'connector') {
           const conn = connectorById.get(only.id);
@@ -1007,6 +1159,24 @@ export function MoodboardCanvas({
               { x: (Number(conn.ax) || 0) * rect.width, y: (Number(conn.ay) || 0) * rect.height },
               { x: (Number(conn.bx) || 0) * rect.width, y: (Number(conn.by) || 0) * rect.height }
             );
+          }
+        } else if (only && onlyBoxItem && (only.kind === 'image' || only.kind === 'text' || only.kind === 'shape')) {
+          const cx = (Number((onlyBoxItem as any).x) || 0) * rect.width;
+          const cy = (Number((onlyBoxItem as any).y) || 0) * rect.height;
+          const w = (Number((onlyBoxItem as any).w) || 0) * rect.width;
+          const h = (Number((onlyBoxItem as any).h) || 0) * rect.height;
+          if (w > 0 && h > 0) {
+            const rotDeg = normalizeAngleDeg(Number((onlyBoxItem as any).rot) || 0);
+            const nw = fromLocalXY(-w / 2, -h / 2, cx, cy, rotDeg);
+            const ne = fromLocalXY(w / 2, -h / 2, cx, cy, rotDeg);
+            const se = fromLocalXY(w / 2, h / 2, cx, cy, rotDeg);
+            const sw = fromLocalXY(-w / 2, h / 2, cx, cy, rotDeg);
+            handles.push(nw, ne, se, sw);
+
+            const offset = 22 * invZoom;
+            const topMid = fromLocalXY(0, -h / 2, cx, cy, rotDeg);
+            const hp = fromLocalXY(0, -h / 2 - offset, cx, cy, rotDeg);
+            rotateHandle = { x: hp.x, y: hp.y, topMidX: topMid.x, topMidY: topMid.y };
           }
         }
         if (!handles.length) {
@@ -1025,6 +1195,17 @@ export function MoodboardCanvas({
         for (const p of handles) {
           ctx.beginPath();
           ctx.rect(p.x - half, p.y - half, handleSize, handleSize);
+          ctx.fill();
+          ctx.stroke();
+        }
+        if (rotateHandle) {
+          const r = 8 * invZoom;
+          ctx.beginPath();
+          ctx.moveTo(rotateHandle.topMidX, rotateHandle.topMidY);
+          ctx.lineTo(rotateHandle.x, rotateHandle.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(rotateHandle.x, rotateHandle.y, r, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -1086,6 +1267,7 @@ export function MoodboardCanvas({
     if (!past.length) return;
     dragRef.current = null;
     resizeRef.current = null;
+    rotateRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
     connectorDragRef.current = null;
@@ -1109,6 +1291,7 @@ export function MoodboardCanvas({
     if (!future.length) return;
     dragRef.current = null;
     resizeRef.current = null;
+    rotateRef.current = null;
     gradientDragRef.current = null;
     shapeDragRef.current = null;
     connectorDragRef.current = null;
@@ -1445,6 +1628,42 @@ export function MoodboardCanvas({
               }
             }
 
+            if (u.kind === 'item' && u.item && u.item.kind !== 'connector') {
+              const it =
+                u.item.kind === 'image'
+                  ? imageById.get(u.item.id)
+                  : u.item.kind === 'text'
+                    ? textById.get(u.item.id)
+                    : shapeById.get(u.item.id);
+              if (it && !(it as any).locked) {
+                const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+                const rotDeg = normalizeAngleDeg(Number((it as any).rot) || 0);
+                const icx = (Number((it as any).x) || 0) * rect.width;
+                const icy = (Number((it as any).y) || 0) * rect.height;
+                const iw = (Number((it as any).w) || 0) * rect.width;
+                const ih = (Number((it as any).h) || 0) * rect.height;
+                if (iw > 0 && ih > 0) {
+                  const offset = 22 / zoom;
+                  const radius = 8 / zoom;
+                  const hp = fromLocalXY(0, -ih / 2 - offset, icx, icy, rotDeg);
+                  if (Math.hypot(px - hp.x, py - hp.y) <= radius) {
+                    rotateRef.current = {
+                      itemKind: u.item.kind,
+                      id: u.item.id,
+                      startItem: it,
+                      startState: current,
+                      startAngleRad: Math.atan2(py - icy, px - icx),
+                      startRotDeg: rotDeg,
+                      moved: false,
+                    };
+                    canvas.setPointerCapture(evt.pointerId);
+                    redraw();
+                    return;
+                  }
+                }
+              }
+            }
+
             const left = u.bounds.left * rect.width;
             const right = u.bounds.right * rect.width;
             const top = u.bounds.top * rect.height;
@@ -1452,6 +1671,31 @@ export function MoodboardCanvas({
 
             const hitHandle = ((): ResizeHandle | null => {
               const half = 7 / Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+              if (u.kind === 'item' && u.item && u.item.kind !== 'connector') {
+                const it =
+                  u.item.kind === 'image'
+                    ? imageById.get(u.item.id)
+                    : u.item.kind === 'text'
+                      ? textById.get(u.item.id)
+                      : shapeById.get(u.item.id);
+                if (it && !(it as any).hidden) {
+                  const icx = (Number((it as any).x) || 0) * rect.width;
+                  const icy = (Number((it as any).y) || 0) * rect.height;
+                  const iw = (Number((it as any).w) || 0) * rect.width;
+                  const ih = (Number((it as any).h) || 0) * rect.height;
+                  const rotDeg = normalizeAngleDeg(Number((it as any).rot) || 0);
+                  const checks: Array<{ h: ResizeHandle; x: number; y: number }> = [
+                    { h: 'nw', ...fromLocalXY(-iw / 2, -ih / 2, icx, icy, rotDeg) },
+                    { h: 'ne', ...fromLocalXY(iw / 2, -ih / 2, icx, icy, rotDeg) },
+                    { h: 'se', ...fromLocalXY(iw / 2, ih / 2, icx, icy, rotDeg) },
+                    { h: 'sw', ...fromLocalXY(-iw / 2, ih / 2, icx, icy, rotDeg) },
+                  ];
+                  for (const c of checks) {
+                    if (Math.abs(px - c.x) <= half && Math.abs(py - c.y) <= half) return c.h;
+                  }
+                }
+                return null;
+              }
               const checks: Array<{ h: ResizeHandle; x: number; y: number }> = [
                 { h: 'nw', x: left, y: top },
                 { h: 'ne', x: right, y: top },
@@ -1584,50 +1828,22 @@ export function MoodboardCanvas({
             if (c.kind === 'text') {
               const t = texts[c.index];
               if (!t || t.hidden) continue;
-              const w = Number(t.w) || 0;
-              const h = Number(t.h) || 0;
-              if (w <= 0 || h <= 0) continue;
-              const left = (Number(t.x) || 0) - w / 2;
-              const right = (Number(t.x) || 0) + w / 2;
-              const top = (Number(t.y) || 0) - h / 2;
-              const bottom = (Number(t.y) || 0) + h / 2;
-              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'text', id: t.id };
+              if (pointInRotatedRect(pt, t)) return { kind: 'text', id: t.id };
               continue;
             }
 
             if (c.kind === 'image') {
               const img = images[c.index];
               if (!img || img.hidden) continue;
-              const w = Number(img.w) || 0;
-              const h = Number(img.h) || 0;
-              if (w <= 0 || h <= 0) continue;
-              const left = (Number(img.x) || 0) - w / 2;
-              const right = (Number(img.x) || 0) + w / 2;
-              const top = (Number(img.y) || 0) - h / 2;
-              const bottom = (Number(img.y) || 0) + h / 2;
-              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) {
+              if (pointInRotatedRect(pt, img)) {
                 const maskShapeId = (img as any)?.mask?.shapeId;
                 if (typeof maskShapeId === 'string' && maskShapeId.trim()) {
                   const s = shapeById.get(maskShapeId.trim());
                   if (s) {
-                    const scx = Number(s.x) || 0;
-                    const scy = Number(s.y) || 0;
-                    const sw = Number(s.w) || 0;
-                    const sh = Number(s.h) || 0;
-                    if (sw > 0 && sh > 0) {
-                      if (s.shape === 'ellipse') {
-                        const rx = sw / 2;
-                        const ry = sh / 2;
-                        const dx = (pt.x - scx) / rx;
-                        const dy = (pt.y - scy) / ry;
-                        if (dx * dx + dy * dy > 1) continue;
-                      } else {
-                        const sLeft = scx - sw / 2;
-                        const sRight = scx + sw / 2;
-                        const sTop = scy - sh / 2;
-                        const sBottom = scy + sh / 2;
-                        if (pt.x < sLeft || pt.x > sRight || pt.y < sTop || pt.y > sBottom) continue;
-                      }
+                    if (s.shape === 'ellipse') {
+                      if (!pointInRotatedEllipse(pt, s)) continue;
+                    } else {
+                      if (!pointInRotatedRect(pt, s)) continue;
                     }
                   }
                 }
@@ -1689,38 +1905,36 @@ export function MoodboardCanvas({
               const cyPx = cy * rect.height;
               const rxPx = rx * rect.width;
               const ryPx = ry * rect.height;
+              const localPx = toLocalXY(px, py, cxPx, cyPx, Number(s.rot) || 0);
 
               if (s.shape === 'ellipse') {
                 if (rxPx <= 0 || ryPx <= 0) continue;
-                const nx = (px - cxPx) / rxPx;
-                const ny = (py - cyPx) / ryPx;
+                const nx = localPx.x / rxPx;
+                const ny = localPx.y / ryPx;
                 const r = Math.sqrt(nx * nx + ny * ny);
                 const dist = Math.abs(r - 1) * Math.min(rxPx, ryPx);
                 if (dist <= tol) return { kind: 'shape', id: s.id };
               } else {
-                const left = cxPx - rxPx;
-                const right = cxPx + rxPx;
-                const top = cyPx - ryPx;
-                const bottom = cyPx + ryPx;
-                if (px < left - tol || px > right + tol || py < top - tol || py > bottom + tol) continue;
-                const edgeDist = Math.min(Math.abs(px - left), Math.abs(px - right), Math.abs(py - top), Math.abs(py - bottom));
+                const left = -rxPx;
+                const right = rxPx;
+                const top = -ryPx;
+                const bottom = ryPx;
+                if (localPx.x < left - tol || localPx.x > right + tol || localPx.y < top - tol || localPx.y > bottom + tol) continue;
+                const edgeDist = Math.min(
+                  Math.abs(localPx.x - left),
+                  Math.abs(localPx.x - right),
+                  Math.abs(localPx.y - top),
+                  Math.abs(localPx.y - bottom)
+                );
                 if (edgeDist <= tol) return { kind: 'shape', id: s.id };
               }
               continue;
             }
 
             if (s.shape === 'ellipse') {
-              if (rx <= 0 || ry <= 0) continue;
-              const dx = pt.x - cx;
-              const dy = pt.y - cy;
-              const v = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
-              if (v <= 1) return { kind: 'shape', id: s.id };
+              if (pointInRotatedEllipse(pt, s)) return { kind: 'shape', id: s.id };
             } else {
-              const left = cx - rx;
-              const right = cx + rx;
-              const top = cy - ry;
-              const bottom = cy + ry;
-              if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return { kind: 'shape', id: s.id };
+              if (pointInRotatedRect(pt, s)) return { kind: 'shape', id: s.id };
             }
           }
 
@@ -2232,6 +2446,69 @@ export function MoodboardCanvas({
         return;
       }
 
+      const rotating = rotateRef.current;
+      if (rotating) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        const basis = rotating.startItem;
+        if (!basis || (basis as any).locked) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const cx = Number((basis as any).x) || 0;
+        const cy = Number((basis as any).y) || 0;
+        const cxPx = cx * rect.width;
+        const cyPx = cy * rect.height;
+        const px = pt.x * rect.width;
+        const py = pt.y * rect.height;
+
+        const ang = Math.atan2(py - cyPx, px - cxPx);
+        let delta = ang - rotating.startAngleRad;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        let nextRot = rotating.startRotDeg + (delta * 180) / Math.PI;
+        if (evt.shiftKey) nextRot = Math.round(nextRot / 15) * 15;
+        nextRot = normalizeAngleDeg(nextRot);
+
+        const cur = valueRef.current;
+        if (rotating.itemKind === 'image') {
+          const idx = (cur.images || []).findIndex((x) => x && x.id === rotating.id);
+          if (idx < 0) return;
+          const img = cur.images[idx];
+          if (!img || img.locked) return;
+          if (normalizeAngleDeg(Number(img.rot) || 0) === nextRot) return;
+          const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
+          valueRef.current = { ...cur, images: nextImages };
+          rotating.moved = true;
+          redraw();
+          return;
+        }
+
+        if (rotating.itemKind === 'shape') {
+          const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          const idx = shapes.findIndex((x) => x && x.id === rotating.id);
+          if (idx < 0) return;
+          const s = shapes[idx];
+          if (!s || s.locked) return;
+          if (normalizeAngleDeg(Number(s.rot) || 0) === nextRot) return;
+          const nextShapes = shapes.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
+          valueRef.current = { ...cur, shapes: nextShapes };
+          rotating.moved = true;
+          redraw();
+          return;
+        }
+
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const idx = texts.findIndex((x) => x && x.id === rotating.id);
+        if (idx < 0) return;
+        const t = texts[idx];
+        if (!t || t.locked) return;
+        if (normalizeAngleDeg(Number(t.rot) || 0) === nextRot) return;
+        const nextTexts = texts.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
+        valueRef.current = { ...cur, texts: nextTexts };
+        rotating.moved = true;
+        redraw();
+        return;
+      }
+
       const resizing = resizeRef.current;
       if (resizing) {
         const pt = pointFromEvent(evt, canvas, viewRef.current);
@@ -2251,7 +2528,52 @@ export function MoodboardCanvas({
           let nextW = Number((basis as any).w) || 0;
           let nextH = Number((basis as any).h) || 0;
 
-          if (isAlt) {
+          const rotDeg = normalizeAngleDeg(Number((basis as any).rot) || 0);
+          if (rotDeg) {
+            const startX = nextX;
+            const startY = nextY;
+            const startW = nextW;
+            const startH = nextH;
+            const local = toLocalXY(pt.x, pt.y, startX, startY, rotDeg);
+
+            if (isAlt) {
+              let w = Math.abs(local.x) * 2;
+              let h = Math.abs(local.y) * 2;
+              if (isShift) {
+                if (h <= 0) h = minSize;
+                if (w / h > ratio) w = h * ratio;
+                else h = w / ratio;
+              }
+              nextW = Math.min(1, Math.max(minSize, w));
+              nextH = Math.min(1, Math.max(minSize, h));
+              nextX = clamp01(startX);
+              nextY = clamp01(startY);
+            } else {
+              const anchor =
+                resizing.handle === 'nw'
+                  ? { x: startW / 2, y: startH / 2 }
+                  : resizing.handle === 'ne'
+                    ? { x: -startW / 2, y: startH / 2 }
+                    : resizing.handle === 'se'
+                      ? { x: -startW / 2, y: -startH / 2 }
+                      : { x: startW / 2, y: -startH / 2 };
+
+              let w = Math.abs(anchor.x - local.x);
+              let h = Math.abs(anchor.y - local.y);
+              if (isShift) {
+                if (h <= 0) h = minSize;
+                if (w / h > ratio) w = h * ratio;
+                else h = w / ratio;
+              }
+              nextW = Math.min(1, Math.max(minSize, w));
+              nextH = Math.min(1, Math.max(minSize, h));
+
+              const centerLocal = { x: (anchor.x + local.x) / 2, y: (anchor.y + local.y) / 2 };
+              const center = fromLocalXY(centerLocal.x, centerLocal.y, startX, startY, rotDeg);
+              nextX = clamp01(center.x);
+              nextY = clamp01(center.y);
+            }
+          } else if (isAlt) {
             let w = Math.abs(pt.x - nextX) * 2;
             let h = Math.abs(pt.y - nextY) * 2;
             if (isShift) {
@@ -2837,6 +3159,17 @@ export function MoodboardCanvas({
         gradientDragRef.current = null;
         setGradientAngle(gradientDrag.lastAngle);
         commit(valueRef.current, { historyPrev: gradientDrag.startState });
+        return;
+      }
+
+      const rotating = rotateRef.current;
+      if (rotating) {
+        rotateRef.current = null;
+        if (rotating.moved) {
+          commit(valueRef.current, { historyPrev: rotating.startState });
+          return;
+        }
+        redraw();
         return;
       }
 
@@ -3862,6 +4195,16 @@ export function MoodboardCanvas({
         : null
       : null;
 
+  const selectedBoxSel = selection.length === 1 ? selection[0] : null;
+  const selectedBoxItem =
+    selectedBoxSel?.kind === 'image'
+      ? layerImages.find((img) => img && img.id === selectedBoxSel.id) ?? null
+      : selectedBoxSel?.kind === 'shape'
+        ? layerShapes.find((s) => s && s.id === selectedBoxSel.id) ?? null
+        : selectedBoxSel?.kind === 'text'
+          ? layerTexts.find((t) => t && t.id === selectedBoxSel.id) ?? null
+          : null;
+
   const maskShapeIdsForUi = React.useMemo(() => {
     const out = new Set<string>();
     for (const img of layerImages) {
@@ -3877,6 +4220,55 @@ export function MoodboardCanvas({
   const selectedImageForMask =
     selection.length === 1 && selection[0]?.kind === 'image' ? layerImages.find((img) => img && img.id === selection[0].id) ?? null : null;
   const canRemoveMask = !!(selectedImageForMask as any)?.mask?.shapeId;
+
+  const updateSelectedBoxItem = React.useCallback(
+    (patch: Partial<{ x: number; y: number; w: number; h: number; rot: number }>) => {
+      const sel = selectedBoxSel;
+      if (!sel || (sel.kind !== 'image' && sel.kind !== 'shape' && sel.kind !== 'text')) return;
+      const cur = valueRef.current;
+      const minSize = 0.02;
+
+      const applyPatch = (box: any) => {
+        const next = { ...box };
+        if (patch.x != null) next.x = clamp01(Number(patch.x) || 0);
+        if (patch.y != null) next.y = clamp01(Number(patch.y) || 0);
+        if (patch.w != null) next.w = Math.min(1, Math.max(minSize, Number(patch.w) || minSize));
+        if (patch.h != null) next.h = Math.min(1, Math.max(minSize, Number(patch.h) || minSize));
+        if (patch.rot != null) next.rot = normalizeAngleDeg(Number(patch.rot) || 0);
+        return next;
+      };
+
+      if (sel.kind === 'image') {
+        const idx = (cur.images || []).findIndex((img) => img && img.id === sel.id);
+        if (idx < 0) return;
+        const img = cur.images[idx];
+        if (!img || img.locked) return;
+        const nextImages = cur.images.map((x, i) => (i === idx ? applyPatch(x) : x));
+        commit({ ...cur, images: nextImages });
+        return;
+      }
+
+      if (sel.kind === 'shape') {
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const idx = shapes.findIndex((s) => s && s.id === sel.id);
+        if (idx < 0) return;
+        const s = shapes[idx];
+        if (!s || s.locked) return;
+        const nextShapes = shapes.map((x, i) => (i === idx ? applyPatch(x) : x));
+        commit({ ...cur, shapes: nextShapes });
+        return;
+      }
+
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+      const idx = texts.findIndex((t) => t && t.id === sel.id);
+      if (idx < 0) return;
+      const t = texts[idx];
+      if (!t || t.locked) return;
+      const nextTexts = texts.map((x, i) => (i === idx ? applyPatch(x) : x));
+      commit({ ...cur, texts: nextTexts });
+    },
+    [commit, selectedBoxSel]
+  );
 
   return (
       <div className={styles.root}>
@@ -3940,6 +4332,9 @@ export function MoodboardCanvas({
           </button>
           <button className={styles.toolBtn} data-active={showLayers ? '1' : '0'} onClick={() => setShowLayers((v) => !v)}>
             Layers
+          </button>
+          <button className={styles.toolBtn} data-active={showInspector ? '1' : '0'} onClick={() => setShowInspector((v) => !v)}>
+            Inspector
           </button>
           <button className={styles.toolBtn} data-active={showGrid ? '1' : '0'} onClick={toggleGrid} title="Toggle grid overlay">
             Grid
@@ -4423,6 +4818,108 @@ export function MoodboardCanvas({
                     const texts = Array.isArray(value.texts) ? value.texts : [];
                     const nextTexts = texts.map((t) => (t && t.id === selectedText.id ? { ...t, fontSize: n } : t));
                     applyNoHistory({ ...value, texts: nextTexts }, { clearRedo: true });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+        {showInspector && selectedBoxSel && selectedBoxItem ? (
+          <div key={`${selectedBoxSel.kind}:${selectedBoxSel.id}`} className={styles.inspectorPanel} aria-label="Inspector">
+            <div className={styles.inspectorHeader}>
+              <div>Inspector</div>
+              <button className={styles.layerBtn} type="button" onClick={() => setShowInspector(false)} title="Close">
+                Close
+              </button>
+            </div>
+
+            <div className={styles.inspectorGrid}>
+              <label className={styles.inspectorField}>
+                X%
+                <input
+                  className={styles.inspectorInput}
+                  type="number"
+                  step="0.1"
+                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).x) || 0) * 1000)) / 10)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!Number.isFinite(n)) return;
+                    updateSelectedBoxItem({ x: n / 100 });
+                  }}
+                />
+              </label>
+
+              <label className={styles.inspectorField}>
+                Y%
+                <input
+                  className={styles.inspectorInput}
+                  type="number"
+                  step="0.1"
+                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).y) || 0) * 1000)) / 10)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!Number.isFinite(n)) return;
+                    updateSelectedBoxItem({ y: n / 100 });
+                  }}
+                />
+              </label>
+
+              <label className={styles.inspectorField}>
+                W%
+                <input
+                  className={styles.inspectorInput}
+                  type="number"
+                  step="0.1"
+                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).w) || 0) * 1000)) / 10)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!Number.isFinite(n)) return;
+                    updateSelectedBoxItem({ w: n / 100 });
+                  }}
+                />
+              </label>
+
+              <label className={styles.inspectorField}>
+                H%
+                <input
+                  className={styles.inspectorInput}
+                  type="number"
+                  step="0.1"
+                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).h) || 0) * 1000)) / 10)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!Number.isFinite(n)) return;
+                    updateSelectedBoxItem({ h: n / 100 });
+                  }}
+                />
+              </label>
+
+              <label className={styles.inspectorField}>
+                Rot°
+                <input
+                  className={styles.inspectorInput}
+                  type="number"
+                  step="1"
+                  defaultValue={String(Math.round(normalizeAngleDeg(Number((selectedBoxItem as any).rot) || 0)))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!Number.isFinite(n)) return;
+                    updateSelectedBoxItem({ rot: n });
                   }}
                 />
               </label>

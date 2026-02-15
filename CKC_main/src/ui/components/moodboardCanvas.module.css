@@ -226,3 +226,47 @@
   background: var(--glass-border);
   margin: 4px 0;
 }
+
+.inspectorPanel {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 280px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  padding: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 2;
+}
+
+.inspectorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.inspectorGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.inspectorField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.inspectorInput {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text);
+  font: inherit;
+}

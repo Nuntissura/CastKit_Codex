@@ -93,8 +93,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0075 | Moodboard: vector connectors | DONE | Codex | Editable line/arrow layers (not ink). |
 | WP-0076 | Moodboard: vector masks / clipping frames | DONE | Codex | Clip images into shapes (non-destructive). |
 | WP-0077 | Moodboard: selection power tools | DONE | Codex | Box select + copy/paste/duplicate + nudge + context menu (`npm test`, `npx tsc --noEmit`). |
-| WP-0078 | Moodboard: rotate + numeric inspector | IN_PROGRESS | Codex | Rotation + precise x/y/w/h editing. |
-| WP-0079 | Moodboard: guides/rulers + smart snapping | BACKLOG | Codex | Guides + alignment snapping cues. |
+| WP-0078 | Moodboard: rotate + numeric inspector | DONE | Codex | Rotate handle + Inspector (x/y/w/h/rot) (`npm test`, `npx tsc --noEmit`). |
+| WP-0079 | Moodboard: guides/rulers + smart snapping | IN_PROGRESS | Codex | Guides + alignment snapping cues. |
 | WP-0080 | Moodboard: layer folders + search/tags | BACKLOG | Codex | Nested folders + board-local tags + search. |
 | WP-0081 | Moodboard: styling (opacity/blend/shadow) | BACKLOG | Codex | Per-layer styling (non-destructive). |
 | WP-0082 | Moodboard: export powerhouse | BACKLOG | Codex | Hi-res + selection export + PDF. |
@@ -108,6 +108,6 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus
-- Current: WP-0078.
-- Next: WP-0079.
+- Current: WP-0079.
+- Next: WP-0080.
 - High-ROI backlog: WP-0083 (global search), WP-0084 (AI tagging), WP-0085 (templates), WP-0086 (macOS), WP-0087 (web export).
