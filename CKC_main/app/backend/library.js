@@ -1023,6 +1023,265 @@ class CKCLibrary {
     return Array.from(seen).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }
 
+  async listTagStats() {
+    const statsByTag = new Map();
+
+    const touch = (tagText) => {
+      const t = String(tagText ?? '').trim();
+      if (!t) return null;
+      if (this._isSystemTag(t)) return null;
+      if (!statsByTag.has(t)) {
+        statsByTag.set(t, {
+          tag: t,
+          imageCount: 0,
+          docCount: 0,
+          docNotesCount: 0,
+          docStoriesCount: 0,
+          docMoodboardCount: 0,
+          characterCount: 0,
+        });
+      }
+      return statsByTag.get(t);
+    };
+
+    const parseJsonArray = (raw) => {
+      try {
+        const parsed = JSON.parse(raw ?? '[]');
+        return Array.isArray(parsed) ? parsed.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // Seed from Tag dictionary (characters).
+    const tagRows = await all(this.db, 'SELECT tag_text FROM Tag');
+    for (const r of tagRows) touch(r.tag_text);
+
+    // Image tags: count per image (de-duped per asset).
+    const imageRows = await all(this.db, 'SELECT image_id, tags_json FROM ImageAsset');
+    for (const r of imageRows) {
+      const unique = new Set(parseJsonArray(r.tags_json));
+      for (const t of unique) {
+        const s = touch(t);
+        if (s) s.imageCount += 1;
+      }
+    }
+
+    // Doc tags: count per doc (de-duped per doc).
+    const docTables = [
+      { docType: 'notes', table: 'NoteDoc', col: 'docNotesCount' },
+      { docType: 'stories', table: 'StoryDoc', col: 'docStoriesCount' },
+      { docType: 'moodboard', table: 'MoodboardDoc', col: 'docMoodboardCount' },
+    ];
+    for (const dt of docTables) {
+      try {
+        const docRows = await all(this.db, `SELECT doc_id, tags_json FROM ${dt.table}`);
+        for (const r of docRows) {
+          const unique = new Set(parseJsonArray(r.tags_json));
+          for (const t of unique) {
+            const s = touch(t);
+            if (!s) continue;
+            s.docCount += 1;
+            s[dt.col] += 1;
+          }
+        }
+      } catch {
+        // Older DBs may not have doc tables yet.
+      }
+    }
+
+    // Character tags (manual + derived): count per character (de-duped per character+tag).
+    const charRows = await all(
+      this.db,
+      `SELECT t.tag_text AS tagText, COUNT(DISTINCT ct.character_id) AS c
+       FROM CharacterTag ct
+       JOIN Tag t ON t.tag_id = ct.tag_id
+       GROUP BY t.tag_text`,
+      []
+    );
+    for (const r of charRows) {
+      const s = touch(r.tagText);
+      if (s) s.characterCount = Number(r.c) || 0;
+    }
+
+    const list = Array.from(statsByTag.values());
+    list.sort((a, b) => {
+      const ta = (a.imageCount || 0) + (a.docCount || 0) + (a.characterCount || 0);
+      const tb = (b.imageCount || 0) + (b.docCount || 0) + (b.characterCount || 0);
+      if (tb !== ta) return tb - ta;
+      return String(a.tag).localeCompare(String(b.tag), undefined, { sensitivity: 'base' });
+    });
+    return list;
+  }
+
+  async mergeTags({ fromTags, toTag } = {}) {
+    const to = String(toTag ?? '').trim();
+    if (!to) throw new Error('toTag is required');
+    if (this._isSystemTag(to)) throw new Error('System tags cannot be merged/renamed');
+
+    const rawFrom = Array.isArray(fromTags) ? fromTags : [fromTags];
+    const fromList = [];
+    const seen = new Set();
+    for (const f of rawFrom) {
+      const s = String(f ?? '').trim();
+      if (!s) continue;
+      if (this._isSystemTag(s)) throw new Error('System tags cannot be merged/renamed');
+      if (s === to) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      fromList.push(s);
+    }
+    if (fromList.length === 0) return { ok: true, merged: 0 };
+
+    const fromSet = new Set(fromList);
+
+    const mergeJsonArray = (raw) => {
+      const arr = (() => {
+        try {
+          const parsed = JSON.parse(raw ?? '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return null;
+        }
+      })();
+      if (!arr) return { changed: false, nextJson: raw };
+
+      const out = [];
+      const seenOut = new Set();
+      let changed = false;
+      for (const t of arr) {
+        const s = String(t ?? '').trim();
+        if (!s) continue;
+        const next = fromSet.has(s) ? to : s;
+        if (next !== s) changed = true;
+        if (seenOut.has(next)) {
+          if (next === s) changed = true;
+          continue;
+        }
+        seenOut.add(next);
+        out.push(next);
+      }
+      return { changed, nextJson: JSON.stringify(out) };
+    };
+
+    const counts = { images: 0, docs: 0, tagTemplates: 0, savedSearches: 0, tagRules: 0, characters: 0 };
+
+    const placeholders = fromList.map(() => '?').join(',');
+    await run(this.db, 'BEGIN');
+    try {
+      // Update ImageAsset tags_json.
+      const imageRows = await all(this.db, `SELECT image_id, tags_json FROM ImageAsset`);
+      for (const r of imageRows) {
+        const { changed, nextJson } = mergeJsonArray(r.tags_json);
+        if (!changed) continue;
+        await run(this.db, `UPDATE ImageAsset SET tags_json = ? WHERE image_id = ?`, [nextJson, r.image_id]);
+        counts.images += 1;
+      }
+
+      // Update Doc tags_json.
+      for (const table of ['NoteDoc', 'StoryDoc', 'MoodboardDoc']) {
+        try {
+          const docRows = await all(this.db, `SELECT doc_id, tags_json FROM ${table}`);
+          for (const r of docRows) {
+            const { changed, nextJson } = mergeJsonArray(r.tags_json);
+            if (!changed) continue;
+            await run(this.db, `UPDATE ${table} SET tags_json = ? WHERE doc_id = ?`, [nextJson, r.doc_id]);
+            counts.docs += 1;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // Update TagTemplate tags_json (all versions).
+      try {
+        const tplRows = await all(this.db, `SELECT template_name, version, tags_json FROM TagTemplate`);
+        for (const r of tplRows) {
+          const { changed, nextJson } = mergeJsonArray(r.tags_json);
+          if (!changed) continue;
+          await run(this.db, `UPDATE TagTemplate SET tags_json = ? WHERE template_name = ? AND version = ?`, [
+            nextJson,
+            r.template_name,
+            r.version,
+          ]);
+          counts.tagTemplates += 1;
+        }
+      } catch {
+        // ignore
+      }
+
+      // Update SavedSearch tag filters.
+      try {
+        const ssRows = await all(this.db, `SELECT search_id, tag_filters_json FROM SavedSearch`);
+        for (const r of ssRows) {
+          const { changed, nextJson } = mergeJsonArray(r.tag_filters_json);
+          if (!changed) continue;
+          await run(
+            this.db,
+            `UPDATE SavedSearch SET tag_filters_json = ?, updated_at = CURRENT_TIMESTAMP WHERE search_id = ?`,
+            [nextJson, r.search_id]
+          );
+          counts.savedSearches += 1;
+        }
+      } catch {
+        // ignore
+      }
+
+      // Update TagRule emitted tags (so derived tags stay consistent after merge).
+      const toId = await this._ensureTag(to);
+      const tagRuleRes = await run(
+        this.db,
+        `UPDATE TagRule SET emit_tag = ?, updated_at = CURRENT_TIMESTAMP WHERE emit_tag IN (${placeholders})`,
+        [to, ...fromList]
+      );
+      counts.tagRules = Number(tagRuleRes?.changes) || 0;
+
+      // Merge CharacterTag entries (manual + derived).
+      const fromTagRows = await all(this.db, `SELECT tag_id, tag_text FROM Tag WHERE tag_text IN (${placeholders})`, fromList);
+      const fromIds = fromTagRows.map((r) => String(r.tag_id || '')).filter(Boolean);
+      if (fromIds.length > 0) {
+        const placeholdersIds = fromIds.map(() => '?').join(',');
+        const affected = await all(
+          this.db,
+          `SELECT DISTINCT character_id FROM CharacterTag WHERE tag_id IN (${placeholdersIds})`,
+          fromIds
+        );
+        const affectedIds = affected.map((r) => String(r.character_id || '')).filter(Boolean);
+
+        for (const fromId of fromIds) {
+          await run(
+            this.db,
+            `INSERT OR IGNORE INTO CharacterTag(character_id, tag_id, tag_type)
+             SELECT character_id, ?, tag_type FROM CharacterTag WHERE tag_id = ?`,
+            [toId, fromId]
+          );
+          await run(this.db, `DELETE FROM CharacterTag WHERE tag_id = ?`, [fromId]);
+        }
+
+        await run(this.db, `DELETE FROM Tag WHERE tag_id IN (${placeholdersIds})`, fromIds);
+
+        for (const characterId of affectedIds) {
+          const character = await this.getCharacter(characterId);
+          if (!character) continue;
+          const templateAst = await this.getTemplateAst(character.templateId);
+          await this._updateSearchBlob(templateAst, characterId, character.displayName, character.valuesById);
+        }
+        counts.characters = affectedIds.length;
+      }
+
+      await this._audit('tag.merge', null, { fromTags: fromList, toTag: to, counts });
+      await run(this.db, 'COMMIT');
+      return { ok: true, fromTags: fromList, toTag: to, counts };
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+  }
+
+  async renameTag({ fromTag, toTag } = {}) {
+    return this.mergeTags({ fromTags: [fromTag], toTag });
+  }
+
   async listFieldValueSuggestions({ fieldId, limit = 60 } = {}) {
     const fid = String(fieldId ?? '').trim();
     if (!fid) return [];

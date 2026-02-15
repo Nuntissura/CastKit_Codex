@@ -439,6 +439,21 @@ function registerIpcHandlers() {
         return lib.listDuplicateGroups(params || {});
     });
 
+    ipcMain.handle('ckc:listTagStats', async () => {
+        const lib = await ensureLibrary();
+        return lib.listTagStats();
+    });
+
+    ipcMain.handle('ckc:mergeTags', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.mergeTags(params || {});
+    });
+
+    ipcMain.handle('ckc:renameTag', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.renameTag(params || {});
+    });
+
     ipcMain.handle('ckc:selectLibraryRoot', async () => {
         const result = await dialog.showOpenDialog(mainWindow, {
             title: 'Select Library Root',

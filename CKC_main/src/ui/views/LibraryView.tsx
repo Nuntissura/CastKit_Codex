@@ -46,6 +46,19 @@ function tagsTextToArray(text: string): string[] {
   return Array.from(new Set(parts));
 }
 
+function dedupeTagsCaseInsensitive(tags: string[]): string[] {
+  const cleaned = (tags || []).map((t) => String(t).trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of cleaned) {
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
 export function LibraryView({
   onOpenCharacter,
 }: {
@@ -65,6 +78,7 @@ export function LibraryView({
   const [showExportsBar, setShowExportsBar] = React.useState<boolean>(false);
   const [showLibraryBar, setShowLibraryBar] = React.useState<boolean>(false);
   const [showInboxBar, setShowInboxBar] = React.useState<boolean>(false);
+  const [showTagsBar, setShowTagsBar] = React.useState<boolean>(false);
   const [leftMode, setLeftMode] = React.useState<'carousel' | 'inbox'>('carousel');
 
   const [queryText, setQueryText] = React.useState<string>('');
@@ -87,6 +101,12 @@ export function LibraryView({
   const [tagFilters, setTagFilters] = React.useState<string[]>([]);
   const [tagDraft, setTagDraft] = React.useState<string>('');
   const [allTags, setAllTags] = React.useState<string[]>([]);
+  const [pinnedTags, setPinnedTags] = React.useState<string[]>([]);
+  const [tagStats, setTagStats] = React.useState<CKCTagStats[] | null>(null);
+  const [tagManagerQuery, setTagManagerQuery] = React.useState<string>('');
+  const [tagManagerBusy, setTagManagerBusy] = React.useState<boolean>(false);
+  const [tagManagerMutating, setTagManagerMutating] = React.useState<boolean>(false);
+  const [tagManagerError, setTagManagerError] = React.useState<string | null>(null);
 
   const [inboxDir, setInboxDir] = React.useState<string>('');
   const [inboxIncludeSubdirs, setInboxIncludeSubdirs] = React.useState<boolean>(false);
@@ -161,6 +181,7 @@ export function LibraryView({
         const cfg: any = info?.config ?? null;
         if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
         if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
+        if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
         const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
         if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
       })
@@ -170,6 +191,7 @@ export function LibraryView({
           .then((cfg: any) => {
             if (typeof cfg?.libraryRoot === 'string') setLibraryRoot(cfg.libraryRoot);
             if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
+            if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
             const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
             if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
           })
@@ -190,6 +212,44 @@ export function LibraryView({
       .then((rows) => setAllTags(Array.isArray(rows) ? rows.map((t) => String(t)) : []))
       .catch(() => setAllTags([]));
   }, [refreshNonce]);
+
+  const reloadTagStats = React.useCallback(() => {
+    setTagManagerError(null);
+    setTagManagerBusy(true);
+    window.ckc
+      .listTagStats()
+      .then((rows) => setTagStats(Array.isArray(rows) ? rows : []))
+      .catch((err: unknown) => {
+        setTagManagerError(err instanceof Error ? err.message : String(err));
+        setTagStats([]);
+      })
+      .finally(() => setTagManagerBusy(false));
+  }, []);
+
+  React.useEffect(() => {
+    if (!showTagsBar) return;
+    reloadTagStats();
+  }, [showTagsBar, reloadTagStats, refreshNonce]);
+
+  const savePinnedTags = React.useCallback(async (next: string[]) => {
+    const cleaned = dedupeTagsCaseInsensitive(next);
+    setPinnedTags(cleaned);
+    try {
+      await window.ckc.setConfig({ pinnedTags: cleaned });
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  const togglePinnedTag = React.useCallback(
+    (tagText: string) => {
+      const t = String(tagText || '').trim();
+      if (!t) return;
+      const isPinned = pinnedTags.some((x) => String(x).toLowerCase() === t.toLowerCase());
+      void savePinnedTags(isPinned ? pinnedTags.filter((x) => String(x).toLowerCase() !== t.toLowerCase()) : [...pinnedTags, t]);
+    },
+    [pinnedTags, savePinnedTags]
+  );
 
   const reloadInbox = React.useCallback(() => {
     setInboxError(null);
@@ -283,6 +343,21 @@ export function LibraryView({
     }
     return out;
   }, [tagFilters]);
+
+  const cleanedPinnedTags = React.useMemo(() => dedupeTagsCaseInsensitive(pinnedTags), [pinnedTags]);
+
+  const activeTagFilterSet = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const t of cleanedTagFilters) s.add(String(t).toLowerCase());
+    return s;
+  }, [cleanedTagFilters]);
+
+  const filteredTagStats = React.useMemo(() => {
+    const rows = tagStats || [];
+    const q = String(tagManagerQuery || '').trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => String(r?.tag ?? '').toLowerCase().includes(q));
+  }, [tagStats, tagManagerQuery]);
 
   const tagsDatalistId = React.useId();
 
@@ -624,6 +699,84 @@ export function LibraryView({
     addTagFiltersFromText(draft);
     setTagDraft('');
   }, [tagDraft, addTagFiltersFromText]);
+
+  const replaceTagInFiltersAndPins = React.useCallback(
+    (fromTag: string, toTag: string) => {
+      const fromKey = String(fromTag || '').trim().toLowerCase();
+      const to = String(toTag || '').trim();
+      if (!fromKey || !to) return;
+
+      setTagFilters((prev) => dedupeTagsCaseInsensitive(prev.map((t) => (String(t).trim().toLowerCase() === fromKey ? to : t))));
+      void savePinnedTags(pinnedTags.map((t) => (String(t).trim().toLowerCase() === fromKey ? to : t)));
+    },
+    [pinnedTags, savePinnedTags]
+  );
+
+  const runRenameTag = React.useCallback(
+    async (stat: CKCTagStats) => {
+      const from = String(stat?.tag ?? '').trim();
+      if (!from) return;
+
+      const proposed = window.prompt(`Rename tag "${from}" to:`, from);
+      if (proposed == null) return;
+      const to = String(proposed || '').trim();
+      if (!to) return;
+      if (to.toLowerCase() === from.toLowerCase()) return;
+
+      const preview = `This tag appears on:\n- images: ${Number(stat.imageCount) || 0}\n- docs: ${Number(stat.docCount) || 0}\n- characters: ${
+        Number(stat.characterCount) || 0
+      }\n\n`;
+      const ok = window.confirm(`${preview}Rename "${from}" \u2192 "${to}"?\n\nThis changes structured tag fields across the library.`);
+      if (!ok) return;
+
+      setTagManagerError(null);
+      setTagManagerMutating(true);
+      try {
+        await window.ckc.renameTag({ fromTag: from, toTag: to });
+        replaceTagInFiltersAndPins(from, to);
+        setRefreshNonce((n) => n + 1);
+        reloadTagStats();
+      } catch (err: unknown) {
+        setTagManagerError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setTagManagerMutating(false);
+      }
+    },
+    [reloadTagStats, replaceTagInFiltersAndPins]
+  );
+
+  const runMergeTag = React.useCallback(
+    async (stat: CKCTagStats) => {
+      const from = String(stat?.tag ?? '').trim();
+      if (!from) return;
+
+      const proposed = window.prompt(`Merge tag "${from}" into:`, '');
+      if (proposed == null) return;
+      const to = String(proposed || '').trim();
+      if (!to) return;
+      if (to.toLowerCase() === from.toLowerCase()) return;
+
+      const preview = `This tag appears on:\n- images: ${Number(stat.imageCount) || 0}\n- docs: ${Number(stat.docCount) || 0}\n- characters: ${
+        Number(stat.characterCount) || 0
+      }\n\n`;
+      const ok = window.confirm(`${preview}Merge "${from}" \u2192 "${to}"?\n\nThis replaces "${from}" with "${to}" in structured tag fields.`);
+      if (!ok) return;
+
+      setTagManagerError(null);
+      setTagManagerMutating(true);
+      try {
+        await window.ckc.mergeTags({ fromTags: [from], toTag: to });
+        replaceTagInFiltersAndPins(from, to);
+        setRefreshNonce((n) => n + 1);
+        reloadTagStats();
+      } catch (err: unknown) {
+        setTagManagerError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setTagManagerMutating(false);
+      }
+    },
+    [reloadTagStats, replaceTagInFiltersAndPins]
+  );
 
   const effectiveLibraryLeftFrac = React.useMemo(() => {
     const frac = clamp01(libraryLeftFrac);
@@ -1334,6 +1487,39 @@ export function LibraryView({
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Pinned:</span>
+            {cleanedPinnedTags.length === 0 ? <span style={{ color: 'var(--text-secondary)' }}>(none)</span> : null}
+            {cleanedPinnedTags.map((t) => {
+              const key = String(t).toLowerCase();
+              const active = activeTagFilterSet.has(key);
+              return (
+                <button
+                  key={t}
+                  className={styles.characterItem}
+                  style={{
+                    padding: '4px 8px',
+                    background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    borderColor: active ? 'rgba(255,255,255,0.26)' : undefined,
+                  }}
+                  onClick={() => {
+                    if (active) {
+                      setTagFilters((prev) => prev.filter((x) => String(x).toLowerCase() !== key));
+                      return;
+                    }
+                    addTagFiltersFromText(t);
+                  }}
+                  title={active ? 'Remove tag filter' : 'Add tag filter'}
+                >
+                  {t}
+                </button>
+              );
+            })}
+            <button onClick={() => setShowTagsBar(true)} title="Open tag manager">
+              Manage…
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-secondary)' }}>Tag filter:</span>
             {cleanedTagFilters.map((t) => (
               <button
@@ -1439,6 +1625,95 @@ export function LibraryView({
             Clear
           </button>
         </CommandBar>
+
+        <div style={{ marginTop: 10 }}>
+          <CommandBar isOpen={showTagsBar} onToggle={() => setShowTagsBar((v) => !v)} label="Tags">
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={tagManagerBusy || tagManagerMutating} onClick={() => reloadTagStats()}>
+                {tagManagerBusy ? 'Working…' : 'Refresh'}
+              </button>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Find{' '}
+                <input
+                  value={tagManagerQuery}
+                  onChange={(e) => setTagManagerQuery(e.target.value)}
+                  placeholder="tag"
+                  style={{ width: 200 }}
+                />
+              </label>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                tags <b>{tagStats ? tagStats.length : '?'}</b> • pinned <b>{cleanedPinnedTags.length}</b>
+              </span>
+            </div>
+
+            {tagManagerError ? <div className={styles.error}>{tagManagerError}</div> : null}
+
+            {!tagStats ? (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Open this bar to scan global tags.</div>
+            ) : filteredTagStats.length === 0 ? (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>No tags match.</div>
+            ) : (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflow: 'auto' }}>
+                {filteredTagStats.map((s) => {
+                  const key = String(s.tag || '').toLowerCase();
+                  const isPinned = cleanedPinnedTags.some((t) => String(t).toLowerCase() === key);
+                  return (
+                    <div
+                      key={s.tag}
+                      style={{
+                        border: '1px solid var(--glass-border)',
+                        background: 'var(--glass)',
+                        padding: 8,
+                        display: 'flex',
+                        gap: 10,
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={s.tag}
+                        >
+                          {s.tag}
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <span>
+                            img <b>{Number(s.imageCount) || 0}</b>
+                          </span>
+                          <span>
+                            docs <b>{Number(s.docCount) || 0}</b> (N {Number(s.docNotesCount) || 0} / S {Number(s.docStoriesCount) || 0} / M{' '}
+                            {Number(s.docMoodboardCount) || 0})
+                          </span>
+                          <span>
+                            chars <b>{Number(s.characterCount) || 0}</b>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button disabled={tagManagerMutating} onClick={() => togglePinnedTag(s.tag)}>
+                          {isPinned ? 'Unpin' : 'Pin'}
+                        </button>
+                        <button disabled={tagManagerMutating} onClick={() => void runRenameTag(s)}>
+                          Rename…
+                        </button>
+                        <button disabled={tagManagerMutating} onClick={() => void runMergeTag(s)}>
+                          Merge…
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CommandBar>
+        </div>
 
         <div style={{ marginTop: 10 }}>
           <CommandBar isOpen={showExportsBar} onToggle={() => setShowExportsBar((v) => !v)} label="Exports">

@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('ckc', {
     resetLibraryRootToDefault: () => ipcRenderer.invoke('ckc:resetLibraryRootToDefault'),
     getLibraryDiagnostics: (params) => ipcRenderer.invoke('ckc:getLibraryDiagnostics', params),
     listDuplicateGroups: (params) => ipcRenderer.invoke('ckc:listDuplicateGroups', params),
+    listTagStats: () => ipcRenderer.invoke('ckc:listTagStats'),
+    mergeTags: (params) => ipcRenderer.invoke('ckc:mergeTags', params),
+    renameTag: (params) => ipcRenderer.invoke('ckc:renameTag', params),
 
     getTemplate: () => ipcRenderer.invoke('ckc:getTemplate'),
     listTemplates: () => ipcRenderer.invoke('ckc:listTemplates'),

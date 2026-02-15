@@ -2,7 +2,7 @@
 
 Date: 2026-02-14
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Add a tag management UI to rename/merge tags globally and show tag counts across images + docs.
@@ -10,7 +10,7 @@ Add a tag management UI to rename/merge tags globally and show tag counts across
 ## Why
 - Tags inevitably drift (typos, variants, duplicates).
 - A tag manager prevents long-term entropy and makes filters usable.
-- Spec: `CastKit_Codex_Spec_v00.038.md` §11.6.
+- Spec: `CastKit_Codex_Spec_v00.039.md` §11.6.
 
 ## Scope
 ### In
@@ -54,4 +54,3 @@ No rollback for tag changes without backups; ensure the operation is explicit an
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
 - Do NOT touch `D:`.
-

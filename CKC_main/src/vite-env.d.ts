@@ -177,6 +177,16 @@ type CKCSavedSearch = {
   isBuiltin: boolean;
 };
 
+type CKCTagStats = {
+  tag: string;
+  imageCount: number;
+  docCount: number;
+  docNotesCount: number;
+  docStoriesCount: number;
+  docMoodboardCount: number;
+  characterCount: number;
+};
+
 type CKCConfigInfo = {
   configPath: string;
   config: unknown;
@@ -363,6 +373,9 @@ interface Window {
       resetLibraryRootToDefault: () => Promise<string>;
       getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
       listDuplicateGroups: (params?: { minCount?: number; limitGroups?: number; maxPerGroup?: number } | null) => Promise<CKCDuplicateGroup[]>;
+      listTagStats: () => Promise<CKCTagStats[]>;
+      mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
+      renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;
       listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
       listAllTags: () => Promise<string[]>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
