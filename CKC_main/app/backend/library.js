@@ -939,7 +939,15 @@ class CKCLibrary {
     return { ok: true };
   }
 
-  async listCharacters({ queryText = '', tagFilters = [], scopeFlags = null, galleryFilters = null, includeSystem = false } = {}) {
+  async listCharacters({
+    queryText = '',
+    tagFilters = [],
+    tagExcludeFilters = [],
+    tagMode = 'all',
+    scopeFlags = null,
+    galleryFilters = null,
+    includeSystem = false,
+  } = {}) {
     const flags = {
       ids: true,
       labels: true,
@@ -959,18 +967,72 @@ class CKCLibrary {
 
     if (!includeSystem) clauses.push('(is_system = 0)');
 
-    if (Array.isArray(tagFilters) && tagFilters.length > 0) {
-      const placeholders = tagFilters.map(() => '?').join(',');
+    const includeTags = (() => {
+      const raw = Array.isArray(tagFilters) ? tagFilters : [];
+      const out = [];
+      const seen = new Set();
+      for (const t of raw) {
+        const s = String(t ?? '').trim();
+        if (!s) continue;
+        const k = s.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(s);
+      }
+      return out;
+    })();
+
+    const excludeTags = (() => {
+      const raw = Array.isArray(tagExcludeFilters) ? tagExcludeFilters : [];
+      const out = [];
+      const seen = new Set();
+      for (const t of raw) {
+        const s = String(t ?? '').trim();
+        if (!s) continue;
+        const k = s.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(s);
+      }
+      return out;
+    })();
+
+    const tagModeNorm = String(tagMode || '').trim().toLowerCase() === 'any' ? 'any' : 'all';
+
+    if (includeTags.length > 0) {
+      const placeholders = includeTags.map(() => '?').join(',');
+      if (tagModeNorm === 'any') {
+        clauses.push(
+          `character_id IN (
+            SELECT DISTINCT character_id FROM CharacterTag ct
+            JOIN Tag t ON t.tag_id = ct.tag_id
+            WHERE t.tag_text IN (${placeholders})
+          )`
+        );
+      } else {
+        clauses.push(
+          `character_id IN (
+            SELECT character_id FROM CharacterTag ct
+            JOIN Tag t ON t.tag_id = ct.tag_id
+            WHERE t.tag_text IN (${placeholders})
+            GROUP BY character_id
+            HAVING COUNT(DISTINCT t.tag_text) = ${includeTags.length}
+          )`
+        );
+      }
+      params.push(...includeTags);
+    }
+
+    if (excludeTags.length > 0) {
+      const placeholders = excludeTags.map(() => '?').join(',');
       clauses.push(
-        `character_id IN (
-          SELECT character_id FROM CharacterTag ct
+        `character_id NOT IN (
+          SELECT DISTINCT character_id FROM CharacterTag ct
           JOIN Tag t ON t.tag_id = ct.tag_id
           WHERE t.tag_text IN (${placeholders})
-          GROUP BY character_id
-          HAVING COUNT(DISTINCT t.tag_text) = ${tagFilters.length}
         )`
       );
-      params.push(...tagFilters);
+      params.push(...excludeTags);
     }
 
     if (galleryFilters && typeof galleryFilters === 'object') {
@@ -1262,14 +1324,19 @@ class CKCLibrary {
 
       // Update SavedSearch tag filters.
       try {
-        const ssRows = await all(this.db, `SELECT search_id, tag_filters_json FROM SavedSearch`);
+        const ssRows = await all(this.db, `SELECT search_id, tag_filters_json, tag_exclude_json FROM SavedSearch`);
         for (const r of ssRows) {
-          const { changed, nextJson } = mergeJsonArray(r.tag_filters_json);
-          if (!changed) continue;
+          const inc = mergeJsonArray(r.tag_filters_json);
+          const exc = mergeJsonArray(r.tag_exclude_json);
+          if (!inc.changed && !exc.changed) continue;
           await run(
             this.db,
-            `UPDATE SavedSearch SET tag_filters_json = ?, updated_at = CURRENT_TIMESTAMP WHERE search_id = ?`,
-            [nextJson, r.search_id]
+            `UPDATE SavedSearch
+             SET tag_filters_json = COALESCE(?, tag_filters_json),
+                 tag_exclude_json = COALESCE(?, tag_exclude_json),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE search_id = ?`,
+            [inc.changed ? inc.nextJson : null, exc.changed ? exc.nextJson : null, r.search_id]
           );
           counts.savedSearches += 1;
         }
@@ -2068,7 +2135,7 @@ class CKCLibrary {
   async listSavedSearches() {
     const rows = await all(
       this.db,
-      `SELECT search_id, name, query_text, scope_flags_json, tag_filters_json, gallery_filters_json, created_at, updated_at, is_builtin
+      `SELECT search_id, name, query_text, scope_flags_json, tag_filters_json, tag_exclude_json, tag_mode, gallery_filters_json, created_at, updated_at, is_builtin
        FROM SavedSearch
        ORDER BY name COLLATE NOCASE`
     );
@@ -2091,6 +2158,18 @@ class CKCLibrary {
           return [];
         }
       })(),
+      tagExcludeFilters: (() => {
+        try {
+          const parsed = JSON.parse(r.tag_exclude_json || '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
+      tagMode: (() => {
+        const raw = r.tag_mode != null ? String(r.tag_mode) : 'all';
+        return raw === 'any' ? 'any' : 'all';
+      })(),
       galleryFilters: (() => {
         try {
           return JSON.parse(r.gallery_filters_json || '{}') || {};
@@ -2104,19 +2183,36 @@ class CKCLibrary {
     }));
   }
 
-  async createSavedSearch({ name, queryText = '', scopeFlags = {}, tagFilters = [], galleryFilters = {} }) {
+  async createSavedSearch({
+    name,
+    queryText = '',
+    scopeFlags = {},
+    tagFilters = [],
+    tagExcludeFilters = [],
+    tagMode = 'all',
+    galleryFilters = {},
+  }) {
     const searchId = randomId('ss_');
     await run(
       this.db,
-      `INSERT INTO SavedSearch(search_id, name, query_text, scope_flags_json, tag_filters_json, gallery_filters_json)
-       VALUES(?, ?, ?, ?, ?, ?)`,
-      [searchId, String(name), String(queryText || ''), JSON.stringify(scopeFlags || {}), JSON.stringify(tagFilters || []), JSON.stringify(galleryFilters || {})]
+      `INSERT INTO SavedSearch(search_id, name, query_text, scope_flags_json, tag_filters_json, tag_exclude_json, tag_mode, gallery_filters_json)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        searchId,
+        String(name),
+        String(queryText || ''),
+        JSON.stringify(scopeFlags || {}),
+        JSON.stringify(tagFilters || []),
+        JSON.stringify(tagExcludeFilters || []),
+        String(tagMode === 'any' ? 'any' : 'all'),
+        JSON.stringify(galleryFilters || {}),
+      ]
     );
     await this._audit('savedSearch.create', null, { name });
     return searchId;
   }
 
-  async updateSavedSearch({ searchId, name, queryText, scopeFlags, tagFilters, galleryFilters }) {
+  async updateSavedSearch({ searchId, name, queryText, scopeFlags, tagFilters, tagExcludeFilters, tagMode, galleryFilters }) {
     const existing = await get(this.db, 'SELECT search_id FROM SavedSearch WHERE search_id = ?', [searchId]);
     if (!existing) throw new Error('Saved search not found');
     await run(
@@ -2126,6 +2222,8 @@ class CKCLibrary {
            query_text = COALESCE(?, query_text),
            scope_flags_json = COALESCE(?, scope_flags_json),
            tag_filters_json = COALESCE(?, tag_filters_json),
+           tag_exclude_json = COALESCE(?, tag_exclude_json),
+           tag_mode = COALESCE(?, tag_mode),
            gallery_filters_json = COALESCE(?, gallery_filters_json),
            updated_at = CURRENT_TIMESTAMP
        WHERE search_id = ?`,
@@ -2134,6 +2232,8 @@ class CKCLibrary {
         queryText != null ? String(queryText) : null,
         scopeFlags != null ? JSON.stringify(scopeFlags) : null,
         tagFilters != null ? JSON.stringify(tagFilters) : null,
+        tagExcludeFilters != null ? JSON.stringify(tagExcludeFilters) : null,
+        tagMode != null ? String(tagMode === 'any' ? 'any' : 'all') : null,
         galleryFilters != null ? JSON.stringify(galleryFilters) : null,
         searchId,
       ]

@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Upgrade saved searches into rule-based “Smart Folders” (editable rules + live results), including tag logic and common media filters.
@@ -10,12 +10,12 @@ Upgrade saved searches into rule-based “Smart Folders” (editable rules + liv
 ## Why
 - Saved searches become durable workflows, not one-off snapshots.
 - Matches the “asset manager” muscle memory (Eagle-like Smart Folders).
-- Spec: `CastKit_Codex_Spec_v00.041.md` §11.12.
+- Spec: `CastKit_Codex_Spec_v00.042.md` §11.12.
 
 ## Scope
 ### In
 - Saved search rules support:
-  - Scope: global vs current character
+  - Scope flags (Name/Tags/IDs/Labels/Values)
   - Favorite only
   - Rating operator + value
   - Tags include/exclude (AND/OR, minimal but useful)
@@ -27,20 +27,23 @@ Upgrade saved searches into rule-based “Smart Folders” (editable rules + liv
 - Nested rule groups beyond one level (initially).
 
 ## Acceptance criteria
-- [ ] Smart Folder rules can be created/edited/deleted.
-- [ ] Applying a Smart Folder reliably reproduces its rule filters.
-- [ ] Rules persist across restarts.
+- [x] Smart Folder rules can be created/edited/deleted.
+- [x] Applying a Smart Folder reliably reproduces its rule filters.
+- [x] Rules persist across restarts.
 
 ## Test plan
-- [ ] `cd CKC_main; npm test`
-- [ ] Manual: create Smart Folder with tags+rating; verify it updates after adding tags to an image.
+- [x] `cd CKC_main; npm test`
+- [x] Manual: create Smart Folder with tags+rating; verify it updates after adding tags to an image.
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (v00.042).
 
 ## Implementation notes
-- Reuse existing filter state structures where possible; add a stable `SavedSearch.rules_json`.
+- Shipped:
+  - Saved searches support `tagMode` (`all`/`any`) and `tagExcludeFilters` (exclude list).
+  - DB upgrade adds `SavedSearch.tag_mode` and `SavedSearch.tag_exclude_json`.
+  - Library filtering (`listCharacters`) supports include-any/include-all and excludes deterministically.
 
 ## Notes
 - Do NOT touch `D:`.

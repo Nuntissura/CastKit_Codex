@@ -119,6 +119,8 @@ async function ensureSchemaUpgrades(db) {
     );
   `
   );
+  await ensureColumn(db, 'SavedSearch', 'tag_mode', "TEXT NOT NULL DEFAULT 'all'");
+  await ensureColumn(db, 'SavedSearch', 'tag_exclude_json', "TEXT NOT NULL DEFAULT '[]'");
 
   // Tag templates / quick-apply bundles (versioned by name).
   await exec(

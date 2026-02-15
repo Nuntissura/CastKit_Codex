@@ -180,6 +180,8 @@ type CKCSavedSearch = {
   queryText: string;
   scopeFlags: CKCSearchScopeFlags;
   tagFilters: string[];
+  tagExcludeFilters: string[];
+  tagMode: 'all' | 'any';
   galleryFilters: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;

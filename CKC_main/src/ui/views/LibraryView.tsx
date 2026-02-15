@@ -101,7 +101,10 @@ export function LibraryView({
     name: true,
   });
   const [tagFilters, setTagFilters] = React.useState<string[]>([]);
+  const [tagMode, setTagMode] = React.useState<'all' | 'any'>('all');
+  const [tagExcludeFilters, setTagExcludeFilters] = React.useState<string[]>([]);
   const [tagDraft, setTagDraft] = React.useState<string>('');
+  const [tagExcludeDraft, setTagExcludeDraft] = React.useState<string>('');
   const [allTags, setAllTags] = React.useState<string[]>([]);
   const [pinnedTags, setPinnedTags] = React.useState<string[]>([]);
   const [tagStats, setTagStats] = React.useState<CKCTagStats[] | null>(null);
@@ -354,6 +357,19 @@ export function LibraryView({
     return out;
   }, [tagFilters]);
 
+  const cleanedTagExcludeFilters = React.useMemo(() => {
+    const cleaned = tagExcludeFilters.map((t) => String(t).trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const out = [];
+    for (const t of cleaned) {
+      const k = t.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(t);
+    }
+    return out;
+  }, [tagExcludeFilters]);
+
   const cleanedPinnedTags = React.useMemo(() => dedupeTagsCaseInsensitive(pinnedTags), [pinnedTags]);
 
   const activeTagFilterSet = React.useMemo(() => {
@@ -396,6 +412,8 @@ export function LibraryView({
         const rows = await window.ckc.listCharacters({
           queryText,
           tagFilters: cleanedTagFilters,
+          tagExcludeFilters: cleanedTagExcludeFilters,
+          tagMode,
           scopeFlags,
           galleryFilters: {
             favoriteOnly,
@@ -416,7 +434,7 @@ export function LibraryView({
     return () => {
       cancelled = true;
     };
-  }, [queryText, cleanedTagFilters, scopeFlags, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
+  }, [queryText, cleanedTagFilters, cleanedTagExcludeFilters, tagMode, scopeFlags, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
 
   React.useEffect(() => {
     reloadCarousel();
@@ -701,6 +719,11 @@ export function LibraryView({
     const tf = Array.isArray(ss.tagFilters) ? ss.tagFilters.map((t) => String(t).trim()).filter(Boolean) : [];
     setTagFilters(tf);
 
+    const ex = Array.isArray(ss.tagExcludeFilters) ? ss.tagExcludeFilters.map((t) => String(t).trim()).filter(Boolean) : [];
+    setTagExcludeFilters(ex);
+
+    setTagMode(ss.tagMode === 'any' ? 'any' : 'all');
+
     const sf = (ss.scopeFlags && typeof ss.scopeFlags === 'object' ? ss.scopeFlags : {}) as any;
     setScopeFlags({
       ids: sf.ids !== false,
@@ -736,6 +759,31 @@ export function LibraryView({
     setTagDraft('');
   }, [tagDraft, addTagFiltersFromText]);
 
+  const addTagExcludeFiltersFromText = React.useCallback(
+    (text: string) => {
+      const parts = tagsTextToArray(text);
+      if (parts.length === 0) return;
+      setTagExcludeFilters((prev) => {
+        const next = [...prev];
+        for (const p of parts) {
+          const raw = String(p).trim();
+          if (!raw) continue;
+          const canonical = allTags.find((t) => String(t).toLowerCase() === raw.toLowerCase()) ?? raw;
+          if (next.some((t) => String(t).toLowerCase() === String(canonical).toLowerCase())) continue;
+          next.push(String(canonical));
+        }
+        return next;
+      });
+    },
+    [allTags]
+  );
+
+  const addTagExcludeFilter = React.useCallback(() => {
+    const draft = tagExcludeDraft;
+    addTagExcludeFiltersFromText(draft);
+    setTagExcludeDraft('');
+  }, [tagExcludeDraft, addTagExcludeFiltersFromText]);
+
   const replaceTagInFiltersAndPins = React.useCallback(
     (fromTag: string, toTag: string) => {
       const fromKey = String(fromTag || '').trim().toLowerCase();
@@ -743,6 +791,7 @@ export function LibraryView({
       if (!fromKey || !to) return;
 
       setTagFilters((prev) => dedupeTagsCaseInsensitive(prev.map((t) => (String(t).trim().toLowerCase() === fromKey ? to : t))));
+      setTagExcludeFilters((prev) => dedupeTagsCaseInsensitive(prev.map((t) => (String(t).trim().toLowerCase() === fromKey ? to : t))));
       void savePinnedTags(pinnedTags.map((t) => (String(t).trim().toLowerCase() === fromKey ? to : t)));
     },
     [pinnedTags, savePinnedTags]
@@ -1462,6 +1511,8 @@ export function LibraryView({
                     queryText,
                     scopeFlags,
                     tagFilters: cleanedTagFilters,
+                    tagExcludeFilters: cleanedTagExcludeFilters,
+                    tagMode,
                     galleryFilters: {
                       favoriteOnly,
                       ratingOp: ratingOp === 'any' ? null : ratingOp,
@@ -1490,6 +1541,8 @@ export function LibraryView({
                     queryText,
                     scopeFlags,
                     tagFilters: cleanedTagFilters,
+                    tagExcludeFilters: cleanedTagExcludeFilters,
+                    tagMode,
                     galleryFilters: {
                       favoriteOnly,
                       ratingOp: ratingOp === 'any' ? null : ratingOp,
@@ -1523,6 +1576,10 @@ export function LibraryView({
             >
               Delete
             </button>
+
+            <span style={{ color: 'var(--text-secondary)' }}>
+              Results: <b>{characters ? characters.length : '?'}</b>
+            </span>
           </div>
 
           {savedSearchError ? <div className={styles.error}>{savedSearchError}</div> : null}
@@ -1593,7 +1650,14 @@ export function LibraryView({
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Tag filter:</span>
+            <span style={{ color: 'var(--text-secondary)' }}>Include tags:</span>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              Match{' '}
+              <select value={tagMode} onChange={(e) => setTagMode(e.target.value as any)}>
+                <option value="all">All (AND)</option>
+                <option value="any">Any (OR)</option>
+              </select>
+            </label>
             {cleanedTagFilters.map((t) => (
               <button
                 key={t}
@@ -1618,17 +1682,51 @@ export function LibraryView({
               list={tagsDatalistId}
               style={{ width: 160 }}
             />
-            <button onClick={addTagFilter} disabled={!tagDraft.trim()}>
+            <button onClick={addTagFilter} disabled={!tagDraft.trim()} title="Add include tag filter">
               Add
             </button>
-            <button onClick={() => setTagFilters([])} disabled={cleanedTagFilters.length === 0} title="Clear tag filters">
-              Clear tags
+            <button onClick={() => setTagFilters([])} disabled={cleanedTagFilters.length === 0} title="Clear include tag filters">
+              Clear include
             </button>
             <datalist id={tagsDatalistId}>
               {allTags.map((t) => (
                 <option key={t} value={t} />
               ))}
             </datalist>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Exclude tags:</span>
+            {cleanedTagExcludeFilters.map((t) => (
+              <button
+                key={t}
+                className={styles.characterItem}
+                style={{ padding: '4px 8px', background: 'transparent' }}
+                onClick={() => setTagExcludeFilters((prev) => prev.filter((x) => String(x).toLowerCase() !== String(t).toLowerCase()))}
+                title="Remove excluded tag"
+              >
+                {t} ×
+              </button>
+            ))}
+            <input
+              value={tagExcludeDraft}
+              onChange={(e) => setTagExcludeDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addTagExcludeFilter();
+                }
+              }}
+              placeholder="tag"
+              list={tagsDatalistId}
+              style={{ width: 160 }}
+            />
+            <button onClick={addTagExcludeFilter} disabled={!tagExcludeDraft.trim()} title="Add excluded tag">
+              Add
+            </button>
+            <button onClick={() => setTagExcludeFilters([])} disabled={cleanedTagExcludeFilters.length === 0} title="Clear excluded tags">
+              Clear exclude
+            </button>
           </div>
 
           <details>
@@ -1691,6 +1789,9 @@ export function LibraryView({
               setScopeFlags({ ids: true, labels: true, values: true, tags: true, name: true });
               setTagFilters([]);
               setTagDraft('');
+              setTagExcludeFilters([]);
+              setTagExcludeDraft('');
+              setTagMode('all');
               setSelectedSavedSearchId('');
               setSavedSearchName('');
             }}

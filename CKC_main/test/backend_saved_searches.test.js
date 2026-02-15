@@ -33,6 +33,8 @@ test('saved searches CRUD persists across reopen', async (t) => {
 
   const scopeFlags = { ids: true, labels: false, values: false, tags: true, name: true };
   const tagFilters = ['alpha', 'beta'];
+  const tagExcludeFilters = ['omega'];
+  const tagMode = 'any';
   const galleryFilters = { favoriteOnly: true, ratingOp: '>=', ratingValue: 4 };
 
   const searchId = await lib.createSavedSearch({
@@ -40,6 +42,8 @@ test('saved searches CRUD persists across reopen', async (t) => {
     queryText: 'hello world',
     scopeFlags,
     tagFilters,
+    tagExcludeFilters,
+    tagMode,
     galleryFilters,
   });
 
@@ -50,6 +54,8 @@ test('saved searches CRUD persists across reopen', async (t) => {
   assert.equal(created.queryText, 'hello world');
   assert.deepEqual(created.scopeFlags, scopeFlags);
   assert.deepEqual(created.tagFilters, tagFilters);
+  assert.deepEqual(created.tagExcludeFilters, tagExcludeFilters);
+  assert.equal(created.tagMode, tagMode);
   assert.deepEqual(created.galleryFilters, galleryFilters);
 
   await lib.updateSavedSearch({
@@ -58,6 +64,8 @@ test('saved searches CRUD persists across reopen', async (t) => {
     queryText: 'updated',
     scopeFlags: { ids: false, labels: false, values: true, tags: false, name: false },
     tagFilters: ['gamma'],
+    tagExcludeFilters: ['beta'],
+    tagMode: 'all',
     galleryFilters: { favoriteOnly: false },
   });
 
@@ -68,6 +76,8 @@ test('saved searches CRUD persists across reopen', async (t) => {
   assert.equal(updated.queryText, 'updated');
   assert.deepEqual(updated.scopeFlags, { ids: false, labels: false, values: true, tags: false, name: false });
   assert.deepEqual(updated.tagFilters, ['gamma']);
+  assert.deepEqual(updated.tagExcludeFilters, ['beta']);
+  assert.equal(updated.tagMode, 'all');
   assert.deepEqual(updated.galleryFilters, { favoriteOnly: false });
 
   lib.close();
@@ -121,6 +131,41 @@ test('manual tags are filterable via tagFilters', async (t) => {
   lib2.close();
 });
 
+test('tag filters support any/all and exclude tags', async (t) => {
+  const { makeInstance } = makeLib(t);
+  const lib = makeInstance();
+  await lib.initialize();
+
+  const a = await lib.createCharacter({ displayName: 'A' });
+  const b = await lib.createCharacter({ displayName: 'B' });
+  const c = await lib.createCharacter({ displayName: 'C' });
+
+  await lib.addManualTag(a, 'alpha');
+  await lib.addManualTag(a, 'gamma');
+  await lib.addManualTag(b, 'beta');
+  await lib.addManualTag(b, 'gamma');
+  await lib.addManualTag(c, 'delta');
+
+  const anyAlphaBeta = await lib.listCharacters({ tagFilters: ['alpha', 'beta'], tagMode: 'any' });
+  assert.ok(anyAlphaBeta.some((x) => x.id === a));
+  assert.ok(anyAlphaBeta.some((x) => x.id === b));
+  assert.ok(!anyAlphaBeta.some((x) => x.id === c));
+
+  const allAlphaGamma = await lib.listCharacters({ tagFilters: ['alpha', 'gamma'], tagMode: 'all' });
+  assert.ok(allAlphaGamma.some((x) => x.id === a));
+  assert.ok(!allAlphaGamma.some((x) => x.id === b));
+
+  const excludeBeta = await lib.listCharacters({ tagExcludeFilters: ['beta'] });
+  assert.ok(excludeBeta.some((x) => x.id === a));
+  assert.ok(!excludeBeta.some((x) => x.id === b));
+
+  const includeGammaExcludeBeta = await lib.listCharacters({ tagFilters: ['gamma'], tagMode: 'any', tagExcludeFilters: ['beta'] });
+  assert.ok(includeGammaExcludeBeta.some((x) => x.id === a));
+  assert.ok(!includeGammaExcludeBeta.some((x) => x.id === b));
+
+  lib.close();
+});
+
 test('scope flags control name search deterministically', async (t) => {
   const { makeInstance } = makeLib(t);
   const lib = makeInstance();
@@ -145,4 +190,3 @@ test('scope flags control name search deterministically', async (t) => {
 
   lib.close();
 });
-
