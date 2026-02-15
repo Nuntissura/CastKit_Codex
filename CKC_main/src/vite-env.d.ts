@@ -197,6 +197,14 @@ type CKCImageAnnotations = {
   }>;
 };
 
+type CKCStoryBoard = {
+  version: number;
+  cards: Array<{
+    id: string;
+    text: string;
+  }>;
+};
+
 type CKCConfigInfo = {
   configPath: string;
   config: unknown;
@@ -405,6 +413,8 @@ interface Window {
     getDoc: (params?: unknown) => Promise<CKCDocDetail | null>;
     upsertDoc: (params?: unknown) => Promise<{ ok: true; docId: string; docType: CKCDocType }>;
     deleteDoc: (params?: unknown) => Promise<{ ok: true }>;
+    getStoryBoard: (params: { docId: string }) => Promise<{ ok: true; docId: string; board: CKCStoryBoard }>;
+    setStoryBoard: (params: { docId: string; board: CKCStoryBoard }) => Promise<{ ok: true }>;
     resolveLinkToken: (token: string) => Promise<CKCLinkCandidate[]>;
     listBacklinks: (params: { targetType: string; targetId: string; limit?: number }) => Promise<CKCBacklinkEntry[]>;
     listSavedSearches: () => Promise<CKCSavedSearch[]>;

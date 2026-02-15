@@ -252,6 +252,14 @@ export function CharacterView({
   const [storiesDraftTagsText, setStoriesDraftTagsText] = React.useState<string>('');
   const [storiesError, setStoriesError] = React.useState<string | null>(null);
   const [isStoriesSaving, setIsStoriesSaving] = React.useState<boolean>(false);
+  const [storiesViewMode, setStoriesViewMode] = React.useState<'text' | 'board'>('text');
+  const [storiesBoard, setStoriesBoard] = React.useState<CKCStoryBoard>({ version: 1, cards: [] });
+  const [storiesBoardIsDirty, setStoriesBoardIsDirty] = React.useState<boolean>(false);
+  const [storiesBoardError, setStoriesBoardError] = React.useState<string | null>(null);
+  const [isStoriesBoardSaving, setIsStoriesBoardSaving] = React.useState<boolean>(false);
+  const [isStoriesBoardLoading, setIsStoriesBoardLoading] = React.useState<boolean>(false);
+  const storiesBoardDragFromRef = React.useRef<string | null>(null);
+  const [storiesBoardDragOverId, setStoriesBoardDragOverId] = React.useState<string | null>(null);
 
   const [moodboardDocId, setMoodboardDocId] = React.useState<string | null>(null);
   const [moodboardLoadedDoc, setMoodboardLoadedDoc] = React.useState<CKCDocDetail | null>(null);
@@ -679,6 +687,38 @@ export function CharacterView({
   }, [storiesDocId]);
 
   React.useEffect(() => {
+    if (!storiesDocId) {
+      storiesBoardDragFromRef.current = null;
+      setStoriesBoardDragOverId(null);
+      setStoriesBoard({ version: 1, cards: [] });
+      setStoriesBoardIsDirty(false);
+      setStoriesBoardError(null);
+      return;
+    }
+
+    storiesBoardDragFromRef.current = null;
+    setStoriesBoardDragOverId(null);
+    setIsStoriesBoardLoading(true);
+    setStoriesBoardError(null);
+    window.ckc
+      .getStoryBoard({ docId: storiesDocId })
+      .then((res: any) => {
+        const board = res?.board && typeof res.board === 'object' ? res.board : { version: 1, cards: [] };
+        const cards = Array.isArray(board.cards)
+          ? board.cards.map((c: any) => ({ id: String(c?.id ?? ''), text: String(c?.text ?? '') })).filter((c: any) => !!String(c.id).trim())
+          : [];
+        setStoriesBoard({ version: 1, cards });
+        setStoriesBoardIsDirty(false);
+      })
+      .catch((err: unknown) => {
+        setStoriesBoardError(err instanceof Error ? err.message : String(err));
+        setStoriesBoard({ version: 1, cards: [] });
+        setStoriesBoardIsDirty(false);
+      })
+      .finally(() => setIsStoriesBoardLoading(false));
+  }, [storiesDocId]);
+
+  React.useEffect(() => {
     if (!moodboardDocId) {
       setMoodboardLoadedDoc(null);
       return;
@@ -766,7 +806,12 @@ export function CharacterView({
   }, [character, mediaMode]);
 
   const notesOutboundLinks = React.useMemo(() => extractBracketLinks(notesDraftContent), [notesDraftContent]);
-  const storiesOutboundLinks = React.useMemo(() => extractBracketLinks(storiesDraftContent), [storiesDraftContent]);
+  const storiesOutboundLinks = React.useMemo(() => {
+    const base = String(storiesDraftContent ?? '');
+    const cardsText = (storiesBoard?.cards || []).map((c) => String(c?.text ?? '')).join('\n\n');
+    const merged = cardsText ? `${base}\n\n${cardsText}` : base;
+    return extractBracketLinks(merged);
+  }, [storiesDraftContent, storiesBoard]);
   const moodboardOutboundLinks = React.useMemo(() => extractBracketLinks(JSON.stringify(moodboardDraft ?? {})), [moodboardDraft]);
   const sheetOutboundLinks = React.useMemo(() => {
     const vals = draftValuesById || {};
@@ -962,6 +1007,9 @@ export function CharacterView({
     );
   }, [storiesLoadedDoc, storiesDraftTitle, storiesDraftContent, storiesTags]);
 
+  const storiesHasUnsavedChanges = storiesIsDirty || storiesBoardIsDirty;
+  const storiesIsSavingAny = isStoriesSaving || isStoriesBoardSaving;
+
   const moodboardIsDirty = React.useMemo(() => {
     const loadedTags = moodboardLoadedDoc?.tags ?? [];
     const sameTags =
@@ -1043,6 +1091,33 @@ export function CharacterView({
     }
   }, [isStoriesSaving, storiesDraftTitle, storiesDraftContent, storiesTags, isLibraryDrawerOpen, reloadDocsDrawer]);
 
+  const saveStoriesBoard = React.useCallback(
+    async (boardOverride?: CKCStoryBoard) => {
+      if (isStoriesBoardSaving) return;
+      const docIdAtStart = storiesDocIdRef.current;
+      if (!docIdAtStart) return;
+
+      const board = boardOverride ?? storiesBoard;
+      setIsStoriesBoardSaving(true);
+      setStoriesBoardError(null);
+      try {
+        await window.ckc.setStoryBoard({ docId: docIdAtStart, board });
+        if (storiesDocIdRef.current !== docIdAtStart) return;
+        setStoriesBoardIsDirty(false);
+      } catch (err: unknown) {
+        setStoriesBoardError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIsStoriesBoardSaving(false);
+      }
+    },
+    [isStoriesBoardSaving, storiesBoard]
+  );
+
+  const saveStoriesAll = React.useCallback(async () => {
+    if (storiesIsDirty) await saveStories();
+    if (storiesBoardIsDirty) await saveStoriesBoard();
+  }, [storiesIsDirty, saveStories, storiesBoardIsDirty, saveStoriesBoard]);
+
   const saveMoodboard = React.useCallback(async () => {
     if (isMoodboardSaving) return;
 
@@ -1101,6 +1176,9 @@ export function CharacterView({
       if (res?.docId) {
         storiesDocIdRef.current = res.docId;
         setStoriesDocId(res.docId);
+        setStoriesBoard({ version: 1, cards: [] });
+        setStoriesBoardIsDirty(false);
+        setStoriesBoardError(null);
         if (isLibraryDrawerOpen) reloadDocsDrawer();
         onCloseLibraryDrawer();
       }
@@ -1173,6 +1251,9 @@ export function CharacterView({
         setStoriesDraftTitle('');
         setStoriesDraftContent('');
         setStoriesDraftTagsText('');
+        setStoriesBoard({ version: 1, cards: [] });
+        setStoriesBoardIsDirty(false);
+        setStoriesBoardError(null);
       }
       if (isLibraryDrawerOpen) reloadDocsDrawer();
     } catch (err: unknown) {
@@ -1208,6 +1289,7 @@ export function CharacterView({
 
   const notesAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const storiesAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storiesBoardAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const moodboardAutosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushNotesAutosave = React.useCallback(() => {
@@ -1224,7 +1306,13 @@ export function CharacterView({
       storiesAutosaveTimerRef.current = null;
     }
     if (storiesIsDirty) void saveStories();
-  }, [storiesIsDirty, saveStories]);
+
+    if (storiesBoardAutosaveTimerRef.current) {
+      clearTimeout(storiesBoardAutosaveTimerRef.current);
+      storiesBoardAutosaveTimerRef.current = null;
+    }
+    if (storiesBoardIsDirty) void saveStoriesBoard();
+  }, [storiesIsDirty, saveStories, storiesBoardIsDirty, saveStoriesBoard]);
 
   const flushMoodboardAutosave = React.useCallback(() => {
     if (moodboardAutosaveTimerRef.current) {
@@ -1233,6 +1321,73 @@ export function CharacterView({
     }
     if (moodboardIsDirty) void saveMoodboard();
   }, [moodboardIsDirty, saveMoodboard]);
+
+  const updateStoriesBoard = React.useCallback(
+    (updater: (prev: CKCStoryBoard) => CKCStoryBoard) => {
+      setStoriesBoard((prev) => {
+        const next = updater(prev);
+        setStoriesBoardIsDirty(true);
+        if (storiesBoardAutosaveTimerRef.current) clearTimeout(storiesBoardAutosaveTimerRef.current);
+        storiesBoardAutosaveTimerRef.current = setTimeout(() => void saveStoriesBoard(next), 700);
+        return next;
+      });
+    },
+    [saveStoriesBoard]
+  );
+
+  const makeCardId = React.useCallback(() => `card_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`, []);
+
+  const addStoryCard = React.useCallback(() => {
+    updateStoriesBoard((prev) => ({ ...prev, cards: [...(prev.cards || []), { id: makeCardId(), text: '' }] }));
+  }, [makeCardId, updateStoriesBoard]);
+
+  const seedStoryBoardFromText = React.useCallback(() => {
+    const parts = String(storiesDraftContent ?? '')
+      .split(/\n\s*\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    if (!confirm(`Seed board cards from story text?\n\nThis will replace ${storiesBoard.cards.length} existing card(s).`)) return;
+    updateStoriesBoard(() => ({ version: 1, cards: parts.map((t) => ({ id: makeCardId(), text: t })) }));
+  }, [storiesDraftContent, storiesBoard.cards.length, makeCardId, updateStoriesBoard]);
+
+  const deleteStoryCard = React.useCallback(
+    (cardId: string) => {
+      const id = String(cardId || '').trim();
+      if (!id) return;
+      if (!confirm('Delete this card?')) return;
+      updateStoriesBoard((prev) => ({ ...prev, cards: (prev.cards || []).filter((c) => c.id !== id) }));
+    },
+    [updateStoriesBoard]
+  );
+
+  const updateStoryCardText = React.useCallback(
+    (cardId: string, text: string) => {
+      const id = String(cardId || '').trim();
+      if (!id) return;
+      updateStoriesBoard((prev) => ({ ...prev, cards: (prev.cards || []).map((c) => (c.id === id ? { ...c, text } : c)) }));
+    },
+    [updateStoriesBoard]
+  );
+
+  const moveStoryCard = React.useCallback(
+    (fromCardId: string, toCardId: string) => {
+      const fromId = String(fromCardId || '').trim();
+      const toId = String(toCardId || '').trim();
+      if (!fromId || !toId) return;
+      if (fromId === toId) return;
+      updateStoriesBoard((prev) => {
+        const cards = [...(prev.cards || [])];
+        const fromIdx = cards.findIndex((c) => c.id === fromId);
+        const toIdx = cards.findIndex((c) => c.id === toId);
+        if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev;
+        const [moved] = cards.splice(fromIdx, 1);
+        cards.splice(toIdx, 0, moved);
+        return { ...prev, cards };
+      });
+    },
+    [updateStoriesBoard]
+  );
 
   const openDocByTypeAndId = React.useCallback(
     (docType: CKCDocType, docId: string) => {
@@ -2003,23 +2158,49 @@ export function CharacterView({
                         <button
                           className={styles.btnSecondary}
                           onClick={() => void (docsLowerType === 'stories' ? newStoriesDoc() : newMoodboardDoc())}
-                          disabled={docsLowerType === 'stories' ? isStoriesSaving : isMoodboardSaving}
+                          disabled={docsLowerType === 'stories' ? storiesIsSavingAny : isMoodboardSaving}
                         >
                           New
                         </button>
+                        {docsLowerType === 'stories' ? (
+                          <div className={styles.viewToggle}>
+                            <button
+                              className={styles.tabBtn}
+                              data-active={storiesViewMode === 'text' ? '1' : '0'}
+                              onClick={() => {
+                                flushStoriesAutosave();
+                                setStoriesViewMode('text');
+                              }}
+                              title="Story text view"
+                            >
+                              Text
+                            </button>
+                            <button
+                              className={styles.tabBtn}
+                              data-active={storiesViewMode === 'board' ? '1' : '0'}
+                              onClick={() => {
+                                flushStoriesAutosave();
+                                setStoriesViewMode('board');
+                              }}
+                              title="Corkboard / outliner view"
+                            >
+                              Board
+                            </button>
+                          </div>
+                        ) : null}
                         <button
                           className={styles.btnSecondary}
-                          onClick={() => void (docsLowerType === 'stories' ? saveStories() : saveMoodboard())}
+                          onClick={() => void (docsLowerType === 'stories' ? saveStoriesAll() : saveMoodboard())}
                           disabled={
                             docsLowerType === 'stories'
-                              ? !storiesIsDirty || isStoriesSaving
+                              ? !storiesHasUnsavedChanges || storiesIsSavingAny
                               : !moodboardIsDirty || isMoodboardSaving
                           }
                         >
                           {docsLowerType === 'stories'
-                            ? isStoriesSaving
+                            ? storiesIsSavingAny
                               ? 'Saving…'
-                              : storiesIsDirty
+                              : storiesHasUnsavedChanges
                                 ? 'Save'
                                 : 'Saved'
                             : isMoodboardSaving
@@ -2033,7 +2214,7 @@ export function CharacterView({
                           onClick={() => void (docsLowerType === 'stories' ? deleteStoriesDoc() : deleteMoodboardDoc())}
                           disabled={
                             docsLowerType === 'stories'
-                              ? !storiesDocId || isStoriesSaving
+                              ? !storiesDocId || storiesIsSavingAny
                               : !moodboardDocId || isMoodboardSaving
                           }
                         >
@@ -2067,13 +2248,116 @@ export function CharacterView({
                           </label>
                         </div>
 
-                        <textarea
-                          className={styles.docTextFlex}
-                          value={storiesDraftContent}
-                          onChange={(e) => setStoriesDraftContent(e.target.value)}
-                          onBlur={() => flushStoriesAutosave()}
-                          placeholder="Write a story…"
-                        />
+                        {storiesViewMode === 'text' ? (
+                          <textarea
+                            className={styles.docTextFlex}
+                            value={storiesDraftContent}
+                            onChange={(e) => setStoriesDraftContent(e.target.value)}
+                            onBlur={() => flushStoriesAutosave()}
+                            placeholder="Write a story…"
+                          />
+                        ) : (
+                          <div className={styles.storyBoard}>
+                            <div className={styles.storyBoardTop}>
+                              <div className={styles.storyBoardStatus}>
+                                {isStoriesBoardLoading
+                                  ? 'Loading…'
+                                  : isStoriesBoardSaving
+                                    ? 'Saving…'
+                                    : storiesBoardIsDirty
+                                      ? 'Unsaved changes'
+                                      : 'Saved'}
+                                <span className={styles.storyBoardMeta}> • Cards: {storiesBoard.cards.length}</span>
+                              </div>
+                              <div className={styles.storyBoardButtons}>
+                                <button className={styles.btnSecondary} onClick={addStoryCard} disabled={!storiesDocId}>
+                                  Add card
+                                </button>
+                                <button
+                                  className={styles.btnSecondary}
+                                  onClick={seedStoryBoardFromText}
+                                  disabled={!storiesDocId || !String(storiesDraftContent ?? '').trim()}
+                                  title="Split story text into paragraphs and turn them into cards"
+                                >
+                                  Seed from text
+                                </button>
+                              </div>
+                            </div>
+
+                            {storiesBoardError ? <div className={styles.storyBoardError}>{storiesBoardError}</div> : null}
+
+                            {!storiesDocId ? (
+                              <div className={styles.muted} style={{ marginTop: 10 }}>
+                                Create or select a Story first.
+                              </div>
+                            ) : storiesBoard.cards.length === 0 ? (
+                              <div className={styles.muted} style={{ marginTop: 10 }}>
+                                (no cards)
+                              </div>
+                            ) : (
+                              <div className={styles.storyBoardList}>
+                                {storiesBoard.cards.map((card, idx) => (
+                                  <div
+                                    key={card.id}
+                                    className={styles.storyCard}
+                                    data-drop-active={storiesBoardDragOverId === card.id ? '1' : '0'}
+                                    onDragOver={(e) => {
+                                      if (!storiesBoardDragFromRef.current) return;
+                                      e.preventDefault();
+                                      e.dataTransfer.dropEffect = 'move';
+                                      if (storiesBoardDragOverId !== card.id) setStoriesBoardDragOverId(card.id);
+                                    }}
+                                    onDragLeave={() => {
+                                      if (storiesBoardDragOverId === card.id) setStoriesBoardDragOverId(null);
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      const fromId = storiesBoardDragFromRef.current || e.dataTransfer.getData('text/plain');
+                                      storiesBoardDragFromRef.current = null;
+                                      setStoriesBoardDragOverId(null);
+                                      moveStoryCard(fromId, card.id);
+                                    }}
+                                  >
+                                    <div className={styles.storyCardHeader}>
+                                      <div className={styles.storyCardHeaderLeft}>
+                                        <button
+                                          className={styles.storyCardDrag}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            storiesBoardDragFromRef.current = card.id;
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            e.dataTransfer.setData('text/plain', card.id);
+                                          }}
+                                          onDragEnd={() => {
+                                            storiesBoardDragFromRef.current = null;
+                                            setStoriesBoardDragOverId(null);
+                                          }}
+                                          title="Drag to reorder"
+                                        >
+                                          ☰
+                                        </button>
+                                        <div className={styles.storyCardTitle}>Card {idx + 1}</div>
+                                      </div>
+                                      <button
+                                        className={styles.btnSecondary}
+                                        onClick={() => deleteStoryCard(card.id)}
+                                        disabled={!storiesDocId}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                    <textarea
+                                      className={styles.storyCardText}
+                                      value={card.text}
+                                      onChange={(e) => updateStoryCardText(card.id, e.target.value)}
+                                      placeholder="Card text… (supports [[links]])"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10 }}>
                           <div

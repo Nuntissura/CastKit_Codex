@@ -681,6 +681,16 @@ function registerIpcHandlers() {
         return lib.deleteDoc(params || {});
     });
 
+    ipcMain.handle('ckc:getStoryBoard', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getStoryBoard(params || {});
+    });
+
+    ipcMain.handle('ckc:setStoryBoard', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setStoryBoard(params || {});
+    });
+
     ipcMain.handle('ckc:resolveLinkToken', async (_evt, token) => {
         const lib = await ensureLibrary();
         return lib.resolveLinkToken(String(token ?? ''));

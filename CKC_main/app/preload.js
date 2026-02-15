@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('ckc', {
     getDoc: (params) => ipcRenderer.invoke('ckc:getDoc', params),
     upsertDoc: (params) => ipcRenderer.invoke('ckc:upsertDoc', params),
     deleteDoc: (params) => ipcRenderer.invoke('ckc:deleteDoc', params),
+    getStoryBoard: (params) => ipcRenderer.invoke('ckc:getStoryBoard', params),
+    setStoryBoard: (params) => ipcRenderer.invoke('ckc:setStoryBoard', params),
     resolveLinkToken: (token) => ipcRenderer.invoke('ckc:resolveLinkToken', token),
     listBacklinks: (params) => ipcRenderer.invoke('ckc:listBacklinks', params),
 

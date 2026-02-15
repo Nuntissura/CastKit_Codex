@@ -456,6 +456,12 @@
   min-width: 0;
 }
 
+.viewToggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .docForm {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -503,6 +509,109 @@
   background: transparent;
   padding: 10px 12px;
   resize: none;
+}
+
+.storyBoard {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.storyBoardTop {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.storyBoardStatus {
+  font-weight: 800;
+}
+
+.storyBoardMeta {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.storyBoardButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.storyBoardError {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.storyBoardList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.storyCard {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storyCard[data-drop-active='1'] {
+  border-color: var(--accent-color);
+  background: var(--bg-accent);
+}
+
+.storyCardHeader {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.storyCardHeaderLeft {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.storyCardDrag {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 4px 8px;
+  cursor: grab;
+  user-select: none;
+}
+
+.storyCardDrag:active {
+  cursor: grabbing;
+}
+
+.storyCardTitle {
+  font-weight: 800;
+}
+
+.storyCardText {
+  width: 100%;
+  min-height: 96px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  resize: vertical;
 }
 
 .moodboardBox {

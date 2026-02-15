@@ -1676,7 +1676,21 @@ class CKCLibrary {
 
     await this._audit('doc.upsert', null, { docType: type, docId: id });
     try {
-      await this._reindexLinksForSource({ sourceType: type, sourceId: id, text: String(content ?? '') });
+      let linkText = String(content ?? '');
+      if (type === 'stories') {
+        try {
+          const sb = await get(this.db, `SELECT board_json FROM StoryBoard WHERE doc_id = ?`, [id]);
+          if (sb?.board_json) {
+            const parsed = JSON.parse(sb.board_json ?? '{}');
+            const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
+            const cardText = cards.map((c) => String(c?.text ?? '')).filter((t) => t.trim().length > 0).join('\n\n');
+            if (cardText) linkText = `${linkText}\n\n${cardText}`;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      await this._reindexLinksForSource({ sourceType: type, sourceId: id, text: linkText });
     } catch (err) {
       await this._audit('linkIndex.reindexFailed', null, {
         sourceType: type,
@@ -1698,6 +1712,89 @@ class CKCLibrary {
     } catch {
       // Best-effort cleanup; user text remains untouched.
     }
+    return { ok: true };
+  }
+
+  async getStoryBoard({ docId } = {}) {
+    const id = String(docId ?? '').trim();
+    if (!id) throw new Error('docId is required');
+
+    const normalize = (raw) => {
+      const obj = raw && typeof raw === 'object' ? raw : {};
+      const cardsRaw = Array.isArray(obj.cards) ? obj.cards : [];
+      const cards = [];
+      for (const c of cardsRaw) {
+        const card = c && typeof c === 'object' ? c : {};
+        const text = String(card.text ?? '');
+        if (!text.trim() && !String(card.id ?? '').trim()) continue;
+        cards.push({
+          id: String(card.id ?? '').trim() || randomId('card_'),
+          text,
+        });
+      }
+      return { version: 1, cards };
+    };
+
+    const row = await get(this.db, `SELECT board_json FROM StoryBoard WHERE doc_id = ?`, [id]);
+    if (!row) return { ok: true, docId: id, board: { version: 1, cards: [] } };
+
+    try {
+      const parsed = JSON.parse(row.board_json ?? '{}');
+      return { ok: true, docId: id, board: normalize(parsed) };
+    } catch {
+      return { ok: true, docId: id, board: { version: 1, cards: [] } };
+    }
+  }
+
+  async setStoryBoard({ docId, board } = {}) {
+    const id = String(docId ?? '').trim();
+    if (!id) throw new Error('docId is required');
+
+    const normalize = (raw) => {
+      const obj = raw && typeof raw === 'object' ? raw : {};
+      const cardsRaw = Array.isArray(obj.cards) ? obj.cards : [];
+      const cards = [];
+      for (const c of cardsRaw) {
+        const card = c && typeof c === 'object' ? c : {};
+        const text = String(card.text ?? '');
+        if (!text.trim() && !String(card.id ?? '').trim()) continue;
+        cards.push({
+          id: String(card.id ?? '').trim() || randomId('card_'),
+          text,
+        });
+      }
+      return { version: 1, cards };
+    };
+
+    const cleaned = normalize(board);
+    await run(
+      this.db,
+      `INSERT INTO StoryBoard(doc_id, board_json, updated_at)
+       VALUES(?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(doc_id) DO UPDATE SET
+         board_json = excluded.board_json,
+         updated_at = CURRENT_TIMESTAMP`,
+      [id, JSON.stringify(cleaned)]
+    );
+    await this._audit('story.setBoard', null, { docId: id, cards: cleaned.cards.length });
+
+    try {
+      const story = await get(this.db, `SELECT body_text FROM StoryDoc WHERE doc_id = ?`, [id]);
+      const baseText = String(story?.body_text ?? '');
+      const cardText = cleaned.cards
+        .map((c) => String(c?.text ?? ''))
+        .filter((t) => t.trim().length > 0)
+        .join('\n\n');
+      const linkText = cardText ? `${baseText}\n\n${cardText}` : baseText;
+      await this._reindexLinksForSource({ sourceType: 'stories', sourceId: id, text: linkText });
+    } catch (err) {
+      await this._audit('linkIndex.reindexFailed', null, {
+        sourceType: 'stories',
+        sourceId: id,
+        message: String(err?.message || err || 'Unknown error'),
+      });
+    }
+
     return { ok: true };
   }
 

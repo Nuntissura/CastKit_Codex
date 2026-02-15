@@ -173,6 +173,22 @@ async function ensureSchemaUpgrades(db) {
   `
   );
 
+  // Stories: corkboard/outliner state (stored separately from free text).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS StoryBoard (
+      doc_id TEXT PRIMARY KEY,
+      board_json TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(doc_id) REFERENCES StoryDoc(doc_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_storyboard_updated ON StoryBoard(updated_at DESC);
+  `
+  );
+
   // Link index for [[...]] backlinks (computed on save; no text rewriting).
   await exec(
     db,
