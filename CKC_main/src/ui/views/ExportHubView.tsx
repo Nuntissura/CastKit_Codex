@@ -60,6 +60,19 @@ export function ExportHubView({
   const [lastExportPath, setLastExportPath] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<boolean>(false);
 
+  // --- Backup / Restore wizard ---
+  const [backupOutDirBase, setBackupOutDirBase] = React.useState<string | null>(null);
+  const [backupName, setBackupName] = React.useState<string>('');
+  const [backupJobId, setBackupJobId] = React.useState<string | null>(null);
+  const [backupJob, setBackupJob] = React.useState<CKCLibraryBackupJobStatus | null>(null);
+
+  const [restoreBackupDir, setRestoreBackupDir] = React.useState<string | null>(null);
+  const [restoreDestLibraryRoot, setRestoreDestLibraryRoot] = React.useState<string | null>(null);
+  const [restoreAllowOverwrite, setRestoreAllowOverwrite] = React.useState<boolean>(false);
+  const [restoreConfirmToken, setRestoreConfirmToken] = React.useState<string>('');
+  const [restoreJobId, setRestoreJobId] = React.useState<string | null>(null);
+  const [restoreJob, setRestoreJob] = React.useState<CKCLibraryRestoreJobStatus | null>(null);
+
   const defaultExportsDir = React.useMemo(() => {
     return libraryRoot ? joinPath(libraryRoot, 'exports') : null;
   }, [libraryRoot]);
@@ -67,6 +80,20 @@ export function ExportHubView({
   const exportRoot = React.useMemo(() => {
     return exportRootOverride || defaultExportsDir || null;
   }, [exportRootOverride, defaultExportsDir]);
+
+  const defaultBackupsDir = React.useMemo(() => {
+    return libraryRoot ? joinPath(joinPath(libraryRoot, 'exports'), 'backups') : null;
+  }, [libraryRoot]);
+
+  const backupsDir = React.useMemo(() => {
+    return backupOutDirBase || defaultBackupsDir || null;
+  }, [backupOutDirBase, defaultBackupsDir]);
+
+  const backupIsRunning = backupJob?.status === 'running';
+  const restoreIsRunning = restoreJob?.status === 'running';
+  const isUiBusy = busy || backupIsRunning || restoreIsRunning;
+  const backupDoneResult = backupJob && backupJob.status === 'done' ? backupJob.result : null;
+  const restoreDoneResult = restoreJob && restoreJob.status === 'done' ? restoreJob.result : null;
 
   React.useEffect(() => {
     window.ckc
@@ -97,6 +124,142 @@ export function ExportHubView({
     setConfig(next ?? null);
     setExportRootOverride(null);
   }, []);
+
+  const chooseBackupOutDirBase = React.useCallback(async () => {
+    setError(null);
+    const dir = await window.ckc.selectFolderDialog({ title: 'Select backup destination folder' });
+    if (!dir) return;
+    setBackupOutDirBase(dir);
+  }, []);
+
+  const resetBackupOutDirBase = React.useCallback(() => {
+    setBackupOutDirBase(null);
+  }, []);
+
+  const startLibraryBackup = React.useCallback(async () => {
+    setError(null);
+    setBackupJob(null);
+    const name = backupName.trim();
+    const res = await window.ckc.startLibraryBackup({ outDirBase: backupOutDirBase, backupName: name.length ? name : null });
+    setBackupJobId(res.jobId);
+  }, [backupName, backupOutDirBase]);
+
+  const cancelLibraryBackup = React.useCallback(async () => {
+    if (!backupJobId) return;
+    setError(null);
+    await window.ckc.cancelLibraryBackup(backupJobId);
+  }, [backupJobId]);
+
+  React.useEffect(() => {
+    const jobId = String(backupJobId ?? '').trim();
+    if (!jobId) return;
+
+    let alive = true;
+    let inFlight = false;
+    let timer: any = null;
+
+    const tick = async () => {
+      if (!alive || inFlight) return;
+      inFlight = true;
+      try {
+        const st = await window.ckc.getLibraryBackupStatus(jobId);
+        if (!alive) return;
+        setBackupJob(st);
+        if (st.status !== 'running' && timer) clearInterval(timer);
+        if (st.status === 'done' && st.result?.snapshotDir) setLastExportPath(st.result.snapshotDir);
+      } catch (err: unknown) {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : String(err));
+        if (timer) clearInterval(timer);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void tick();
+    timer = setInterval(() => void tick(), 800);
+    return () => {
+      alive = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [backupJobId]);
+
+  const chooseRestoreBackupDir = React.useCallback(async () => {
+    setError(null);
+    const dir = await window.ckc.selectFolderDialog({ title: 'Select backup snapshot folder' });
+    if (!dir) return;
+    setRestoreBackupDir(dir);
+  }, []);
+
+  const chooseRestoreDestLibraryRoot = React.useCallback(async () => {
+    setError(null);
+    const dir = await window.ckc.selectFolderDialog({ title: 'Select restore destination (libraryRoot)' });
+    if (!dir) return;
+    setRestoreDestLibraryRoot(dir);
+  }, []);
+
+  const startLibraryRestore = React.useCallback(async () => {
+    const backupDir = String(restoreBackupDir ?? '').trim();
+    const destLibraryRoot = String(restoreDestLibraryRoot ?? '').trim();
+    if (!backupDir) {
+      setError('Pick a backup folder first.');
+      return;
+    }
+    if (!destLibraryRoot) {
+      setError('Pick a restore destination folder first.');
+      return;
+    }
+
+    setError(null);
+    setRestoreJob(null);
+    const res = await window.ckc.startLibraryRestore({
+      backupDir,
+      destLibraryRoot,
+      allowOverwrite: restoreAllowOverwrite,
+      confirmToken: restoreConfirmToken,
+    });
+    setRestoreJobId(res.jobId);
+  }, [restoreAllowOverwrite, restoreBackupDir, restoreConfirmToken, restoreDestLibraryRoot]);
+
+  const cancelLibraryRestore = React.useCallback(async () => {
+    if (!restoreJobId) return;
+    setError(null);
+    await window.ckc.cancelLibraryRestore(restoreJobId);
+  }, [restoreJobId]);
+
+  React.useEffect(() => {
+    const jobId = String(restoreJobId ?? '').trim();
+    if (!jobId) return;
+
+    let alive = true;
+    let inFlight = false;
+    let timer: any = null;
+
+    const tick = async () => {
+      if (!alive || inFlight) return;
+      inFlight = true;
+      try {
+        const st = await window.ckc.getLibraryRestoreStatus(jobId);
+        if (!alive) return;
+        setRestoreJob(st);
+        if (st.status !== 'running' && timer) clearInterval(timer);
+        if (st.status === 'done' && st.result?.destLibraryRoot) setLastExportPath(st.result.destLibraryRoot);
+      } catch (err: unknown) {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : String(err));
+        if (timer) clearInterval(timer);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void tick();
+    timer = setInterval(() => void tick(), 800);
+    return () => {
+      alive = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [restoreJobId]);
 
   // --- Moodboard PNG export ---
   const [moodboards, setMoodboards] = React.useState<CKCDocListItem[] | null>(null);
@@ -507,14 +670,14 @@ export function ExportHubView({
     <div className={styles.layout}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button className={styles.btnSecondary} onClick={onBack} disabled={busy}>
+          <button className={styles.btnSecondary} onClick={onBack} disabled={isUiBusy}>
             Back
           </button>
           <div className={styles.title}>Export Hub</div>
         </div>
         <div className={styles.headerRight}>
           {lastExportPath ? (
-            <button className={styles.btnSecondary} onClick={() => void window.ckc.openPath(lastExportPath)} disabled={busy}>
+            <button className={styles.btnSecondary} onClick={() => void window.ckc.openPath(lastExportPath)} disabled={isUiBusy}>
               Open last
             </button>
           ) : null}
@@ -534,13 +697,13 @@ export function ExportHubView({
           <code className={styles.code}>{exportRoot ?? '(not set)'}</code>
         </div>
         <div className={styles.row}>
-          <button className={styles.btnSecondary} onClick={() => exportRoot && void window.ckc.openPath(exportRoot)} disabled={!exportRoot || busy}>
+          <button className={styles.btnSecondary} onClick={() => exportRoot && void window.ckc.openPath(exportRoot)} disabled={!exportRoot || isUiBusy}>
             Open exports
           </button>
-          <button className={styles.btnSecondary} onClick={() => void chooseExportRoot()} disabled={busy}>
+          <button className={styles.btnSecondary} onClick={() => void chooseExportRoot()} disabled={isUiBusy}>
             Choose…
           </button>
-          <button className={styles.btnSecondary} onClick={() => void resetExportRoot()} disabled={busy || !exportRootOverride}>
+          <button className={styles.btnSecondary} onClick={() => void resetExportRoot()} disabled={isUiBusy || !exportRootOverride}>
             Reset to default
           </button>
           <span className={styles.muted}>
@@ -558,7 +721,7 @@ export function ExportHubView({
               className={styles.select}
               value={selectedMoodboardId ?? ''}
               onChange={(e) => setSelectedMoodboardId(e.target.value)}
-              disabled={busy}
+              disabled={isUiBusy}
             >
               {(moodboards || []).map((d) => (
                 <option key={d.id} value={d.id}>
@@ -573,7 +736,7 @@ export function ExportHubView({
           </div>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void exportMoodboardPng()} disabled={busy || !exportRoot || !selectedMoodboardId}>
+            <button className={styles.btnSecondary} onClick={() => void exportMoodboardPng()} disabled={isUiBusy || !exportRoot || !selectedMoodboardId}>
               Export PNG
             </button>
           </div>
@@ -587,7 +750,7 @@ export function ExportHubView({
               className={styles.select}
               value={selectedCharacterId ?? ''}
               onChange={(e) => setSelectedCharacterId(e.target.value)}
-              disabled={busy}
+              disabled={isUiBusy}
             >
               {(characters || []).map((c) => (
                 <option key={c.id} value={c.id}>
@@ -609,10 +772,10 @@ export function ExportHubView({
           </div>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void exportImageSet('selected')} disabled={busy || !selectedCharacterId}>
+            <button className={styles.btnSecondary} onClick={() => void exportImageSet('selected')} disabled={isUiBusy || !selectedCharacterId}>
               Export selected ({mediaSelectedIds.length})
             </button>
-            <button className={styles.btnSecondary} onClick={() => void exportImageSet('all')} disabled={busy || !selectedCharacterId}>
+            <button className={styles.btnSecondary} onClick={() => void exportImageSet('all')} disabled={isUiBusy || !selectedCharacterId}>
               Export all ({allImageIds.length})
             </button>
           </div>
@@ -623,13 +786,13 @@ export function ExportHubView({
 
           <div className={styles.row}>
             <label className={styles.inlineLabel}>
-              <input type="checkbox" checked={shareIncludeSheet} onChange={(e) => setShareIncludeSheet(e.target.checked)} disabled={busy} /> Include
+              <input type="checkbox" checked={shareIncludeSheet} onChange={(e) => setShareIncludeSheet(e.target.checked)} disabled={isUiBusy} /> Include
               sheet
             </label>
 
             <div className={styles.inlineLabel}>
               Images:
-              <select className={styles.select} value={shareImagesMode} onChange={(e) => setShareImagesMode(e.target.value as any)} disabled={busy}>
+              <select className={styles.select} value={shareImagesMode} onChange={(e) => setShareImagesMode(e.target.value as any)} disabled={isUiBusy}>
                 <option value="selected">Selected ({mediaSelectedIds.length})</option>
                 <option value="all">All ({allImageIds.length})</option>
                 <option value="none">None</option>
@@ -649,7 +812,7 @@ export function ExportHubView({
                         type="checkbox"
                         checked={shareNotesIds.includes(d.id)}
                         onChange={() => toggleIdInList(d.id, shareNotesIds, setShareNotesIds)}
-                        disabled={busy}
+                        disabled={isUiBusy}
                       />
                       <span title={d.id}>{d.title || d.id}</span>
                     </label>
@@ -665,7 +828,7 @@ export function ExportHubView({
                         type="checkbox"
                         checked={shareStoriesIds.includes(d.id)}
                         onChange={() => toggleIdInList(d.id, shareStoriesIds, setShareStoriesIds)}
-                        disabled={busy}
+                        disabled={isUiBusy}
                       />
                       <span title={d.id}>{d.title || d.id}</span>
                     </label>
@@ -681,7 +844,7 @@ export function ExportHubView({
                         type="checkbox"
                         checked={shareMoodboardIds.includes(d.id)}
                         onChange={() => toggleIdInList(d.id, shareMoodboardIds, setShareMoodboardIds)}
-                        disabled={busy}
+                        disabled={isUiBusy}
                       />
                       <span title={d.id}>{d.title || d.id}</span>
                     </label>
@@ -692,7 +855,7 @@ export function ExportHubView({
           </details>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void exportSharePack()} disabled={busy || !selectedCharacterId}>
+            <button className={styles.btnSecondary} onClick={() => void exportSharePack()} disabled={isUiBusy || !selectedCharacterId}>
               Export share pack
             </button>
           </div>
@@ -707,7 +870,7 @@ export function ExportHubView({
               className={styles.select}
               value={selectedCollectionId ?? ''}
               onChange={(e) => setSelectedCollectionId(e.target.value || null)}
-              disabled={busy}
+              disabled={isUiBusy}
             >
               <option value="">(none)</option>
               {(collections || []).map((c) => (
@@ -719,16 +882,16 @@ export function ExportHubView({
           </div>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void createCollection()} disabled={busy}>
+            <button className={styles.btnSecondary} onClick={() => void createCollection()} disabled={isUiBusy}>
               Newâ€¦
             </button>
-            <button className={styles.btnSecondary} onClick={() => void renameCollection()} disabled={busy || !selectedCollectionId}>
+            <button className={styles.btnSecondary} onClick={() => void renameCollection()} disabled={isUiBusy || !selectedCollectionId}>
               Renameâ€¦
             </button>
-            <button className={styles.btnSecondary} onClick={() => void deleteCollection()} disabled={busy || !selectedCollectionId}>
+            <button className={styles.btnSecondary} onClick={() => void deleteCollection()} disabled={isUiBusy || !selectedCollectionId}>
               Delete
             </button>
-            <button className={styles.btnSecondary} onClick={() => void reloadCollections()} disabled={busy}>
+            <button className={styles.btnSecondary} onClick={() => void reloadCollections()} disabled={isUiBusy}>
               Refresh
             </button>
             {selectedCollectionId ? (
@@ -739,10 +902,10 @@ export function ExportHubView({
           </div>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('selected')} disabled={busy || !selectedCollectionId}>
+            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('selected')} disabled={isUiBusy || !selectedCollectionId}>
               Add selected from character ({mediaSelectedIds.length})
             </button>
-            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('all')} disabled={busy || !selectedCollectionId}>
+            <button className={styles.btnSecondary} onClick={() => void addSelectedToCollection('all')} disabled={isUiBusy || !selectedCollectionId}>
               Add all from character ({allImageIds.length})
             </button>
           </div>
@@ -770,11 +933,11 @@ export function ExportHubView({
             <button
               className={styles.btnSecondary}
               onClick={() => void removeSelectedFromCollection()}
-              disabled={busy || !selectedCollectionId || collectionSelectedIds.length === 0}
+              disabled={isUiBusy || !selectedCollectionId || collectionSelectedIds.length === 0}
             >
               Remove selected ({collectionSelectedIds.length})
             </button>
-            <button className={styles.btnSecondary} onClick={() => void exportCollection()} disabled={busy || !selectedCollectionId}>
+            <button className={styles.btnSecondary} onClick={() => void exportCollection()} disabled={isUiBusy || !selectedCollectionId}>
               Export collection
             </button>
           </div>
@@ -782,6 +945,160 @@ export function ExportHubView({
           <div className={styles.muted} style={{ marginTop: 8 }}>
             Tip: export uses the same output root and writes under <code>image_sets/</code>.
           </div>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Backup / restore</div>
+
+          <div className={styles.muted}>Creates a snapshot of this libraryRoot with checksums. Refuses D:.</div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Backups folder</div>
+            <code className={styles.code}>{backupsDir ?? '(not set)'}</code>
+          </div>
+
+          <div className={styles.row}>
+            <button className={styles.btnSecondary} onClick={() => backupsDir && void window.ckc.openPath(backupsDir)} disabled={isUiBusy || !backupsDir}>
+              Open backups
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void chooseBackupOutDirBase()} disabled={isUiBusy}>
+              Choose...
+            </button>
+            <button className={styles.btnSecondary} onClick={() => void resetBackupOutDirBase()} disabled={isUiBusy || !backupOutDirBase}>
+              Reset
+            </button>
+          </div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Snapshot name</div>
+            <input
+              className={styles.input}
+              value={backupName}
+              onChange={(e) => setBackupName(e.target.value)}
+              placeholder="(auto)"
+              disabled={isUiBusy}
+            />
+          </div>
+
+          <div className={styles.row}>
+            <button className={styles.btnSecondary} onClick={() => void startLibraryBackup()} disabled={isUiBusy || !libraryRoot}>
+              Create backup
+            </button>
+            {backupJob?.status === 'running' ? (
+              <button className={styles.btnSecondary} onClick={() => void cancelLibraryBackup()} disabled={!backupJobId}>
+                Cancel
+              </button>
+            ) : null}
+            {backupJob?.status === 'running' && backupJob.progress ? (
+              <span className={styles.muted}>
+                {backupJob.progress.phase} <b>{backupJob.progress.done}</b> / <b>{backupJob.progress.total}</b>
+              </span>
+            ) : null}
+          </div>
+
+          {backupJob?.status === 'error' && backupJob.error ? <div className={styles.muted}>Error: {backupJob.error}</div> : null}
+
+          {backupDoneResult ? (
+            <>
+              <div className={styles.row}>
+                <div className={styles.label}>Snapshot</div>
+                <code className={styles.code}>{backupDoneResult.snapshotDir}</code>
+              </div>
+              <div className={styles.row}>
+                <button className={styles.btnSecondary} onClick={() => void window.ckc.openPath(backupDoneResult.snapshotDir)} disabled={isUiBusy}>
+                  Open snapshot
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          <details className={styles.details} style={{ marginTop: 10 }}>
+            <summary>Restore</summary>
+
+            <div className={styles.row}>
+              <div className={styles.label}>Backup folder</div>
+              <code className={styles.code}>{restoreBackupDir ?? '(not set)'}</code>
+            </div>
+            <div className={styles.row}>
+              <button className={styles.btnSecondary} onClick={() => restoreBackupDir && void window.ckc.openPath(restoreBackupDir)} disabled={isUiBusy || !restoreBackupDir}>
+                Open backup
+              </button>
+              <button className={styles.btnSecondary} onClick={() => void chooseRestoreBackupDir()} disabled={isUiBusy}>
+                Choose...
+              </button>
+            </div>
+
+            <div className={styles.row}>
+              <div className={styles.label}>Destination</div>
+              <code className={styles.code}>{restoreDestLibraryRoot ?? '(not set)'}</code>
+            </div>
+            <div className={styles.row}>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => restoreDestLibraryRoot && void window.ckc.openPath(restoreDestLibraryRoot)}
+                disabled={isUiBusy || !restoreDestLibraryRoot}
+              >
+                Open destination
+              </button>
+              <button className={styles.btnSecondary} onClick={() => void chooseRestoreDestLibraryRoot()} disabled={isUiBusy}>
+                Choose...
+              </button>
+            </div>
+
+            <div className={styles.row}>
+              <label className={styles.inlineLabel}>
+                <input
+                  type="checkbox"
+                  checked={restoreAllowOverwrite}
+                  onChange={(e) => setRestoreAllowOverwrite(e.target.checked)}
+                  disabled={isUiBusy}
+                />{' '}
+                Overwrite destination (danger)
+              </label>
+            </div>
+
+            {restoreAllowOverwrite ? (
+              <div className={styles.row}>
+                <div className={styles.label}>Type RESTORE</div>
+                <input
+                  className={styles.input}
+                  value={restoreConfirmToken}
+                  onChange={(e) => setRestoreConfirmToken(e.target.value)}
+                  placeholder="RESTORE"
+                  disabled={isUiBusy}
+                />
+              </div>
+            ) : null}
+
+            <div className={styles.row}>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => void startLibraryRestore()}
+                disabled={isUiBusy || !restoreBackupDir || !restoreDestLibraryRoot}
+              >
+                Restore
+              </button>
+              {restoreJob?.status === 'running' ? (
+                <button className={styles.btnSecondary} onClick={() => void cancelLibraryRestore()} disabled={!restoreJobId}>
+                  Cancel
+                </button>
+              ) : null}
+              {restoreJob?.status === 'running' && restoreJob.progress ? (
+                <span className={styles.muted}>
+                  {restoreJob.progress.phase} <b>{restoreJob.progress.done}</b> / <b>{restoreJob.progress.total}</b>
+                </span>
+              ) : null}
+            </div>
+
+            {restoreJob?.status === 'error' && restoreJob.error ? <div className={styles.muted}>Error: {restoreJob.error}</div> : null}
+
+            {restoreDoneResult ? (
+              <div className={styles.row}>
+                <div className={styles.label}>Restored to</div>
+                <code className={styles.code}>{restoreDoneResult.destLibraryRoot}</code>
+              </div>
+            ) : null}
+          </details>
         </div>
       </div>
 

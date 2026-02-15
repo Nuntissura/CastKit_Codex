@@ -307,6 +307,46 @@ type CKCNearDuplicateScanJobStatus = {
   result: CKCNearDuplicateScanResult | null;
 };
 
+type CKCLibraryBackupProgress = { phase: string; done: number; total: number };
+
+type CKCLibraryBackupResult = {
+  ok: true;
+  snapshotDir: string;
+  manifestPath: string;
+  checksumsPath: string;
+  fileCount: number;
+};
+
+type CKCLibraryBackupJobStatus = {
+  ok: true;
+  jobId: string;
+  status: 'running' | 'done' | 'cancelled' | 'error';
+  startedAt: string;
+  finishedAt: string | null;
+  progress: CKCLibraryBackupProgress | null;
+  error: string | null;
+  result: CKCLibraryBackupResult | null;
+};
+
+type CKCLibraryRestoreProgress = { phase: string; done: number; total: number };
+
+type CKCLibraryRestoreResult = {
+  ok: true;
+  destLibraryRoot: string;
+  fileCount: number;
+};
+
+type CKCLibraryRestoreJobStatus = {
+  ok: true;
+  jobId: string;
+  status: 'running' | 'done' | 'cancelled' | 'error';
+  startedAt: string;
+  finishedAt: string | null;
+  progress: CKCLibraryRestoreProgress | null;
+  error: string | null;
+  result: CKCLibraryRestoreResult | null;
+};
+
 type CKCCollectionListItem = {
   id: string;
   name: string;
@@ -498,6 +538,12 @@ interface Window {
       startNearDuplicateScan: (params?: { threshold?: number; maxImages?: number; maxPerGroup?: number } | null) => Promise<{ ok: true; jobId: string }>;
       getNearDuplicateScanStatus: (jobId: string) => Promise<CKCNearDuplicateScanJobStatus>;
       cancelNearDuplicateScan: (jobId: string) => Promise<{ ok: true }>;
+      startLibraryBackup: (params?: { outDirBase?: string | null; backupName?: string | null } | null) => Promise<{ ok: true; jobId: string }>;
+      getLibraryBackupStatus: (jobId: string) => Promise<CKCLibraryBackupJobStatus>;
+      cancelLibraryBackup: (jobId: string) => Promise<{ ok: true }>;
+      startLibraryRestore: (params: { backupDir: string; destLibraryRoot: string; allowOverwrite?: boolean; confirmToken?: string | null }) => Promise<{ ok: true; jobId: string }>;
+      getLibraryRestoreStatus: (jobId: string) => Promise<CKCLibraryRestoreJobStatus>;
+      cancelLibraryRestore: (jobId: string) => Promise<{ ok: true }>;
       listCollections: () => Promise<CKCCollectionListItem[]>;
       createCollection: (params: { name: string }) => Promise<{ ok: true; id: string; name: string }>;
       renameCollection: (params: { collectionId: string; name: string }) => Promise<{ ok: true }>;

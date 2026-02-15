@@ -5,6 +5,7 @@ const path = require('path');
 
 const { CKCLibrary } = require('./backend/library');
 const { openAiChatCompletions } = require('./backend/llm');
+const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup');
 
 const CONFIG_FILE = 'ckc-config.json';
 
@@ -134,6 +135,10 @@ let referenceWindow = null;
 let referenceSelection = { imageId: null };
 let nearDupJobs = new Map();
 let nearDupActiveJobId = null;
+let libraryBackupJobs = new Map();
+let libraryBackupActiveJobId = null;
+let libraryRestoreJobs = new Map();
+let libraryRestoreActiveJobId = null;
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -376,6 +381,140 @@ async function runNearDuplicateScanJob(job, params) {
     } finally {
         job.finishedAt = new Date().toISOString();
         if (nearDupActiveJobId === job.jobId) nearDupActiveJobId = null;
+    }
+}
+
+function makeLibraryBackupJobId() {
+    return `bk_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+}
+
+function getLibraryBackupJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return null;
+    return libraryBackupJobs.get(id) || null;
+}
+
+function snapshotLibraryBackupJob(job) {
+    if (!job) return null;
+    const status = String(job.status || 'running');
+    return {
+        ok: true,
+        jobId: String(job.jobId),
+        status,
+        startedAt: String(job.startedAt),
+        finishedAt: job.finishedAt ? String(job.finishedAt) : null,
+        progress: job.progress && typeof job.progress === 'object' ? job.progress : null,
+        error: job.error ? String(job.error) : null,
+        result: status === 'done' ? job.result : null,
+    };
+}
+
+async function runLibraryBackupJob(job, params) {
+    const p = params && typeof params === 'object' ? params : {};
+    const outDirBase = p.outDirBase == null ? null : String(p.outDirBase);
+    const backupName = p.backupName == null ? null : String(p.backupName);
+
+    try {
+        const lib = await ensureLibrary();
+        const res = await createLibraryBackup({
+            libraryRoot: lib.libraryRoot,
+            db: lib.db,
+            outDirBase,
+            backupName,
+            onProgress: (prog) => {
+                if (!job || job.cancelRequested) return;
+                const phase = String(prog?.phase || '').trim() || 'working';
+                const done = Number(prog?.done) || 0;
+                const total = Number(prog?.total) || 0;
+                job.progress = { phase, done, total };
+            },
+            isCancelled: () => !!job.cancelRequested,
+        });
+
+        if (job.cancelRequested) {
+            job.status = 'cancelled';
+            job.result = null;
+        } else {
+            job.status = 'done';
+            job.result = { ok: true, destLibraryRoot: res.destLibraryRoot, fileCount: res.fileCount };
+        }
+    } catch (err) {
+        job.status = 'error';
+        job.error = err instanceof Error ? err.message : String(err);
+        job.result = null;
+    } finally {
+        job.finishedAt = new Date().toISOString();
+        if (libraryBackupActiveJobId === job.jobId) libraryBackupActiveJobId = null;
+    }
+}
+
+function makeLibraryRestoreJobId() {
+    return `rs_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+}
+
+function getLibraryRestoreJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return null;
+    return libraryRestoreJobs.get(id) || null;
+}
+
+function snapshotLibraryRestoreJob(job) {
+    if (!job) return null;
+    const status = String(job.status || 'running');
+    return {
+        ok: true,
+        jobId: String(job.jobId),
+        status,
+        startedAt: String(job.startedAt),
+        finishedAt: job.finishedAt ? String(job.finishedAt) : null,
+        progress: job.progress && typeof job.progress === 'object' ? job.progress : null,
+        error: job.error ? String(job.error) : null,
+        result: status === 'done' ? job.result : null,
+    };
+}
+
+async function runLibraryRestoreJob(job, params) {
+    const p = params && typeof params === 'object' ? params : {};
+    const backupDir = String(p.backupDir || '').trim();
+    const destLibraryRoot = String(p.destLibraryRoot || '').trim();
+    const allowOverwrite = !!p.allowOverwrite;
+    const confirmToken = p.confirmToken == null ? null : String(p.confirmToken);
+
+    try {
+        if (!backupDir) throw new Error('backupDir is required');
+        if (!destLibraryRoot) throw new Error('destLibraryRoot is required');
+
+        const lib = await ensureLibrary();
+        const res = await restoreLibraryBackup({
+            backupDir,
+            destLibraryRoot,
+            currentLibraryRoot: lib.libraryRoot,
+            allowOverwrite,
+            confirmToken,
+            onProgress: (prog) => {
+                if (!job || job.cancelRequested) return;
+                const phase = String(prog?.phase || '').trim() || 'working';
+                const done = Number(prog?.done) || 0;
+                const total = Number(prog?.total) || 0;
+                job.progress = { phase, done, total };
+            },
+            isCancelled: () => !!job.cancelRequested,
+        });
+
+        if (job.cancelRequested) {
+            job.status = 'cancelled';
+            job.result = null;
+        } else {
+            job.status = 'done';
+            job.result = res;
+        }
+    } catch (err) {
+        job.status = 'error';
+        job.error = err instanceof Error ? err.message : String(err);
+        job.result = null;
+    } finally {
+        job.finishedAt = new Date().toISOString();
+        if (libraryRestoreActiveJobId === job.jobId) libraryRestoreActiveJobId = null;
     }
 }
 
@@ -717,6 +856,86 @@ function registerIpcHandlers() {
         const id = String(jobId || '').trim();
         const job = getNearDupJob(id);
         if (!job) throw new Error(`Near-duplicate scan job not found: ${id || '(blank)'}`);
+        job.cancelRequested = true;
+        return { ok: true };
+    });
+
+    ipcMain.handle('ckc:startLibraryBackup', async (_evt, params) => {
+        if (libraryBackupActiveJobId) {
+            const existing = getLibraryBackupJob(libraryBackupActiveJobId);
+            if (existing && String(existing.status) === 'running') throw new Error('Library backup already running.');
+            libraryBackupActiveJobId = null;
+        }
+
+        const jobId = makeLibraryBackupJobId();
+        const job = {
+            jobId,
+            status: 'running',
+            startedAt: new Date().toISOString(),
+            finishedAt: null,
+            progress: { phase: 'starting', done: 0, total: 0 },
+            cancelRequested: false,
+            error: null,
+            result: null,
+        };
+
+        libraryBackupJobs.set(jobId, job);
+        libraryBackupActiveJobId = jobId;
+        void runLibraryBackupJob(job, params || {});
+        return { ok: true, jobId };
+    });
+
+    ipcMain.handle('ckc:getLibraryBackupStatus', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getLibraryBackupJob(id);
+        if (!job) throw new Error(`Library backup job not found: ${id || '(blank)'}`);
+        return snapshotLibraryBackupJob(job);
+    });
+
+    ipcMain.handle('ckc:cancelLibraryBackup', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getLibraryBackupJob(id);
+        if (!job) throw new Error(`Library backup job not found: ${id || '(blank)'}`);
+        job.cancelRequested = true;
+        return { ok: true };
+    });
+
+    ipcMain.handle('ckc:startLibraryRestore', async (_evt, params) => {
+        if (libraryRestoreActiveJobId) {
+            const existing = getLibraryRestoreJob(libraryRestoreActiveJobId);
+            if (existing && String(existing.status) === 'running') throw new Error('Library restore already running.');
+            libraryRestoreActiveJobId = null;
+        }
+
+        const jobId = makeLibraryRestoreJobId();
+        const job = {
+            jobId,
+            status: 'running',
+            startedAt: new Date().toISOString(),
+            finishedAt: null,
+            progress: { phase: 'starting', done: 0, total: 0 },
+            cancelRequested: false,
+            error: null,
+            result: null,
+        };
+
+        libraryRestoreJobs.set(jobId, job);
+        libraryRestoreActiveJobId = jobId;
+        void runLibraryRestoreJob(job, params || {});
+        return { ok: true, jobId };
+    });
+
+    ipcMain.handle('ckc:getLibraryRestoreStatus', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getLibraryRestoreJob(id);
+        if (!job) throw new Error(`Library restore job not found: ${id || '(blank)'}`);
+        return snapshotLibraryRestoreJob(job);
+    });
+
+    ipcMain.handle('ckc:cancelLibraryRestore', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getLibraryRestoreJob(id);
+        if (!job) throw new Error(`Library restore job not found: ${id || '(blank)'}`);
         job.cancelRequested = true;
         return { ok: true };
     });

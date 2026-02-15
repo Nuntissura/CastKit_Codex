@@ -102,6 +102,13 @@
   min-width: 260px;
 }
 
+.input {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 8px 10px;
+  min-width: 260px;
+}
+
 .grid {
   padding: 0 18px 18px;
   display: grid;
@@ -186,4 +193,3 @@
   flex-direction: column;
   gap: 6px;
 }
-

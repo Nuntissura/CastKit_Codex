@@ -88,8 +88,8 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0070 | Character relationship map | DONE | Codex | Structured edges + graph view (Character → Tools editor + Library graph). |
 | WP-0071 | Moodboard arrange tools | DONE | Codex | Multi-select arrange + group/ungroup + tidy (undoable). |
 | WP-0072 | Command palette (Ctrl+K) | DONE | Codex | Ctrl+K global palette: characters/docs/tags/actions. |
-| WP-0073 | Backup/restore wizard | IN_PROGRESS | Codex | Snapshot + restore with manifest/checksums. |
+| WP-0073 | Backup/restore wizard | DONE | Codex | Export Hub wizard; snapshot+restore jobs w/ progress; manifest+SHA256SUMS; refuses D:. |
 
 ## Current focus
-- Current: WP-0073.
+- Current: (none).
 - Next: (none).
