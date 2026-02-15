@@ -129,6 +129,16 @@ type MoodboardItemKind = 'image' | 'text' | 'shape' | 'connector';
 type SelectedItem = { kind: MoodboardItemKind; id: string };
 type Selection = SelectedItem[];
 
+type ClipboardItem =
+  | { kind: 'shape'; item: MoodboardShape; z: number }
+  | { kind: 'connector'; item: MoodboardConnector; z: number }
+  | { kind: 'image'; item: MoodboardImage; z: number }
+  | { kind: 'text'; item: MoodboardText; z: number };
+type ClipboardPayload = {
+  items: ClipboardItem[];
+  bounds: { left: number; top: number; right: number; bottom: number; cx: number; cy: number };
+};
+
 const KIND_Z_BASE: Record<MoodboardItemKind, number> = {
   shape: 0,
   connector: 500,
@@ -322,6 +332,12 @@ export function MoodboardCanvas({
   const isSpaceDownRef = React.useRef<boolean>(false);
   const gridRef = React.useRef<boolean>(false);
   const snapRef = React.useRef<boolean>(false);
+  const boxSelectRef = React.useRef<
+    null | { startPt: { x: number; y: number }; curPt: { x: number; y: number }; startSel: Selection; additive: boolean; moved: boolean }
+  >(null);
+  const clipboardRef = React.useRef<ClipboardPayload | null>(null);
+  const pasteSerialRef = React.useRef<number>(0);
+  const contextMenuElRef = React.useRef<HTMLDivElement | null>(null);
 
   const [tool, setTool] = React.useState<MoodboardTool>('pen');
   const [size, setSize] = React.useState<number>(3);
@@ -336,6 +352,7 @@ export function MoodboardCanvas({
   const [snapToGrid, setSnapToGrid] = React.useState<boolean>(false);
   const [selection, setSelection] = React.useState<Selection>([]);
   const [showLayers, setShowLayers] = React.useState<boolean>(false);
+  const [contextMenu, setContextMenu] = React.useState<null | { x: number; y: number }>(null);
   const [, setHistoryVersion] = React.useState<number>(0);
 
   const canUndo = historyPastRef.current.length > 0;
@@ -370,6 +387,8 @@ export function MoodboardCanvas({
     if (tool !== 'gradient') gradientDragRef.current = null;
     if (tool !== 'shape') shapeDragRef.current = null;
     if (tool !== 'connector') connectorDragRef.current = null;
+    if (tool !== 'move') boxSelectRef.current = null;
+    setContextMenu(null);
   }, [tool]);
 
   React.useEffect(() => {
@@ -1013,6 +1032,26 @@ export function MoodboardCanvas({
       }
     }
 
+    const box = boxSelectRef.current;
+    if (box) {
+      const left = Math.min(box.startPt.x, box.curPt.x) * rect.width;
+      const right = Math.max(box.startPt.x, box.curPt.x) * rect.width;
+      const top = Math.min(box.startPt.y, box.curPt.y) * rect.height;
+      const bottom = Math.max(box.startPt.y, box.curPt.y) * rect.height;
+      const w = right - left;
+      const h = bottom - top;
+      if (w > 0 && h > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.06)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 2 * invZoom;
+        ctx.setLineDash([6 * invZoom, 5 * invZoom]);
+        ctx.fillRect(left, top, w, h);
+        ctx.strokeRect(left + invZoom, top + invZoom, Math.max(0, w - 2 * invZoom), Math.max(0, h - 2 * invZoom));
+        ctx.restore();
+      }
+    }
+
     ctx.restore();
   }, []);
 
@@ -1051,6 +1090,8 @@ export function MoodboardCanvas({
     shapeDragRef.current = null;
     connectorDragRef.current = null;
     connectorEditRef.current = null;
+    boxSelectRef.current = null;
+    setContextMenu(null);
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -1072,6 +1113,8 @@ export function MoodboardCanvas({
     shapeDragRef.current = null;
     connectorDragRef.current = null;
     connectorEditRef.current = null;
+    boxSelectRef.current = null;
+    setContextMenu(null);
     drawingRef.current = false;
     strokeRef.current = null;
     const cur = valueRef.current;
@@ -1112,6 +1155,24 @@ export function MoodboardCanvas({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [redo, undo]);
+
+  React.useEffect(() => {
+    if (!contextMenu) return;
+    const onMouseDown = (evt: MouseEvent) => {
+      const el = contextMenuElRef.current;
+      if (el && evt.target instanceof Node && el.contains(evt.target)) return;
+      setContextMenu(null);
+    };
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [contextMenu]);
 
   React.useEffect(() => {
     const isTypingTarget = (target: EventTarget | null): boolean => {
@@ -1173,6 +1234,7 @@ export function MoodboardCanvas({
       const rect = canvas.getBoundingClientRect();
       const sx = evt.clientX - rect.left;
       const sy = evt.clientY - rect.top;
+      if (evt.button !== 0) return;
 
       if (isSpaceDownRef.current) {
         const view = viewRef.current;
@@ -1666,6 +1728,21 @@ export function MoodboardCanvas({
         })();
 
         if (hit == null) {
+          if (currentTool === 'move' && evt.button === 0) {
+            const prevSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+            const additive = !!evt.shiftKey;
+            const startSel = additive ? prevSel : [];
+            if (!additive && prevSel.length) {
+              selectionRef.current = [];
+              setSelection([]);
+            }
+            boxSelectRef.current = { startPt: pt, curPt: pt, startSel, additive, moved: false };
+            setContextMenu(null);
+            canvas.setPointerCapture(evt.pointerId);
+            redraw();
+            return;
+          }
+
           selectionRef.current = [];
           setSelection([]);
           redraw();
@@ -1979,6 +2056,21 @@ export function MoodboardCanvas({
         const dy = sy - panning.startSY;
         viewRef.current.panX = panning.startPanX + dx;
         viewRef.current.panY = panning.startPanY + dy;
+        redraw();
+        return;
+      }
+
+      const boxSel = boxSelectRef.current;
+      if (boxSel) {
+        const pt = pointFromEvent(evt, canvas, viewRef.current);
+        boxSel.curPt = pt;
+        if (!boxSel.moved) {
+          const rect = canvas.getBoundingClientRect();
+          const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
+          const dxPx = (pt.x - boxSel.startPt.x) * rect.width * zoom;
+          const dyPx = (pt.y - boxSel.startPt.y) * rect.height * zoom;
+          if (Math.hypot(dxPx, dyPx) >= 4) boxSel.moved = true;
+        }
         redraw();
         return;
       }
@@ -2538,6 +2630,144 @@ export function MoodboardCanvas({
         return;
       }
 
+      const boxSel = boxSelectRef.current;
+      if (boxSel) {
+        boxSelectRef.current = null;
+
+        if (!boxSel.moved) {
+          if (!boxSel.additive) {
+            selectionRef.current = [];
+            setSelection([]);
+          } else {
+            selectionRef.current = boxSel.startSel;
+            setSelection(boxSel.startSel);
+          }
+          redraw();
+          return;
+        }
+
+        const cur = valueRef.current;
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const images = Array.isArray(cur.images) ? cur.images : [];
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+
+        const leftSel = Math.min(boxSel.startPt.x, boxSel.curPt.x);
+        const rightSel = Math.max(boxSel.startPt.x, boxSel.curPt.x);
+        const topSel = Math.min(boxSel.startPt.y, boxSel.curPt.y);
+        const bottomSel = Math.max(boxSel.startPt.y, boxSel.curPt.y);
+
+        const hits: Array<{ kind: MoodboardItemKind; id: string; z: number }> = [];
+        for (let i = 0; i < shapes.length; i++) {
+          const s = shapes[i];
+          if (!s || s.hidden) continue;
+          const w = Number(s.w) || 0;
+          const h = Number(s.h) || 0;
+          if (w <= 0 || h <= 0) continue;
+          const cx = Number(s.x) || 0;
+          const cy = Number(s.y) || 0;
+          const l = cx - w / 2;
+          const r = cx + w / 2;
+          const t = cy - h / 2;
+          const b = cy + h / 2;
+          if (r < leftSel || l > rightSel || b < topSel || t > bottomSel) continue;
+          hits.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z) });
+        }
+        for (let i = 0; i < connectors.length; i++) {
+          const c = connectors[i];
+          if (!c || c.hidden) continue;
+          const ax = Number(c.ax) || 0;
+          const ay = Number(c.ay) || 0;
+          const bx = Number(c.bx) || 0;
+          const by = Number(c.by) || 0;
+          const l = Math.min(ax, bx);
+          const r = Math.max(ax, bx);
+          const t = Math.min(ay, by);
+          const b = Math.max(ay, by);
+          if (r < leftSel || l > rightSel || b < topSel || t > bottomSel) continue;
+          hits.push({ kind: 'connector', id: c.id, z: zFor('connector', i, (c as any).z) });
+        }
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          if (!img || img.hidden) continue;
+          const w = Number(img.w) || 0;
+          const h = Number(img.h) || 0;
+          if (w <= 0 || h <= 0) continue;
+          const cx = Number(img.x) || 0;
+          const cy = Number(img.y) || 0;
+          const l = cx - w / 2;
+          const r = cx + w / 2;
+          const t = cy - h / 2;
+          const b = cy + h / 2;
+          if (r < leftSel || l > rightSel || b < topSel || t > bottomSel) continue;
+          hits.push({ kind: 'image', id: img.id, z: zFor('image', i, (img as any).z) });
+        }
+        for (let i = 0; i < texts.length; i++) {
+          const t0 = texts[i];
+          if (!t0 || t0.hidden) continue;
+          const w = Number(t0.w) || 0;
+          const h = Number(t0.h) || 0;
+          if (w <= 0 || h <= 0) continue;
+          const cx = Number(t0.x) || 0;
+          const cy = Number(t0.y) || 0;
+          const l = cx - w / 2;
+          const r = cx + w / 2;
+          const t = cy - h / 2;
+          const b = cy + h / 2;
+          if (r < leftSel || l > rightSel || b < topSel || t > bottomSel) continue;
+          hits.push({ kind: 'text', id: t0.id, z: zFor('text', i, (t0 as any).z) });
+        }
+
+        hits.sort((a, b) => b.z - a.z);
+
+        const groupIds = new Set<string>();
+        const getGroupId = (s: SelectedItem): string => {
+          const it =
+            s.kind === 'image'
+              ? images.find((x) => x && x.id === s.id)
+              : s.kind === 'text'
+                ? texts.find((x) => x && x.id === s.id)
+                : s.kind === 'connector'
+                  ? connectors.find((x) => x && x.id === s.id)
+                  : shapes.find((x) => x && x.id === s.id);
+          return String((it as any)?.groupId ?? '').trim();
+        };
+        for (const h of hits) {
+          const gid = getGroupId({ kind: h.kind, id: h.id });
+          if (gid) groupIds.add(gid);
+        }
+
+        const outMap = new Map<string, SelectedItem>();
+        if (boxSel.additive) {
+          for (const s of boxSel.startSel) outMap.set(`${s.kind}:${s.id}`, s);
+        }
+        for (const h of hits) outMap.set(`${h.kind}:${h.id}`, { kind: h.kind, id: h.id });
+        if (groupIds.size) {
+          for (const s of shapes) {
+            if (!s || s.hidden) continue;
+            if (groupIds.has(String((s as any).groupId ?? '').trim())) outMap.set(`shape:${s.id}`, { kind: 'shape', id: s.id });
+          }
+          for (const c of connectors) {
+            if (!c || c.hidden) continue;
+            if (groupIds.has(String((c as any).groupId ?? '').trim())) outMap.set(`connector:${c.id}`, { kind: 'connector', id: c.id });
+          }
+          for (const img of images) {
+            if (!img || img.hidden) continue;
+            if (groupIds.has(String((img as any).groupId ?? '').trim())) outMap.set(`image:${img.id}`, { kind: 'image', id: img.id });
+          }
+          for (const t of texts) {
+            if (!t || t.hidden) continue;
+            if (groupIds.has(String((t as any).groupId ?? '').trim())) outMap.set(`text:${t.id}`, { kind: 'text', id: t.id });
+          }
+        }
+
+        const nextSel = Array.from(outMap.values());
+        selectionRef.current = nextSel;
+        setSelection(nextSel);
+        redraw();
+        return;
+      }
+
       const shapeDrag = shapeDragRef.current;
       if (shapeDrag) {
         shapeDragRef.current = null;
@@ -3071,6 +3301,451 @@ export function MoodboardCanvas({
     commit(next);
   }, [commit]);
 
+  const buildClipboardPayload = React.useCallback((state: MoodboardState, selList: Selection): ClipboardPayload | null => {
+    const shapes = Array.isArray(state.shapes) ? state.shapes : [];
+    const connectors = Array.isArray(state.connectors) ? state.connectors : [];
+    const images = Array.isArray(state.images) ? state.images : [];
+    const texts = Array.isArray(state.texts) ? state.texts : [];
+
+    const shapeIndexById = new Map(shapes.map((s, i) => [s.id, i]));
+    const connectorIndexById = new Map(connectors.map((c, i) => [c.id, i]));
+    const imageIndexById = new Map(images.map((img, i) => [img.id, i]));
+    const textIndexById = new Map(texts.map((t, i) => [t.id, i]));
+
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+
+    const groupIds = new Set<string>();
+    for (const s of selList) {
+      const it =
+        s.kind === 'image'
+          ? imageById.get(s.id)
+          : s.kind === 'text'
+            ? textById.get(s.id)
+            : s.kind === 'connector'
+              ? connectorById.get(s.id)
+              : shapeById.get(s.id);
+      const gid = String((it as any)?.groupId ?? '').trim();
+      if (gid) groupIds.add(gid);
+    }
+
+    const expanded = new Map<string, SelectedItem>();
+    for (const s of selList) expanded.set(`${s.kind}:${s.id}`, s);
+    if (groupIds.size) {
+      for (const s of shapes) {
+        if (!s || s.hidden) continue;
+        if (groupIds.has(String((s as any).groupId ?? '').trim())) expanded.set(`shape:${s.id}`, { kind: 'shape', id: s.id });
+      }
+      for (const c of connectors) {
+        if (!c || c.hidden) continue;
+        if (groupIds.has(String((c as any).groupId ?? '').trim())) expanded.set(`connector:${c.id}`, { kind: 'connector', id: c.id });
+      }
+      for (const img of images) {
+        if (!img || img.hidden) continue;
+        if (groupIds.has(String((img as any).groupId ?? '').trim())) expanded.set(`image:${img.id}`, { kind: 'image', id: img.id });
+      }
+      for (const t of texts) {
+        if (!t || t.hidden) continue;
+        if (groupIds.has(String((t as any).groupId ?? '').trim())) expanded.set(`text:${t.id}`, { kind: 'text', id: t.id });
+      }
+    }
+
+    const items: ClipboardItem[] = [];
+    for (const s of expanded.values()) {
+      if (s.kind === 'shape') {
+        const it = shapeById.get(s.id);
+        if (!it || (it as any).hidden) continue;
+        const idx = shapeIndexById.get(it.id) ?? 0;
+        items.push({ kind: 'shape', item: { ...it }, z: zFor('shape', idx, (it as any).z) });
+      } else if (s.kind === 'connector') {
+        const it = connectorById.get(s.id);
+        if (!it || (it as any).hidden) continue;
+        const idx = connectorIndexById.get(it.id) ?? 0;
+        items.push({ kind: 'connector', item: { ...it }, z: zFor('connector', idx, (it as any).z) });
+      } else if (s.kind === 'image') {
+        const it = imageById.get(s.id);
+        if (!it || (it as any).hidden) continue;
+        const idx = imageIndexById.get(it.id) ?? 0;
+        items.push({ kind: 'image', item: { ...it }, z: zFor('image', idx, (it as any).z) });
+      } else {
+        const it = textById.get(s.id);
+        if (!it || (it as any).hidden) continue;
+        const idx = textIndexById.get(it.id) ?? 0;
+        items.push({ kind: 'text', item: { ...it }, z: zFor('text', idx, (it as any).z) });
+      }
+    }
+    if (!items.length) return null;
+
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const it of items) {
+      if (it.kind === 'connector') {
+        const ax = Number(it.item.ax) || 0;
+        const ay = Number(it.item.ay) || 0;
+        const bx = Number(it.item.bx) || 0;
+        const by = Number(it.item.by) || 0;
+        left = Math.min(left, Math.min(ax, bx));
+        top = Math.min(top, Math.min(ay, by));
+        right = Math.max(right, Math.max(ax, bx));
+        bottom = Math.max(bottom, Math.max(ay, by));
+        continue;
+      }
+      const cx = Number((it.item as any).x) || 0;
+      const cy = Number((it.item as any).y) || 0;
+      const w = Number((it.item as any).w) || 0;
+      const h = Number((it.item as any).h) || 0;
+      left = Math.min(left, cx - w / 2);
+      top = Math.min(top, cy - h / 2);
+      right = Math.max(right, cx + w / 2);
+      bottom = Math.max(bottom, cy + h / 2);
+    }
+    if (!Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(right) || !Number.isFinite(bottom)) return null;
+    const w = right - left;
+    const h = bottom - top;
+    return { items, bounds: { left, top, right, bottom, cx: left + w / 2, cy: top + h / 2 } };
+  }, []);
+
+  const pastePayload = React.useCallback(
+    (payload: ClipboardPayload, opts?: { bumpSerial?: boolean }) => {
+      if (!payload.items.length) return;
+      const cur = valueRef.current;
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+      const images = Array.isArray(cur.images) ? cur.images : [];
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+
+      const basePx = 20;
+      const canvas = canvasRef.current;
+      const rect = canvas ? canvas.getBoundingClientRect() : null;
+      let mult = 1;
+      if (opts?.bumpSerial) {
+        pasteSerialRef.current += 1;
+        mult = pasteSerialRef.current;
+      }
+      const dx = rect && rect.width > 0 ? (basePx * mult) / rect.width : 0.02 * mult;
+      const dy = rect && rect.height > 0 ? (basePx * mult) / rect.height : 0.02 * mult;
+
+      const maxZ = Math.max(
+        0,
+        ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
+        ...connectors.map((c, i) => zFor('connector', i, (c as any).z)),
+        ...images.map((img, i) => zFor('image', i, (img as any).z)),
+        ...texts.map((t, i) => zFor('text', i, (t as any).z))
+      );
+
+      const groupIdMap = new Map<string, string>();
+      const shapeIdMap = new Map<string, string>();
+      for (const it of payload.items) {
+        const gid = String((it.item as any)?.groupId ?? '').trim();
+        if (gid && !groupIdMap.has(gid)) groupIdMap.set(gid, makeMoodId('mbg_'));
+        if (it.kind === 'shape') shapeIdMap.set(it.item.id, makeMoodId('mbs_'));
+      }
+
+      const sorted = payload.items.slice().sort((a, b) => a.z - b.z);
+      const newSel: Selection = [];
+      const addShapes: MoodboardShape[] = [];
+      const addConnectors: MoodboardConnector[] = [];
+      const addImages: MoodboardImage[] = [];
+      const addTexts: MoodboardText[] = [];
+
+      let z = maxZ + 1;
+      for (const it of sorted) {
+        const gid = String((it.item as any)?.groupId ?? '').trim();
+        const nextGroupId = gid ? groupIdMap.get(gid) : undefined;
+
+        if (it.kind === 'shape') {
+          const nextId = shapeIdMap.get(it.item.id) || makeMoodId('mbs_');
+          addShapes.push({
+            ...it.item,
+            id: nextId,
+            x: clamp01((Number(it.item.x) || 0) + dx),
+            y: clamp01((Number(it.item.y) || 0) + dy),
+            z: z++,
+            groupId: nextGroupId,
+          });
+          newSel.push({ kind: 'shape', id: nextId });
+          continue;
+        }
+
+        if (it.kind === 'connector') {
+          const nextId = makeMoodId('mbc_');
+          addConnectors.push({
+            ...it.item,
+            id: nextId,
+            ax: clamp01((Number(it.item.ax) || 0) + dx),
+            ay: clamp01((Number(it.item.ay) || 0) + dy),
+            bx: clamp01((Number(it.item.bx) || 0) + dx),
+            by: clamp01((Number(it.item.by) || 0) + dy),
+            z: z++,
+            groupId: nextGroupId,
+          });
+          newSel.push({ kind: 'connector', id: nextId });
+          continue;
+        }
+
+        if (it.kind === 'image') {
+          const nextId = makeMoodId('mbi_');
+          const maskShapeId = String((it.item as any)?.mask?.shapeId ?? '').trim();
+          const nextMaskShapeId = maskShapeId && shapeIdMap.has(maskShapeId) ? shapeIdMap.get(maskShapeId) : maskShapeId || undefined;
+          addImages.push({
+            ...it.item,
+            id: nextId,
+            x: clamp01((Number(it.item.x) || 0) + dx),
+            y: clamp01((Number(it.item.y) || 0) + dy),
+            z: z++,
+            groupId: nextGroupId,
+            mask: nextMaskShapeId ? { shapeId: String(nextMaskShapeId) } : undefined,
+          });
+          newSel.push({ kind: 'image', id: nextId });
+          continue;
+        }
+
+        const nextId = makeMoodId('mbt_');
+        addTexts.push({
+          ...it.item,
+          id: nextId,
+          x: clamp01((Number(it.item.x) || 0) + dx),
+          y: clamp01((Number(it.item.y) || 0) + dy),
+          z: z++,
+          groupId: nextGroupId,
+        });
+        newSel.push({ kind: 'text', id: nextId });
+      }
+
+      const nextShapes = [...shapes, ...addShapes];
+      const nextConnectors = [...connectors, ...addConnectors];
+      const nextImages = [...images, ...addImages];
+      const nextTexts = [...texts, ...addTexts];
+
+      const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+      if (nextShapes.length || cur.shapes) next.shapes = nextShapes;
+      if (nextConnectors.length || cur.connectors) next.connectors = nextConnectors;
+      if (nextTexts.length || cur.texts) next.texts = nextTexts;
+      commit(next);
+
+      selectionRef.current = newSel;
+      setSelection(newSel);
+    },
+    [commit]
+  );
+
+  const copySelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (!curSel.length) return;
+    const payload = buildClipboardPayload(valueRef.current, curSel);
+    if (!payload) return;
+    clipboardRef.current = payload;
+    pasteSerialRef.current = 0;
+  }, [buildClipboardPayload]);
+
+  const pasteClipboard = React.useCallback(() => {
+    const payload = clipboardRef.current;
+    if (!payload) return;
+    pastePayload(payload, { bumpSerial: true });
+  }, [pastePayload]);
+
+  const duplicateSelection = React.useCallback(() => {
+    const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (!curSel.length) return;
+    const payload = buildClipboardPayload(valueRef.current, curSel);
+    if (!payload) return;
+    pastePayload(payload);
+  }, [buildClipboardPayload, pastePayload]);
+
+  const deleteSelection = React.useCallback(() => {
+    const sel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (!sel.length) return;
+    const cur = valueRef.current;
+    const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
+    const deletedShapeIds = new Set(sel.filter((s) => s.kind === 'shape').map((s) => s.id));
+    const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+    const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+    const nextShapes = shapes.filter((s) => s && !keys.has(`shape:${s.id}`));
+    const nextConnectors = connectors.filter((c) => c && !keys.has(`connector:${c.id}`));
+    const nextImagesRaw = (cur.images || []).filter((img) => img && !keys.has(`image:${img.id}`));
+    const nextImages = nextImagesRaw.map((img) => {
+      const maskShapeId = String((img as any)?.mask?.shapeId ?? '').trim();
+      return maskShapeId && deletedShapeIds.has(maskShapeId) ? { ...img, mask: undefined } : img;
+    });
+    const nextTexts = (cur.texts || []).filter((t) => t && !keys.has(`text:${t.id}`));
+    const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+    if (nextShapes.length || cur.shapes) next.shapes = nextShapes;
+    if (nextConnectors.length || cur.connectors) next.connectors = nextConnectors;
+    if (nextTexts.length || cur.texts) next.texts = nextTexts;
+    commit(next);
+    selectionRef.current = [];
+    setSelection([]);
+  }, [commit]);
+
+  const nudgeSelection = React.useCallback(
+    (dirX: number, dirY: number, big: boolean) => {
+      const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+      if (!curSel.length) return;
+      const cur = valueRef.current;
+      const units = buildSelectionUnitsForArrange(cur, curSel);
+      if (!units.length) return;
+
+      const canvas = canvasRef.current;
+      const rect = canvas ? canvas.getBoundingClientRect() : null;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+      const stepX = 40 / rect.width;
+      const stepY = 40 / rect.height;
+      const pxStep = big ? 20 : 5;
+      const dx = snapRef.current ? (dirX * stepX * (big ? 2 : 1)) : (dirX * pxStep) / rect.width;
+      const dy = snapRef.current ? (dirY * stepY * (big ? 2 : 1)) : (dirY * pxStep) / rect.height;
+      if (!dx && !dy) return;
+
+      const updates = new Map<
+        string,
+        | { kind: 'pos'; x: number; y: number }
+        | { kind: 'connector'; ax: number; ay: number; bx: number; by: number }
+      >();
+
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+      const images = Array.isArray(cur.images) ? cur.images : [];
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+      const shapeById = new Map(shapes.map((s) => [s.id, s]));
+      const connectorById = new Map(connectors.map((c) => [c.id, c]));
+      const imageById = new Map(images.map((img) => [img.id, img]));
+      const textById = new Map(texts.map((t) => [t.id, t]));
+
+      for (const u of units) {
+        const clampedDx = Math.max(-u.bounds.left, Math.min(1 - u.bounds.right, dx));
+        const clampedDy = Math.max(-u.bounds.top, Math.min(1 - u.bounds.bottom, dy));
+        for (const m of u.members) {
+          const it =
+            m.kind === 'image'
+              ? imageById.get(m.id)
+              : m.kind === 'text'
+                ? textById.get(m.id)
+                : m.kind === 'connector'
+                  ? connectorById.get(m.id)
+                  : shapeById.get(m.id);
+          if (!it || (it as any).hidden || (it as any).locked) continue;
+
+          if (m.kind === 'connector') {
+            let ax = clamp01((Number((it as any).ax) || 0) + clampedDx);
+            let ay = clamp01((Number((it as any).ay) || 0) + clampedDy);
+            let bx = clamp01((Number((it as any).bx) || 0) + clampedDx);
+            let by = clamp01((Number((it as any).by) || 0) + clampedDy);
+            if (snapRef.current) {
+              if (stepX > 0) {
+                ax = clamp01(Math.round(ax / stepX) * stepX);
+                bx = clamp01(Math.round(bx / stepX) * stepX);
+              }
+              if (stepY > 0) {
+                ay = clamp01(Math.round(ay / stepY) * stepY);
+                by = clamp01(Math.round(by / stepY) * stepY);
+              }
+            }
+            updates.set(`connector:${m.id}`, { kind: 'connector', ax, ay, bx, by });
+            continue;
+          }
+
+          let x = clamp01((Number((it as any).x) || 0) + clampedDx);
+          let y = clamp01((Number((it as any).y) || 0) + clampedDy);
+          if (snapRef.current) {
+            if (stepX > 0) x = clamp01(Math.round(x / stepX) * stepX);
+            if (stepY > 0) y = clamp01(Math.round(y / stepY) * stepY);
+          }
+          updates.set(`${m.kind}:${m.id}`, { kind: 'pos', x, y });
+        }
+      }
+
+      if (!updates.size) return;
+      const nextShapes = shapes.map((s) => {
+        const u = updates.get(`shape:${s.id}`);
+        return u && u.kind === 'pos' ? { ...s, x: u.x, y: u.y } : s;
+      });
+      const nextConnectors = connectors.map((c) => {
+        const u = updates.get(`connector:${c.id}`);
+        return u && u.kind === 'connector' ? { ...c, ax: u.ax, ay: u.ay, bx: u.bx, by: u.by } : c;
+      });
+      const nextImages = images.map((img) => {
+        const u = updates.get(`image:${img.id}`);
+        return u && u.kind === 'pos' ? { ...img, x: u.x, y: u.y } : img;
+      });
+      const nextTexts = texts.map((t) => {
+        const u = updates.get(`text:${t.id}`);
+        return u && u.kind === 'pos' ? { ...t, x: u.x, y: u.y } : t;
+      });
+
+      const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+      if (nextShapes.length || cur.shapes) next.shapes = nextShapes;
+      if (nextConnectors.length || cur.connectors) next.connectors = nextConnectors;
+      if (nextTexts.length || cur.texts) next.texts = nextTexts;
+      commit(next);
+    },
+    [buildSelectionUnitsForArrange, commit]
+  );
+
+  React.useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null): boolean => {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || (el as any).isContentEditable;
+    };
+
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (!(evt.ctrlKey || evt.metaKey)) return;
+      if (evt.altKey) return;
+      if (isTypingTarget(evt.target)) return;
+      const k = String(evt.key || '').toLowerCase();
+      if (k === 'c') {
+        evt.preventDefault();
+        copySelection();
+      } else if (k === 'v') {
+        evt.preventDefault();
+        pasteClipboard();
+      } else if (k === 'd') {
+        evt.preventDefault();
+        duplicateSelection();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [copySelection, pasteClipboard, duplicateSelection]);
+
+  React.useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null): boolean => {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || (el as any).isContentEditable;
+    };
+
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (isTypingTarget(evt.target)) return;
+      if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
+      const k = String(evt.key || '');
+      if (k === 'ArrowLeft') {
+        evt.preventDefault();
+        nudgeSelection(-1, 0, evt.shiftKey);
+      } else if (k === 'ArrowRight') {
+        evt.preventDefault();
+        nudgeSelection(1, 0, evt.shiftKey);
+      } else if (k === 'ArrowUp') {
+        evt.preventDefault();
+        nudgeSelection(0, -1, evt.shiftKey);
+      } else if (k === 'ArrowDown') {
+        evt.preventDefault();
+        nudgeSelection(0, 1, evt.shiftKey);
+      } else if (k === 'Delete' || k === 'Backspace') {
+        evt.preventDefault();
+        deleteSelection();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteSelection, nudgeSelection]);
+
   const arrangeUnits = React.useMemo(() => buildSelectionUnitsForArrange(value, selection), [buildSelectionUnitsForArrange, value, selection]);
   const canArrange = arrangeUnits.length >= 2;
   const canDistribute = arrangeUnits.length >= 3;
@@ -3312,24 +3987,7 @@ export function MoodboardCanvas({
 
         <button
             className={styles.toolBtn}
-            onClick={() => {
-              const sel = selectionRef.current;
-              if (!sel || sel.length === 0) return;
-              const cur = valueRef.current;
-              const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
-              const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
-              const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
-              const nextShapes = shapes.filter((s) => s && !keys.has(`shape:${s.id}`));
-              const nextConnectors = connectors.filter((c) => c && !keys.has(`connector:${c.id}`));
-              const nextImages = (cur.images || []).filter((img) => img && !keys.has(`image:${img.id}`));
-              const nextTexts = (cur.texts || []).filter((t) => t && !keys.has(`text:${t.id}`));
-              const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
-              if (shapes.length || cur.shapes) next.shapes = nextShapes;
-              if (connectors.length || cur.connectors) next.connectors = nextConnectors;
-              commit(next);
-              selectionRef.current = [];
-              setSelection([]);
-            }}
+            onClick={deleteSelection}
             disabled={selection.length === 0}
             title="Delete selected item(s)"
           >
@@ -3771,7 +4429,140 @@ export function MoodboardCanvas({
             </div>
           </div>
         ) : null}
-        <canvas ref={canvasRef} className={styles.canvas} />
+        {contextMenu ? (
+          <div
+            ref={contextMenuElRef}
+            className={styles.contextMenu}
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            role="menu"
+          >
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                duplicateSelection();
+                setContextMenu(null);
+              }}
+              disabled={selection.length === 0}
+            >
+              Duplicate
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                copySelection();
+                setContextMenu(null);
+              }}
+              disabled={selection.length === 0}
+            >
+              Copy
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                pasteClipboard();
+                setContextMenu(null);
+              }}
+              disabled={!clipboardRef.current}
+            >
+              Paste
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                deleteSelection();
+                setContextMenu(null);
+              }}
+              disabled={selection.length === 0}
+            >
+              Delete
+            </button>
+
+            <div className={styles.contextMenuSep} />
+
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                if (selection.length === 1) reorderLayer(selection[0], 'up');
+                setContextMenu(null);
+              }}
+              disabled={selection.length !== 1}
+            >
+              Bring forward
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                if (selection.length === 1) reorderLayer(selection[0], 'down');
+                setContextMenu(null);
+              }}
+              disabled={selection.length !== 1}
+            >
+              Send backward
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                if (selection.length === 1) reorderLayer(selection[0], 'top');
+                setContextMenu(null);
+              }}
+              disabled={selection.length !== 1}
+            >
+              Bring to front
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                if (selection.length === 1) reorderLayer(selection[0], 'bottom');
+                setContextMenu(null);
+              }}
+              disabled={selection.length !== 1}
+            >
+              Send to back
+            </button>
+
+            <div className={styles.contextMenuSep} />
+
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                groupSelection();
+                setContextMenu(null);
+              }}
+              disabled={!canGroup}
+            >
+              Group
+            </button>
+            <button
+              className={styles.contextMenuItem}
+              type="button"
+              onClick={() => {
+                ungroupSelection();
+                setContextMenu(null);
+              }}
+              disabled={!canUngroup}
+            >
+              Ungroup
+            </button>
+          </div>
+        ) : null}
+        <canvas
+          ref={canvasRef}
+          className={styles.canvas}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          }}
+        />
       </div>
     </div>
   );

@@ -189,3 +189,40 @@
 .textSize {
   width: 140px;
 }
+
+.contextMenu {
+  position: absolute;
+  z-index: 3;
+  min-width: 190px;
+  max-width: 240px;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextMenuItem {
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.contextMenuItem:hover {
+  background: var(--bg-accent);
+}
+
+.contextMenuItem[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.contextMenuSep {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 4px 0;
+}
