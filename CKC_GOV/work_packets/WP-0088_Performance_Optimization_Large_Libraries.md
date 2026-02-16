@@ -1,8 +1,8 @@
 # Work Packet: WP-0088 — Performance optimization for large libraries
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Optimize CKC for large libraries (1000+ characters, 10,000+ images) with virtualized lists, lazy loading, pagination, and database indexing improvements.
@@ -12,7 +12,7 @@ Optimize CKC for large libraries (1000+ characters, 10,000+ images) with virtual
 - Users with 500+ characters or 5000+ images will experience lag.
 - Performance issues cause user churn (if it's slow, they abandon the tool).
 - Gallery scroll, character list rendering, and search need to scale.
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.6 "Performance & Scalability".
+- Spec: `CastKit_Codex_Spec_v00.056.md` §12.6 "Performance & Scalability".
 
 ## Scope
 ### In
@@ -70,7 +70,7 @@ Optimize CKC for large libraries (1000+ characters, 10,000+ images) with virtual
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.6).
+- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.056.md` §12.6).
 
 ## Implementation notes
 - Key files to modify:

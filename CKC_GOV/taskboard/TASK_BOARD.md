@@ -103,7 +103,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0085 | Character templates & cloning | DONE | Codex | Save/load templates; create-from-template (batch); clone (sheet-only or with images); built-in starter templates; tests added. |
 | WP-0086 | macOS build support | DONE | Codex | Added mac build config + `package:mac:*` scripts + `release-mac.yml` workflow (tag-triggered). Manual mac smoke check pending. |
 | WP-0087 | Web portfolio export | DONE | Codex | Export Hub export writes static HTML site (index + per-character pages) with image/field filtering + safe subset mode (`npm test`, `npx tsc --noEmit`). |
-| WP-0088 | Performance optimization (large libraries) | BACKLOG | TBD | Virtualized lists; lazy loading; pagination; database indexing; thumbnail pre-generation. |
+| WP-0088 | Performance optimization (large libraries) | IN_PROGRESS | Codex | Add pagination/virtualization + lazy-loading where needed; add DB indexes; keep UI stable. |
 | WP-0089 | Visual similarity search | BACKLOG | TBD | Find visually similar images using CLIP embeddings; "find similar" action; bulk embedding generation. |
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
