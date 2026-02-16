@@ -105,7 +105,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0087 | Web portfolio export | DONE | Codex | Export Hub export writes static HTML site (index + per-character pages) with image/field filtering + safe subset mode (`npm test`, `npx tsc --noEmit`). |
 | WP-0088 | Performance optimization (large libraries) | DONE | Codex | Added DB indexes + character list pagination + capped thumbnail rendering (Load more) (`npm test`, `npx tsc --noEmit`). |
 | WP-0089 | Visual similarity search | DONE | Codex | Added dHash-based "Similar…" modal with distance threshold + jump-to (IPC + unit test) (`npm test`, `npx tsc --noEmit`). |
-| WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
+| WP-0090 | Batch character operations | IN_PROGRESS | Codex | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus
 - Current: WP-0090.

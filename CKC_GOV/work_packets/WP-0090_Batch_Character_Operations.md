@@ -1,8 +1,8 @@
 # Work Packet: WP-0090 — Batch character operations
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add multi-select and batch operations for characters in the Library view: bulk tagging, bulk field updates, batch export, batch delete.
@@ -11,7 +11,7 @@ Add multi-select and batch operations for characters in the Library view: bulk t
 - Managing 50+ characters needs bulk actions (currently requires editing one at a time).
 - Common workflows: "Set Universe: Cyberpunk for all NPCs", "Export all main cast", "Delete all test characters".
 - Batch operations are essential for power users with large casts (100+ characters).
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.8 "Batch Character Operations".
+- Spec: `CastKit_Codex_Spec_v00.058.md` §12.8 "Batch character operations (WP-0090)".
 
 ## Scope
 ### In
@@ -35,7 +35,7 @@ Add multi-select and batch operations for characters in the Library view: bulk t
 - Batch export:
   - Use existing export formats (canonical, LLM-friendly, web portfolio)
   - Progress UI with cancel support
-  - Output folder: `<libraryRoot>/exports/batch-<timestamp>/`
+  - Output folder: under the configured output root (default: exe parent folder) at `exports/batch-<timestamp>/` (refuse `D:`)
 - Batch delete:
   - Confirmation dialog with count: "Delete 25 characters?"
   - Optional "Move to Trash" vs "Permanent Delete"
@@ -67,14 +67,14 @@ None (pure feature, uses existing CRUD operations)
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.8).
+- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.058.md` §12.8).
 
 ## Implementation notes
 - Key files to create/modify:
-  - `CKC_main/src/ui/components/LibraryView.tsx` — Multi-select UI
-  - `CKC_main/src/ui/components/BatchOperationsToolbar.tsx` — Batch actions toolbar
-  - `CKC_main/src/ui/components/BulkFieldEditDialog.tsx` — Bulk edit UI
-  - `CKC_main/app/ipc/batch-character.js` — Batch IPC handlers
+  - `CKC_main/src/ui/views/LibraryView.tsx` — Multi-select UI + batch toolbar
+  - `CKC_main/src/ui/components/*` — Batch actions toolbar + dialogs
+  - `CKC_main/app/backend/library.js` — Batch operations backend
+  - `CKC_main/app/main.js` + `CKC_main/app/preload.js` — IPC wiring
 - Multi-select state:
   ```tsx
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(new Set());
