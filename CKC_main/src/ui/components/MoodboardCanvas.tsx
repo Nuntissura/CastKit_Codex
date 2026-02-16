@@ -50,6 +50,8 @@ export type MoodboardImage = {
   rot?: number; // degrees (clockwise)
   z?: number; // z-order (higher draws on top)
   name?: string;
+  folderId?: string;
+  tags?: string[];
   mask?: { shapeId: string }; // clip this image to a shape frame (optional)
   groupId?: string;
   hidden?: boolean;
@@ -65,6 +67,8 @@ export type MoodboardText = {
   rot?: number; // degrees (clockwise)
   z?: number; // z-order (higher draws on top)
   name?: string;
+  folderId?: string;
+  tags?: string[];
   text: string;
   fontSize?: number; // px
   color?: string; // CSS color (prefer #RRGGBB)
@@ -91,6 +95,8 @@ export type MoodboardShape = {
   fill?: MoodboardFill;
   stroke?: { color: string; width: number };
   name?: string;
+  folderId?: string;
+  tags?: string[];
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -107,6 +113,8 @@ export type MoodboardConnector = {
   color?: string; // CSS color (prefer #RRGGBB)
   width?: number; // px
   name?: string;
+  folderId?: string;
+  tags?: string[];
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -116,6 +124,14 @@ export type MoodboardGuide = {
   id: string;
   axis: 'x' | 'y';
   pos: number; // normalized 0..1
+  hidden?: boolean;
+  locked?: boolean;
+};
+
+export type MoodboardFolder = {
+  id: string;
+  name: string;
+  parentId?: string;
   hidden?: boolean;
   locked?: boolean;
 };
@@ -132,6 +148,7 @@ export type MoodboardState = {
   images: MoodboardImage[];
   texts?: MoodboardText[];
   guides?: MoodboardGuide[];
+  folders?: MoodboardFolder[];
   strokesHidden?: boolean;
   strokesLocked?: boolean;
 };
@@ -266,6 +283,82 @@ function bestSnapDelta(
   return bestAbs < Infinity ? { delta: bestDelta, line: bestLine } : null;
 }
 
+function computeEffectiveFolderFlags(folders: MoodboardFolder[]): Map<string, { hidden: boolean; locked: boolean }> {
+  const list = Array.isArray(folders) ? folders : [];
+  const byId = new Map<string, MoodboardFolder>();
+  for (const f of list) {
+    if (!f || typeof f.id !== 'string' || !f.id.trim()) continue;
+    byId.set(f.id, f);
+  }
+
+  const memo = new Map<string, { hidden: boolean; locked: boolean }>();
+  const visiting = new Set<string>();
+  const visit = (id: string): { hidden: boolean; locked: boolean } => {
+    const known = memo.get(id);
+    if (known) return known;
+    if (visiting.has(id)) {
+      const f = byId.get(id);
+      const out = { hidden: !!f?.hidden, locked: !!f?.locked };
+      memo.set(id, out);
+      return out;
+    }
+    const f = byId.get(id);
+    if (!f) {
+      const out = { hidden: false, locked: false };
+      memo.set(id, out);
+      return out;
+    }
+    visiting.add(id);
+    const parentId = typeof f.parentId === 'string' && f.parentId.trim() ? f.parentId.trim() : '';
+    const parent = parentId ? visit(parentId) : { hidden: false, locked: false };
+    visiting.delete(id);
+    const out = { hidden: parent.hidden || !!f.hidden, locked: parent.locked || !!f.locked };
+    memo.set(id, out);
+    return out;
+  };
+
+  for (const id of byId.keys()) visit(id);
+  return memo;
+}
+
+function folderIdOf(item: any): string {
+  return typeof item?.folderId === 'string' ? item.folderId.trim() : '';
+}
+
+function isItemEffectivelyHidden(item: any, folderFlags: Map<string, { hidden: boolean; locked: boolean }>): boolean {
+  if (!item) return true;
+  if (item.hidden) return true;
+  const fid = folderIdOf(item);
+  if (!fid) return false;
+  return !!folderFlags.get(fid)?.hidden;
+}
+
+function isItemEffectivelyLocked(item: any, folderFlags: Map<string, { hidden: boolean; locked: boolean }>): boolean {
+  if (!item) return false;
+  if (item.locked) return true;
+  const fid = folderIdOf(item);
+  if (!fid) return false;
+  return !!folderFlags.get(fid)?.locked;
+}
+
+function normalizeTagList(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  const out: string[] = [];
+  for (const t of tags) {
+    const s = typeof t === 'string' ? t.trim() : '';
+    if (!s) continue;
+    out.push(s);
+  }
+  return out;
+}
+
+function parseTagsInput(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 type ViewTransform = { zoom: number; panX: number; panY: number };
 
 function pointFromEvent(evt: PointerEvent, canvas: HTMLCanvasElement, view?: ViewTransform): { x: number; y: number } {
@@ -317,6 +410,8 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   const connectors = Array.isArray(rawConnectors) ? (rawConnectors as MoodboardConnector[]) : [];
   const rawGuides = (value as any)?.guides;
   const guides = Array.isArray(rawGuides) ? (rawGuides as MoodboardGuide[]) : [];
+  const rawFolders = (value as any)?.folders;
+  const folders = Array.isArray(rawFolders) ? (rawFolders as MoodboardFolder[]) : [];
   let changed = false;
   const nextImages = images.map((img) => {
     if (img && typeof img.id === 'string' && img.id.trim().length) return img;
@@ -357,15 +452,26 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
     return { ...(g as any), id: hasId ? String(g.id) : makeMoodId('mbg_'), axis, pos } as MoodboardGuide;
   });
 
+  const nextFolders = folders.map((f: any) => {
+    const hasId = !!(f && typeof f.id === 'string' && f.id.trim().length);
+    const name = typeof f?.name === 'string' && f.name.trim() ? String(f.name) : 'Folder';
+    const parentId = typeof f?.parentId === 'string' && f.parentId.trim() ? String(f.parentId) : undefined;
+    if (hasId && typeof f?.name === 'string') return f as MoodboardFolder;
+    changed = true;
+    return { ...(f as any), id: hasId ? String(f.id) : makeMoodId('mbf_'), name, parentId } as MoodboardFolder;
+  });
+
   if (rawShapes !== undefined && !Array.isArray(rawShapes)) changed = true;
   if (rawConnectors !== undefined && !Array.isArray(rawConnectors)) changed = true;
   if (rawGuides !== undefined && !Array.isArray(rawGuides)) changed = true;
+  if (rawFolders !== undefined && !Array.isArray(rawFolders)) changed = true;
   if (!changed) return value;
   const next: MoodboardState = { ...value, images: nextImages };
   if (shapes.length || rawShapes !== undefined) next.shapes = nextShapes;
   if (connectors.length || rawConnectors !== undefined) next.connectors = nextConnectors;
   if (texts.length || value.texts) next.texts = nextTexts;
   if (guides.length || rawGuides !== undefined) next.guides = nextGuides;
+  if (folders.length || rawFolders !== undefined) next.folders = nextFolders;
   return next;
 }
 
@@ -500,6 +606,10 @@ export function MoodboardCanvas({
   const [snapToGrid, setSnapToGrid] = React.useState<boolean>(false);
   const [selection, setSelection] = React.useState<Selection>([]);
   const [showLayers, setShowLayers] = React.useState<boolean>(false);
+  const [layersSearch, setLayersSearch] = React.useState<string>('');
+  const [moveSelectionFolderPick, setMoveSelectionFolderPick] = React.useState<string>('');
+  const [activeFolderId, setActiveFolderId] = React.useState<string>('');
+  const [collapsedFolderIds, setCollapsedFolderIds] = React.useState<Set<string>>(() => new Set());
   const [showInspector, setShowInspector] = React.useState<boolean>(false);
   const [showRulers, setShowRulers] = React.useState<boolean>(false);
   const [snapGuides, setSnapGuides] = React.useState<boolean>(true);
@@ -584,16 +694,22 @@ export function MoodboardCanvas({
     const textById = new Map(texts.map((t) => [t.id, t]));
     const shapeById = new Map(shapes.map((s) => [s.id, s]));
     const connectorById = new Map(connectors.map((c) => [c.id, c]));
+    const folderFlags = computeEffectiveFolderFlags(Array.isArray(value.folders) ? value.folders : []);
     const next = selection.filter((sel) => {
-      if (sel.kind === 'image') return !!imageById.get(sel.id) && !imageById.get(sel.id)?.hidden;
-      if (sel.kind === 'text') return !!textById.get(sel.id) && !textById.get(sel.id)?.hidden;
-      if (sel.kind === 'shape') return !!shapeById.get(sel.id) && !shapeById.get(sel.id)?.hidden;
-      return !!connectorById.get(sel.id) && !connectorById.get(sel.id)?.hidden;
+      const it =
+        sel.kind === 'image'
+          ? imageById.get(sel.id)
+          : sel.kind === 'text'
+            ? textById.get(sel.id)
+            : sel.kind === 'shape'
+              ? shapeById.get(sel.id)
+              : connectorById.get(sel.id);
+      return !!it && !isItemEffectivelyHidden(it, folderFlags);
     });
     if (next.length === selection.length && next.every((x, i) => x.kind === selection[i].kind && x.id === selection[i].id)) return;
     selectionRef.current = next;
     setSelection(next);
-  }, [selection, value.images, value.texts, value.shapes, value.connectors]);
+  }, [selection, value.images, value.texts, value.shapes, value.connectors, value.folders]);
 
   const redraw = React.useCallback(() => {
     const canvas = canvasRef.current;
@@ -617,6 +733,10 @@ export function MoodboardCanvas({
       if (typeof sid === 'string' && sid.trim()) maskShapeIds.add(sid);
     }
 
+    const folderFlags = computeEffectiveFolderFlags(Array.isArray(current.folders) ? current.folders : []);
+    const isHidden = (item: any): boolean => isItemEffectivelyHidden(item, folderFlags);
+    const isLocked = (item: any): boolean => isItemEffectivelyLocked(item, folderFlags);
+
     const selection = Array.isArray(selectionRef.current) ? selectionRef.current : [];
     const groupIds = new Set<string>();
     for (const sel of selection) {
@@ -635,10 +755,10 @@ export function MoodboardCanvas({
     const selectionUnits: Array<{ kind: 'group' | 'item'; key: string; bounds: { left: number; top: number; right: number; bottom: number } }> = [];
     for (const gid of groupIds) {
       const members: Array<MoodboardImage | MoodboardText | MoodboardShape | MoodboardConnector> = [];
-      for (const c of connectors) if (c && !c.hidden && String((c as any).groupId ?? '') === gid) members.push(c);
-      for (const s of shapes) if (s && !s.hidden && String((s as any).groupId ?? '') === gid) members.push(s);
-      for (const img of images) if (img && !img.hidden && String((img as any).groupId ?? '') === gid) members.push(img);
-      for (const t of texts) if (t && !t.hidden && String((t as any).groupId ?? '') === gid) members.push(t);
+      for (const c of connectors) if (c && !isHidden(c) && String((c as any).groupId ?? '') === gid) members.push(c);
+      for (const s of shapes) if (s && !isHidden(s) && String((s as any).groupId ?? '') === gid) members.push(s);
+      for (const img of images) if (img && !isHidden(img) && String((img as any).groupId ?? '') === gid) members.push(img);
+      for (const t of texts) if (t && !isHidden(t) && String((t as any).groupId ?? '') === gid) members.push(t);
       if (!members.length) continue;
       let left = Infinity;
       let top = Infinity;
@@ -677,7 +797,7 @@ export function MoodboardCanvas({
             : sel.kind === 'shape'
               ? shapeById.get(sel.id)
               : connectorById.get(sel.id);
-      if (!item || (item as any).hidden) continue;
+      if (!item || isHidden(item)) continue;
       const gid = String((item as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue; // covered by group unit
       if (sel.kind === 'connector') {
@@ -837,7 +957,7 @@ export function MoodboardCanvas({
 
     const drawShapeItem = (s: MoodboardShape) => {
       if (!s) return;
-      if (s.hidden) return;
+      if (isHidden(s)) return;
       const cx = (Number(s.x) || 0) * rect.width;
       const cy = (Number(s.y) || 0) * rect.height;
       const w = (Number(s.w) || 0) * rect.width;
@@ -898,7 +1018,7 @@ export function MoodboardCanvas({
 
     const drawConnectorItem = (c: MoodboardConnector) => {
       if (!c) return;
-      if (c.hidden) return;
+      if (isHidden(c)) return;
       const ax = (Number(c.ax) || 0) * rect.width;
       const ay = (Number(c.ay) || 0) * rect.height;
       const bx = (Number(c.bx) || 0) * rect.width;
@@ -938,7 +1058,7 @@ export function MoodboardCanvas({
 
     const drawImageItem = (img: MoodboardImage) => {
       if (!img?.imageId) return;
-      if (img.hidden) return;
+      if (isHidden(img)) return;
       let el = imageCacheRef.current.get(img.imageId);
       if (!el) {
         el = new Image();
@@ -1020,7 +1140,7 @@ export function MoodboardCanvas({
 
     const drawTextItem = (t: MoodboardText) => {
       if (!t) return;
-      if (t.hidden) return;
+      if (isHidden(t)) return;
       const cx = (Number(t.x) || 0) * rect.width;
       const cy = (Number(t.y) || 0) * rect.height;
       const w = (Number(t.w) || 0) * rect.width;
@@ -1098,22 +1218,22 @@ export function MoodboardCanvas({
     }> = [];
     for (let i = 0; i < shapes.length; i++) {
       const s = shapes[i];
-      if (!s || s.hidden) continue;
+      if (!s || isHidden(s)) continue;
       drawItems.push({ kind: 'shape', index: i, z: zFor('shape', i, (s as any).z), item: s });
     }
     for (let i = 0; i < connectors.length; i++) {
       const c = connectors[i];
-      if (!c || c.hidden) continue;
+      if (!c || isHidden(c)) continue;
       drawItems.push({ kind: 'connector', index: i, z: zFor('connector', i, (c as any).z), item: c });
     }
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
-      if (!img || img.hidden) continue;
+      if (!img || isHidden(img)) continue;
       drawItems.push({ kind: 'image', index: i, z: zFor('image', i, (img as any).z), item: img });
     }
     for (let i = 0; i < texts.length; i++) {
       const t = texts[i];
-      if (!t || t.hidden) continue;
+      if (!t || isHidden(t)) continue;
       drawItems.push({ kind: 'text', index: i, z: zFor('text', i, (t as any).z), item: t });
     }
 
@@ -1283,7 +1403,7 @@ export function MoodboardCanvas({
         const only = selection.length === 1 ? selection[0] : null;
         if (only?.kind === 'connector') {
           const conn = connectorById.get(only.id);
-          if (conn && !conn.hidden) {
+          if (conn && !isHidden(conn)) {
             handles.push(
               { x: (Number(conn.ax) || 0) * rect.width, y: (Number(conn.ay) || 0) * rect.height },
               { x: (Number(conn.bx) || 0) * rect.width, y: (Number(conn.by) || 0) * rect.height }
@@ -1573,25 +1693,28 @@ export function MoodboardCanvas({
         const connectorById = new Map(connectors.map((c) => [c.id, c]));
         const imageById = new Map(images.map((img) => [img.id, img]));
         const textById = new Map(texts.map((t) => [t.id, t]));
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(current.folders) ? current.folders : []);
+        const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
+        const isLockedItem = (it: any): boolean => isItemEffectivelyLocked(it, folderFlags);
 
         const keyOf = (sel: SelectedItem) => `${sel.kind}:${sel.id}`;
 
         const membersForGroup = (gid: string): Selection => {
           const out: Selection = [];
           for (const c of connectors) {
-            if (!c || c.hidden) continue;
+            if (!c || isHiddenItem(c)) continue;
             if (String((c as any).groupId ?? '') === gid) out.push({ kind: 'connector', id: c.id });
           }
           for (const s of shapes) {
-            if (!s || s.hidden) continue;
+            if (!s || isHiddenItem(s)) continue;
             if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
           }
           for (const t of texts) {
-            if (!t || t.hidden) continue;
+            if (!t || isHiddenItem(t)) continue;
             if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
           }
           for (const img of images) {
-            if (!img || img.hidden) continue;
+            if (!img || isHiddenItem(img)) continue;
             if (String((img as any).groupId ?? '') === gid) out.push({ kind: 'image', id: img.id });
           }
           return out;
@@ -1653,7 +1776,7 @@ export function MoodboardCanvas({
                     : m.kind === 'shape'
                       ? shapeById.get(m.id)
                       : connectorById.get(m.id);
-              if (!it || (it as any).hidden) continue;
+              if (!it || isHiddenItem(it)) continue;
               if (m.kind === 'connector') {
                 const ax = Number((it as any).ax) || 0;
                 const ay = Number((it as any).ay) || 0;
@@ -1694,7 +1817,7 @@ export function MoodboardCanvas({
                   : s.kind === 'shape'
                     ? shapeById.get(s.id)
                     : connectorById.get(s.id);
-            if (!it || (it as any).hidden) continue;
+            if (!it || isHiddenItem(it)) continue;
             const gid = String((it as any).groupId ?? '').trim();
             if (gid && groupIds.has(gid)) continue;
             let cx = 0;
@@ -1743,7 +1866,7 @@ export function MoodboardCanvas({
 
             if (u.kind === 'item' && u.item?.kind === 'connector') {
               const conn = connectorById.get(u.item.id);
-              if (conn && !conn.hidden && !conn.locked) {
+              if (conn && !isHiddenItem(conn) && !isLockedItem(conn)) {
                 const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
                 const half = 9 / zoom;
                 const ax = (Number(conn.ax) || 0) * rect.width;
@@ -1768,7 +1891,7 @@ export function MoodboardCanvas({
                   : u.item.kind === 'text'
                     ? textById.get(u.item.id)
                     : shapeById.get(u.item.id);
-              if (it && !(it as any).locked) {
+              if (it && !isHiddenItem(it) && !isLockedItem(it)) {
                 const zoom = Math.max(0.25, Math.min(6, Number(viewRef.current.zoom) || 1));
                 const rotDeg = normalizeAngleDeg(Number((it as any).rot) || 0);
                 const icx = (Number((it as any).x) || 0) * rect.width;
@@ -1811,7 +1934,7 @@ export function MoodboardCanvas({
                     : u.item.kind === 'text'
                       ? textById.get(u.item.id)
                       : shapeById.get(u.item.id);
-                if (it && !(it as any).hidden) {
+                if (it && !isHiddenItem(it)) {
                   const icx = (Number((it as any).x) || 0) * rect.width;
                   const icy = (Number((it as any).y) || 0) * rect.height;
                   const iw = (Number((it as any).w) || 0) * rect.width;
@@ -1849,7 +1972,7 @@ export function MoodboardCanvas({
                     : u.item.kind === 'text'
                       ? textById.get(u.item.id)
                       : shapeById.get(u.item.id);
-                if (!it || (it as any).locked) {
+                if (!it || isHiddenItem(it) || isLockedItem(it)) {
                   redraw();
                   return;
                 }
@@ -1876,7 +1999,7 @@ export function MoodboardCanvas({
                 for (const m of members) {
                   if (m.kind === 'connector') {
                     const c = connectorById.get(m.id);
-                    if (!c || c.hidden) continue;
+                    if (!c || isHiddenItem(c)) continue;
                     startItems.push({
                       kind: 'connector',
                       id: c.id,
@@ -1884,13 +2007,13 @@ export function MoodboardCanvas({
                       ay: Number(c.ay) || 0,
                       bx: Number(c.bx) || 0,
                       by: Number(c.by) || 0,
-                      locked: !!c.locked,
+                      locked: isLockedItem(c),
                     });
                     continue;
                   }
 
                   const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
-                  if (!it || (it as any).hidden) continue;
+                  if (!it || isHiddenItem(it)) continue;
                   startItems.push({
                     kind: m.kind,
                     id: m.id,
@@ -1898,7 +2021,7 @@ export function MoodboardCanvas({
                     y: Number((it as any).y) || 0,
                     w: Number((it as any).w) || 0,
                     h: Number((it as any).h) || 0,
-                    locked: !!(it as any).locked,
+                    locked: isLockedItem(it),
                   });
                 }
                 if (!startItems.some((x) => !x.locked)) {
@@ -1957,22 +2080,22 @@ export function MoodboardCanvas({
           const candidates: Array<{ kind: MoodboardItemKind; id: string; z: number; index: number }> = [];
           for (let i = 0; i < shapes.length; i++) {
             const s = shapes[i];
-            if (!s || s.hidden) continue;
+            if (!s || isHiddenItem(s)) continue;
             candidates.push({ kind: 'shape', id: s.id, z: zFor('shape', i, (s as any).z), index: i });
           }
           for (let i = 0; i < connectors.length; i++) {
             const c = connectors[i];
-            if (!c || c.hidden) continue;
+            if (!c || isHiddenItem(c)) continue;
             candidates.push({ kind: 'connector', id: c.id, z: zFor('connector', i, (c as any).z), index: i });
           }
           for (let i = 0; i < images.length; i++) {
             const img = images[i];
-            if (!img || img.hidden) continue;
+            if (!img || isHiddenItem(img)) continue;
             candidates.push({ kind: 'image', id: img.id, z: zFor('image', i, (img as any).z), index: i });
           }
           for (let i = 0; i < texts.length; i++) {
             const t = texts[i];
-            if (!t || t.hidden) continue;
+            if (!t || isHiddenItem(t)) continue;
             candidates.push({ kind: 'text', id: t.id, z: zFor('text', i, (t as any).z), index: i });
           }
 
@@ -1991,14 +2114,14 @@ export function MoodboardCanvas({
             const c = candidates[i];
             if (c.kind === 'text') {
               const t = texts[c.index];
-              if (!t || t.hidden) continue;
+              if (!t || isHiddenItem(t)) continue;
               if (pointInRotatedRect(pt, t)) return { kind: 'text', id: t.id };
               continue;
             }
 
             if (c.kind === 'image') {
               const img = images[c.index];
-              if (!img || img.hidden) continue;
+              if (!img || isHiddenItem(img)) continue;
               if (pointInRotatedRect(pt, img)) {
                 const maskShapeId = (img as any)?.mask?.shapeId;
                 if (typeof maskShapeId === 'string' && maskShapeId.trim()) {
@@ -2018,7 +2141,7 @@ export function MoodboardCanvas({
 
             if (c.kind === 'connector') {
               const conn = connectors[c.index];
-              if (!conn || conn.hidden) continue;
+              if (!conn || isHiddenItem(conn)) continue;
               const ax = (Number(conn.ax) || 0) * rect.width;
               const ay = (Number(conn.ay) || 0) * rect.height;
               const bx = (Number(conn.bx) || 0) * rect.width;
@@ -2051,7 +2174,7 @@ export function MoodboardCanvas({
             }
 
             const s = shapes[c.index];
-            if (!s || s.hidden) continue;
+            if (!s || isHiddenItem(s)) continue;
             const w = Number(s.w) || 0;
             const h = Number(s.h) || 0;
             if (w <= 0 || h <= 0) continue;
@@ -2172,7 +2295,7 @@ export function MoodboardCanvas({
               : hit.kind === 'shape'
                 ? shapeById.get(hit.id)
                 : connectorById.get(hit.id);
-        if (!hitItem || (hitItem as any).locked) {
+        if (!hitItem || isLockedItem(hitItem)) {
           redraw();
           return;
         }
@@ -2200,7 +2323,7 @@ export function MoodboardCanvas({
           for (const m of u.members) {
             if (m.kind === 'connector') {
               const conn = connectorById.get(m.id);
-              if (!conn || conn.hidden || conn.locked) continue;
+              if (!conn || isHiddenItem(conn) || isLockedItem(conn)) continue;
               const ax = Number(conn.ax) || 0;
               const ay = Number(conn.ay) || 0;
               const bx = Number(conn.bx) || 0;
@@ -2214,7 +2337,7 @@ export function MoodboardCanvas({
             }
 
             const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
-            if (!it || (it as any).hidden || (it as any).locked) continue;
+            if (!it || isHiddenItem(it) || isLockedItem(it)) continue;
             const cx = Number((it as any).x) || 0;
             const cy = Number((it as any).y) || 0;
             const w = Number((it as any).w) || 0;
@@ -2253,6 +2376,8 @@ export function MoodboardCanvas({
         const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
         const images = Array.isArray(cur.images) ? cur.images : [];
         const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
         const maxZ = Math.max(
           0,
           ...shapes.map((s, i) => zFor('shape', i, (s as any).z)),
@@ -2357,9 +2482,10 @@ export function MoodboardCanvas({
         const shapeIds = sel.filter((s) => s.kind === 'shape').map((s) => s.id);
         if (shapeIds.length) {
           const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
           const idSet = new Set(shapeIds);
           const nextShapes = shapes.map((s) => {
-            if (!s || s.hidden || s.locked) return s;
+            if (!s || isItemEffectivelyHidden(s, folderFlags) || isItemEffectivelyLocked(s, folderFlags)) return s;
             if (!idSet.has(s.id)) return s;
             return { ...s, fill: { kind: 'solid' as const, color: colorRef.current } };
           });
@@ -2380,9 +2506,10 @@ export function MoodboardCanvas({
         const shapeIdsAll = sel.filter((s) => s.kind === 'shape').map((s) => s.id);
         const startShapes = Array.isArray(startState.shapes) ? startState.shapes : [];
         const byId = new Map(startShapes.map((s) => [s.id, s]));
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(startState.folders) ? startState.folders : []);
         const shapeIds = shapeIdsAll.filter((id) => {
           const s = byId.get(id);
-          return !!s && !s.hidden && !s.locked;
+          return !!s && !isItemEffectivelyHidden(s, folderFlags) && !isItemEffectivelyLocked(s, folderFlags);
         });
 
         if (shapeIds.length) {
@@ -2527,7 +2654,8 @@ export function MoodboardCanvas({
         const idx = shapes.findIndex((s) => s && s.id === shapeDrag.shapeId);
         if (idx < 0) return;
         const basis = shapes[idx];
-        if (!basis || basis.locked) return;
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        if (!basis || isItemEffectivelyLocked(basis, folderFlags)) return;
 
         const nextShapes = shapes.map((s, i) => (i === idx ? { ...s, x: cx, y: cy, w, h } : s));
         valueRef.current = { ...cur, shapes: nextShapes };
@@ -2544,7 +2672,8 @@ export function MoodboardCanvas({
         const idx = connectors.findIndex((c) => c && c.id === connectorEdit.connectorId);
         if (idx < 0) return;
         const basis = connectors[idx];
-        if (!basis || basis.hidden || basis.locked) return;
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        if (!basis || isItemEffectivelyHidden(basis, folderFlags) || isItemEffectivelyLocked(basis, folderFlags)) return;
         const nextConn =
           connectorEdit.endpoint === 'a'
             ? { ...basis, ax: pt.x, ay: pt.y }
@@ -2564,7 +2693,8 @@ export function MoodboardCanvas({
         const idx = connectors.findIndex((c) => c && c.id === connectorDrag.connectorId);
         if (idx < 0) return;
         const basis = connectors[idx];
-        if (!basis || basis.hidden || basis.locked) return;
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        if (!basis || isItemEffectivelyHidden(basis, folderFlags) || isItemEffectivelyLocked(basis, folderFlags)) return;
         let bx = pt.x;
         let by = pt.y;
         if (evt.shiftKey) {
@@ -2627,7 +2757,9 @@ export function MoodboardCanvas({
       if (rotating) {
         const pt = pointFromEvent(evt, canvas, viewRef.current);
         const basis = rotating.startItem;
-        if (!basis || (basis as any).locked) return;
+        const cur = valueRef.current;
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        if (!basis || isItemEffectivelyLocked(basis, folderFlags)) return;
 
         const rect = canvas.getBoundingClientRect();
         const cx = Number((basis as any).x) || 0;
@@ -2645,12 +2777,11 @@ export function MoodboardCanvas({
         if (evt.shiftKey) nextRot = Math.round(nextRot / 15) * 15;
         nextRot = normalizeAngleDeg(nextRot);
 
-        const cur = valueRef.current;
         if (rotating.itemKind === 'image') {
           const idx = (cur.images || []).findIndex((x) => x && x.id === rotating.id);
           if (idx < 0) return;
           const img = cur.images[idx];
-          if (!img || img.locked) return;
+          if (!img || isItemEffectivelyLocked(img, folderFlags)) return;
           if (normalizeAngleDeg(Number(img.rot) || 0) === nextRot) return;
           const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
           valueRef.current = { ...cur, images: nextImages };
@@ -2664,7 +2795,7 @@ export function MoodboardCanvas({
           const idx = shapes.findIndex((x) => x && x.id === rotating.id);
           if (idx < 0) return;
           const s = shapes[idx];
-          if (!s || s.locked) return;
+          if (!s || isItemEffectivelyLocked(s, folderFlags)) return;
           if (normalizeAngleDeg(Number(s.rot) || 0) === nextRot) return;
           const nextShapes = shapes.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
           valueRef.current = { ...cur, shapes: nextShapes };
@@ -2677,7 +2808,7 @@ export function MoodboardCanvas({
         const idx = texts.findIndex((x) => x && x.id === rotating.id);
         if (idx < 0) return;
         const t = texts[idx];
-        if (!t || t.locked) return;
+        if (!t || isItemEffectivelyLocked(t, folderFlags)) return;
         if (normalizeAngleDeg(Number(t.rot) || 0) === nextRot) return;
         const nextTexts = texts.map((x, i) => (i === idx ? { ...x, rot: nextRot } : x));
         valueRef.current = { ...cur, texts: nextTexts };
@@ -2692,7 +2823,8 @@ export function MoodboardCanvas({
 
         if (resizing.kind === 'item') {
           const basis = resizing.startItem;
-          if (!basis || (basis as any).locked) return;
+          const folderFlags = computeEffectiveFolderFlags(Array.isArray(valueRef.current.folders) ? valueRef.current.folders : []);
+          if (!basis || isItemEffectivelyLocked(basis, folderFlags)) return;
 
           const minSize = 0.02;
           const ratio = (basis as any).h > 0 ? (basis as any).w / (basis as any).h : 1;
@@ -2816,11 +2948,12 @@ export function MoodboardCanvas({
           }
 
           const cur = valueRef.current;
+          const folderFlagsNow = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
           if (resizing.itemKind === 'image') {
             const idx = (cur.images || []).findIndex((x) => x && x.id === resizing.id);
             if (idx < 0) return;
             const img = cur.images[idx];
-            if (!img || img.locked) return;
+            if (!img || isItemEffectivelyLocked(img, folderFlagsNow)) return;
             const changed = img.x !== nextX || img.y !== nextY || img.w !== nextW || img.h !== nextH;
             if (!changed) return;
             const nextImages = cur.images.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
@@ -2836,7 +2969,7 @@ export function MoodboardCanvas({
             const idx = shapes.findIndex((x) => x && x.id === resizing.id);
             if (idx < 0) return;
             const s = shapes[idx];
-            if (!s || s.locked) return;
+            if (!s || isItemEffectivelyLocked(s, folderFlagsNow)) return;
             const changed = s.x !== nextX || s.y !== nextY || s.w !== nextW || s.h !== nextH;
             if (!changed) return;
             const nextShapes = shapes.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
@@ -2851,7 +2984,7 @@ export function MoodboardCanvas({
           const idx = texts.findIndex((x) => x && x.id === resizing.id);
           if (idx < 0) return;
           const t = texts[idx];
-          if (!t || t.locked) return;
+          if (!t || isItemEffectivelyLocked(t, folderFlagsNow)) return;
           const changed = t.x !== nextX || t.y !== nextY || t.w !== nextW || t.h !== nextH;
           if (!changed) return;
           const nextTexts = texts.map((x, i) => (i === idx ? { ...x, x: nextX, y: nextY, w: nextW, h: nextH } : x));
@@ -3034,6 +3167,8 @@ export function MoodboardCanvas({
 
         const selList = Array.isArray(selectionRef.current) ? selectionRef.current : [];
         const selSet = new Set(selList.map((s) => `${s.kind}:${s.id}`));
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
 
         const candX: number[] = [];
         const candY: number[] = [];
@@ -3051,7 +3186,7 @@ export function MoodboardCanvas({
         if (snapObjectsRef.current) {
           const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
           for (const s of shapes) {
-            if (!s || (s as any).hidden) continue;
+            if (!s || isHiddenItem(s)) continue;
             if (selSet.has(`shape:${s.id}`)) continue;
             const cx = Number((s as any).x) || 0;
             const cy = Number((s as any).y) || 0;
@@ -3064,7 +3199,7 @@ export function MoodboardCanvas({
 
           const images = Array.isArray(cur.images) ? cur.images : [];
           for (const img of images) {
-            if (!img || (img as any).hidden) continue;
+            if (!img || isHiddenItem(img)) continue;
             if (selSet.has(`image:${img.id}`)) continue;
             const cx = Number((img as any).x) || 0;
             const cy = Number((img as any).y) || 0;
@@ -3077,7 +3212,7 @@ export function MoodboardCanvas({
 
           const texts = Array.isArray(cur.texts) ? cur.texts : [];
           for (const t of texts) {
-            if (!t || (t as any).hidden) continue;
+            if (!t || isHiddenItem(t)) continue;
             if (selSet.has(`text:${t.id}`)) continue;
             const cx = Number((t as any).x) || 0;
             const cy = Number((t as any).y) || 0;
@@ -3239,6 +3374,8 @@ export function MoodboardCanvas({
         const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
         const images = Array.isArray(cur.images) ? cur.images : [];
         const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+        const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
 
         const leftSel = Math.min(boxSel.startPt.x, boxSel.curPt.x);
         const rightSel = Math.max(boxSel.startPt.x, boxSel.curPt.x);
@@ -3248,7 +3385,7 @@ export function MoodboardCanvas({
         const hits: Array<{ kind: MoodboardItemKind; id: string; z: number }> = [];
         for (let i = 0; i < shapes.length; i++) {
           const s = shapes[i];
-          if (!s || s.hidden) continue;
+          if (!s || isHiddenItem(s)) continue;
           const w = Number(s.w) || 0;
           const h = Number(s.h) || 0;
           if (w <= 0 || h <= 0) continue;
@@ -3263,7 +3400,7 @@ export function MoodboardCanvas({
         }
         for (let i = 0; i < connectors.length; i++) {
           const c = connectors[i];
-          if (!c || c.hidden) continue;
+          if (!c || isHiddenItem(c)) continue;
           const ax = Number(c.ax) || 0;
           const ay = Number(c.ay) || 0;
           const bx = Number(c.bx) || 0;
@@ -3277,7 +3414,7 @@ export function MoodboardCanvas({
         }
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
-          if (!img || img.hidden) continue;
+          if (!img || isHiddenItem(img)) continue;
           const w = Number(img.w) || 0;
           const h = Number(img.h) || 0;
           if (w <= 0 || h <= 0) continue;
@@ -3292,7 +3429,7 @@ export function MoodboardCanvas({
         }
         for (let i = 0; i < texts.length; i++) {
           const t0 = texts[i];
-          if (!t0 || t0.hidden) continue;
+          if (!t0 || isHiddenItem(t0)) continue;
           const w = Number(t0.w) || 0;
           const h = Number(t0.h) || 0;
           if (w <= 0 || h <= 0) continue;
@@ -3332,19 +3469,19 @@ export function MoodboardCanvas({
         for (const h of hits) outMap.set(`${h.kind}:${h.id}`, { kind: h.kind, id: h.id });
         if (groupIds.size) {
           for (const s of shapes) {
-            if (!s || s.hidden) continue;
+            if (!s || isHiddenItem(s)) continue;
             if (groupIds.has(String((s as any).groupId ?? '').trim())) outMap.set(`shape:${s.id}`, { kind: 'shape', id: s.id });
           }
           for (const c of connectors) {
-            if (!c || c.hidden) continue;
+            if (!c || isHiddenItem(c)) continue;
             if (groupIds.has(String((c as any).groupId ?? '').trim())) outMap.set(`connector:${c.id}`, { kind: 'connector', id: c.id });
           }
           for (const img of images) {
-            if (!img || img.hidden) continue;
+            if (!img || isHiddenItem(img)) continue;
             if (groupIds.has(String((img as any).groupId ?? '').trim())) outMap.set(`image:${img.id}`, { kind: 'image', id: img.id });
           }
           for (const t of texts) {
-            if (!t || t.hidden) continue;
+            if (!t || isHiddenItem(t)) continue;
             if (groupIds.has(String((t as any).groupId ?? '').trim())) outMap.set(`text:${t.id}`, { kind: 'text', id: t.id });
           }
         }
@@ -3362,10 +3499,11 @@ export function MoodboardCanvas({
         if (!shapeDrag.moved) {
           const cur = valueRef.current;
           const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+          const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
           const idx = shapes.findIndex((s) => s && s.id === shapeDrag.shapeId);
           if (idx >= 0) {
             const s = shapes[idx];
-            if (s && !s.locked) {
+            if (s && !isItemEffectivelyLocked(s, folderFlags)) {
               const defaultW = shapeDrag.shape === 'ellipse' ? 0.18 : 0.22;
               const defaultH = shapeDrag.shape === 'ellipse' ? 0.18 : 0.16;
               let x = clamp01(Number(s.x) || shapeDrag.startPt.x);
@@ -3401,10 +3539,11 @@ export function MoodboardCanvas({
         if (!connectorDrag.moved) {
           const cur = valueRef.current;
           const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+          const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
           const idx = connectors.findIndex((c) => c && c.id === connectorDrag.connectorId);
           if (idx >= 0) {
             const c = connectors[idx];
-            if (c && !c.locked) {
+            if (c && !isItemEffectivelyLocked(c, folderFlags)) {
               const defaultLen = 0.18;
               const ax = clamp01(Number(c.ax) || connectorDrag.startPt.x);
               const ay = clamp01(Number(c.ay) || connectorDrag.startPt.y);
@@ -3609,23 +3748,25 @@ export function MoodboardCanvas({
     const connectorById = new Map(connectors.map((c) => [c.id, c]));
     const imageById = new Map(images.map((img) => [img.id, img]));
     const textById = new Map(texts.map((t) => [t.id, t]));
+    const folderFlags = computeEffectiveFolderFlags(Array.isArray(state.folders) ? state.folders : []);
+    const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
 
     const membersForGroup = (gid: string): Selection => {
       const out: Selection = [];
       for (const c of connectors) {
-        if (!c || c.hidden) continue;
+        if (!c || isHiddenItem(c)) continue;
         if (String((c as any).groupId ?? '') === gid) out.push({ kind: 'connector', id: c.id });
       }
       for (const s of shapes) {
-        if (!s || s.hidden) continue;
+        if (!s || isHiddenItem(s)) continue;
         if (String((s as any).groupId ?? '') === gid) out.push({ kind: 'shape', id: s.id });
       }
       for (const t of texts) {
-        if (!t || t.hidden) continue;
+        if (!t || isHiddenItem(t)) continue;
         if (String((t as any).groupId ?? '') === gid) out.push({ kind: 'text', id: t.id });
       }
       for (const img of images) {
-        if (!img || img.hidden) continue;
+        if (!img || isHiddenItem(img)) continue;
         if (String((img as any).groupId ?? '') === gid) out.push({ kind: 'image', id: img.id });
       }
       return out;
@@ -3663,7 +3804,7 @@ export function MoodboardCanvas({
       for (const m of members) {
         if (m.kind === 'connector') {
           const it = connectorById.get(m.id);
-          if (!it || (it as any).hidden) continue;
+          if (!it || isHiddenItem(it)) continue;
           const ax = Number((it as any).ax) || 0;
           const ay = Number((it as any).ay) || 0;
           const bx = Number((it as any).bx) || 0;
@@ -3675,7 +3816,7 @@ export function MoodboardCanvas({
           continue;
         }
         const it = m.kind === 'image' ? imageById.get(m.id) : m.kind === 'text' ? textById.get(m.id) : shapeById.get(m.id);
-        if (!it || (it as any).hidden) continue;
+        if (!it || isHiddenItem(it)) continue;
         const cx = Number((it as any).x) || 0;
         const cy = Number((it as any).y) || 0;
         const w = Number((it as any).w) || 0;
@@ -3699,7 +3840,7 @@ export function MoodboardCanvas({
             : s.kind === 'connector'
               ? connectorById.get(s.id)
               : shapeById.get(s.id);
-      if (!it || (it as any).hidden) continue;
+      if (!it || isHiddenItem(it)) continue;
       const gid = String((it as any).groupId ?? '').trim();
       if (gid && groupIds.has(gid)) continue;
       let cx = 0;
@@ -3736,6 +3877,9 @@ export function MoodboardCanvas({
       const curSel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
       if (curSel.length < 2 && mode !== 'tidy') return;
       const cur = valueRef.current;
+      const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+      const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
+      const isLockedItem = (it: any): boolean => isItemEffectivelyLocked(it, folderFlags);
       const units = buildSelectionUnitsForArrange(cur, curSel);
       if (units.length < 2 && mode !== 'tidy') return;
 
@@ -3758,7 +3902,7 @@ export function MoodboardCanvas({
         const clampedDy = Math.max(-unit.bounds.top, Math.min(1 - unit.bounds.bottom, dy));
         for (const m of unit.members) {
           const it: any = getItem(m);
-          if (!it || it.hidden || it.locked) continue;
+          if (!it || isHiddenItem(it) || isLockedItem(it)) continue;
           if (m.kind === 'connector') {
             const ax = clamp01((Number(it.ax) || 0) + clampedDx);
             const ay = clamp01((Number(it.ay) || 0) + clampedDy);
@@ -3936,6 +4080,8 @@ export function MoodboardCanvas({
     const connectors = Array.isArray(state.connectors) ? state.connectors : [];
     const images = Array.isArray(state.images) ? state.images : [];
     const texts = Array.isArray(state.texts) ? state.texts : [];
+    const folderFlags = computeEffectiveFolderFlags(Array.isArray(state.folders) ? state.folders : []);
+    const isHiddenItem = (it: any): boolean => isItemEffectivelyHidden(it, folderFlags);
 
     const shapeIndexById = new Map(shapes.map((s, i) => [s.id, i]));
     const connectorIndexById = new Map(connectors.map((c, i) => [c.id, i]));
@@ -3965,19 +4111,19 @@ export function MoodboardCanvas({
     for (const s of selList) expanded.set(`${s.kind}:${s.id}`, s);
     if (groupIds.size) {
       for (const s of shapes) {
-        if (!s || s.hidden) continue;
+        if (!s || isHiddenItem(s)) continue;
         if (groupIds.has(String((s as any).groupId ?? '').trim())) expanded.set(`shape:${s.id}`, { kind: 'shape', id: s.id });
       }
       for (const c of connectors) {
-        if (!c || c.hidden) continue;
+        if (!c || isHiddenItem(c)) continue;
         if (groupIds.has(String((c as any).groupId ?? '').trim())) expanded.set(`connector:${c.id}`, { kind: 'connector', id: c.id });
       }
       for (const img of images) {
-        if (!img || img.hidden) continue;
+        if (!img || isHiddenItem(img)) continue;
         if (groupIds.has(String((img as any).groupId ?? '').trim())) expanded.set(`image:${img.id}`, { kind: 'image', id: img.id });
       }
       for (const t of texts) {
-        if (!t || t.hidden) continue;
+        if (!t || isHiddenItem(t)) continue;
         if (groupIds.has(String((t as any).groupId ?? '').trim())) expanded.set(`text:${t.id}`, { kind: 'text', id: t.id });
       }
     }
@@ -3986,22 +4132,22 @@ export function MoodboardCanvas({
     for (const s of expanded.values()) {
       if (s.kind === 'shape') {
         const it = shapeById.get(s.id);
-        if (!it || (it as any).hidden) continue;
+        if (!it || isHiddenItem(it)) continue;
         const idx = shapeIndexById.get(it.id) ?? 0;
         items.push({ kind: 'shape', item: { ...it }, z: zFor('shape', idx, (it as any).z) });
       } else if (s.kind === 'connector') {
         const it = connectorById.get(s.id);
-        if (!it || (it as any).hidden) continue;
+        if (!it || isHiddenItem(it)) continue;
         const idx = connectorIndexById.get(it.id) ?? 0;
         items.push({ kind: 'connector', item: { ...it }, z: zFor('connector', idx, (it as any).z) });
       } else if (s.kind === 'image') {
         const it = imageById.get(s.id);
-        if (!it || (it as any).hidden) continue;
+        if (!it || isHiddenItem(it)) continue;
         const idx = imageIndexById.get(it.id) ?? 0;
         items.push({ kind: 'image', item: { ...it }, z: zFor('image', idx, (it as any).z) });
       } else {
         const it = textById.get(s.id);
-        if (!it || (it as any).hidden) continue;
+        if (!it || isHiddenItem(it)) continue;
         const idx = textIndexById.get(it.id) ?? 0;
         items.push({ kind: 'text', item: { ...it }, z: zFor('text', idx, (it as any).z) });
       }
@@ -4240,6 +4386,7 @@ export function MoodboardCanvas({
       const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
       const images = Array.isArray(cur.images) ? cur.images : [];
       const texts = Array.isArray(cur.texts) ? cur.texts : [];
+      const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
       const shapeById = new Map(shapes.map((s) => [s.id, s]));
       const connectorById = new Map(connectors.map((c) => [c.id, c]));
       const imageById = new Map(images.map((img) => [img.id, img]));
@@ -4257,7 +4404,7 @@ export function MoodboardCanvas({
                 : m.kind === 'connector'
                   ? connectorById.get(m.id)
                   : shapeById.get(m.id);
-          if (!it || (it as any).hidden || (it as any).locked) continue;
+          if (!it || isItemEffectivelyHidden(it, folderFlags) || isItemEffectivelyLocked(it, folderFlags)) continue;
 
           if (m.kind === 'connector') {
             let ax = clamp01((Number((it as any).ax) || 0) + clampedDx);
@@ -4476,14 +4623,196 @@ export function MoodboardCanvas({
     [commit]
   );
 
+  const createFolder = React.useCallback(
+    (opts?: { parentId?: string }) => {
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      const parentIdRaw = typeof opts?.parentId === 'string' ? opts?.parentId.trim() : '';
+      const parentId = parentIdRaw && folders.some((f) => f && f.id === parentIdRaw) ? parentIdRaw : undefined;
+
+      const usedNames = new Set(folders.map((f) => String(f?.name || '').trim()).filter(Boolean));
+      let name = 'Folder';
+      if (usedNames.has(name)) {
+        for (let i = 2; i < 10_000; i++) {
+          const candidate = `Folder ${i}`;
+          if (!usedNames.has(candidate)) {
+            name = candidate;
+            break;
+          }
+        }
+      }
+
+      const nextFolders = [...folders, { id: makeMoodId('mbf_'), name, parentId } satisfies MoodboardFolder];
+      commit({ ...cur, folders: nextFolders });
+    },
+    [commit]
+  );
+
+  const renameFolder = React.useCallback(
+    (folderId: string) => {
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      const f = folders.find((x) => x && x.id === folderId);
+      if (!f) return;
+      const nextName = window.prompt('Folder name', String(f.name || '').trim() || 'Folder');
+      if (nextName == null) return;
+      const name = String(nextName).trim() || 'Folder';
+      const nextFolders = folders.map((x) => (x && x.id === folderId ? { ...x, name } : x));
+      commit({ ...cur, folders: nextFolders });
+    },
+    [commit]
+  );
+
+  const deleteFolder = React.useCallback(
+    (folderId: string) => {
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      const f = folders.find((x) => x && x.id === folderId);
+      if (!f) return;
+      if (!window.confirm(`Delete folder "${String(f.name || 'Folder')}"? Layers will be moved out.`)) return;
+
+      const parentId = typeof f.parentId === 'string' && f.parentId.trim() ? f.parentId.trim() : undefined;
+      const nextFolders = folders
+        .filter((x) => x && x.id !== folderId)
+        .map((x) => (x && String(x.parentId || '').trim() === folderId ? { ...x, parentId } : x));
+
+      const clearFolder = (it: any) => {
+        const fid = folderIdOf(it);
+        return fid && fid === folderId ? { ...it, folderId: undefined } : it;
+      };
+
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+      const nextShapes = shapes.map((s) => (s ? clearFolder(s) : s));
+      const nextConnectors = connectors.map((c) => (c ? clearFolder(c) : c));
+      const nextImages = (cur.images || []).map((img) => (img ? clearFolder(img) : img));
+      const nextTexts = texts.map((t) => (t ? clearFolder(t) : t));
+
+      const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts, folders: nextFolders };
+      if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      if (connectors.length || cur.connectors) next.connectors = nextConnectors;
+      if (texts.length || cur.texts) next.texts = nextTexts;
+      if (nextFolders.length || cur.folders) next.folders = nextFolders;
+      commit(next);
+
+      if (activeFolderId === folderId) setActiveFolderId('');
+      setCollapsedFolderIds((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.delete(folderId);
+        return nextSet;
+      });
+    },
+    [activeFolderId, commit]
+  );
+
+  const setFolderForSelection = React.useCallback(
+    (folderId: string | null) => {
+      const sel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+      if (!sel.length) return;
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      const fidRaw = typeof folderId === 'string' ? folderId.trim() : '';
+      const nextFolderId = fidRaw && folders.some((f) => f && f.id === fidRaw) ? fidRaw : undefined;
+
+      const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
+      const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+      const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+      const texts = Array.isArray(cur.texts) ? cur.texts : [];
+
+      const nextShapes = shapes.map((s) => (s && keys.has(`shape:${s.id}`) ? { ...s, folderId: nextFolderId } : s));
+      const nextConnectors = connectors.map((c) => (c && keys.has(`connector:${c.id}`) ? { ...c, folderId: nextFolderId } : c));
+      const nextImages = (cur.images || []).map((img) => (img && keys.has(`image:${img.id}`) ? { ...img, folderId: nextFolderId } : img));
+      const nextTexts = texts.map((t) => (t && keys.has(`text:${t.id}`) ? { ...t, folderId: nextFolderId } : t));
+
+      const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+      if (shapes.length || cur.shapes) next.shapes = nextShapes;
+      if (connectors.length || cur.connectors) next.connectors = nextConnectors;
+      if (texts.length || cur.texts) next.texts = nextTexts;
+      if (folders.length || cur.folders) next.folders = folders;
+      commit(next);
+    },
+    [commit]
+  );
+
+  const setTagsForSelection = React.useCallback(() => {
+    const sel = Array.isArray(selectionRef.current) ? selectionRef.current : [];
+    if (!sel.length) return;
+    const cur = valueRef.current;
+    const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+    const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+    const images = Array.isArray(cur.images) ? cur.images : [];
+    const texts = Array.isArray(cur.texts) ? cur.texts : [];
+    const shapeById = new Map(shapes.map((s) => [s.id, s]));
+    const connectorById = new Map(connectors.map((c) => [c.id, c]));
+    const imageById = new Map(images.map((img) => [img.id, img]));
+    const textById = new Map(texts.map((t) => [t.id, t]));
+
+    const first = sel[0];
+    const firstItem =
+      first.kind === 'shape'
+        ? shapeById.get(first.id)
+        : first.kind === 'connector'
+          ? connectorById.get(first.id)
+          : first.kind === 'image'
+            ? imageById.get(first.id)
+            : textById.get(first.id);
+    const curTags = normalizeTagList((firstItem as any)?.tags);
+    const nextRaw = window.prompt('Tags (comma-separated)', curTags.join(', '));
+    if (nextRaw == null) return;
+    const nextTags = parseTagsInput(String(nextRaw));
+    const tags = nextTags.length ? nextTags : undefined;
+
+    const keys = new Set(sel.map((s) => `${s.kind}:${s.id}`));
+    const nextShapes = shapes.map((s) => (s && keys.has(`shape:${s.id}`) ? { ...s, tags } : s));
+    const nextConnectors = connectors.map((c) => (c && keys.has(`connector:${c.id}`) ? { ...c, tags } : c));
+    const nextImages = images.map((img) => (img && keys.has(`image:${img.id}`) ? { ...img, tags } : img));
+    const nextTexts = texts.map((t) => (t && keys.has(`text:${t.id}`) ? { ...t, tags } : t));
+
+    const next: MoodboardState = { ...cur, images: nextImages, texts: nextTexts };
+    if (shapes.length || cur.shapes) next.shapes = nextShapes;
+    if (connectors.length || cur.connectors) next.connectors = nextConnectors;
+    if (nextTexts.length || cur.texts) next.texts = nextTexts;
+    commit(next);
+  }, [commit]);
+
+  const toggleFolderHidden = React.useCallback(
+    (folderId: string) => {
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      if (!folders.some((f) => f && f.id === folderId)) return;
+      const eff = computeEffectiveFolderFlags(folders).get(folderId);
+      const effectiveHidden = !!eff?.hidden;
+      const nextFolders = folders.map((f) => (f && f.id === folderId ? { ...f, hidden: !effectiveHidden } : f));
+      commit({ ...cur, folders: nextFolders });
+    },
+    [commit]
+  );
+
+  const toggleFolderLocked = React.useCallback(
+    (folderId: string) => {
+      const cur = valueRef.current;
+      const folders = Array.isArray(cur.folders) ? cur.folders : [];
+      if (!folders.some((f) => f && f.id === folderId)) return;
+      const eff = computeEffectiveFolderFlags(folders).get(folderId);
+      const effectiveLocked = !!eff?.locked;
+      const nextFolders = folders.map((f) => (f && f.id === folderId ? { ...f, locked: !effectiveLocked } : f));
+      commit({ ...cur, folders: nextFolders });
+    },
+    [commit]
+  );
+
   const layerShapes = Array.isArray(value.shapes) ? value.shapes : [];
   const layerConnectors = Array.isArray(value.connectors) ? value.connectors : [];
   const layerImages = Array.isArray(value.images) ? value.images : [];
   const layerTexts = Array.isArray(value.texts) ? value.texts : [];
+  const layerFolders = Array.isArray(value.folders) ? value.folders : [];
   const shapeById = new Map(layerShapes.map((s) => [s.id, s]));
   const connectorById = new Map(layerConnectors.map((c) => [c.id, c]));
   const imageById = new Map(layerImages.map((img) => [img.id, img]));
   const textById = new Map(layerTexts.map((t) => [t.id, t]));
+  const folderById = React.useMemo(() => new Map(layerFolders.map((f) => [f.id, f])), [layerFolders]);
+  const folderFlagsForUi = React.useMemo(() => computeEffectiveFolderFlags(layerFolders), [layerFolders]);
 
   const selectedText =
     selection.length === 1 && selection[0]?.kind === 'text'
@@ -4511,6 +4840,162 @@ export function MoodboardCanvas({
     return out;
   }, [layerImages]);
 
+  const layersTree = React.useMemo(() => {
+    type LayerRef = { kind: MoodboardItemKind; id: string };
+    type LayerTreeRow = { kind: 'folder'; id: string; depth: number } | { kind: 'item'; ref: LayerRef; depth: number };
+
+    const folders = Array.isArray(layerFolders) ? layerFolders : [];
+    const byId = new Map<string, MoodboardFolder>();
+    for (const f of folders) {
+      if (!f || typeof f.id !== 'string' || !f.id.trim()) continue;
+      byId.set(f.id, f);
+    }
+
+    const childFoldersByParent = new Map<string, MoodboardFolder[]>();
+    const rootFolders: MoodboardFolder[] = [];
+    for (const f of folders) {
+      if (!f || typeof f.id !== 'string' || !f.id.trim()) continue;
+      const parentId = typeof f.parentId === 'string' ? f.parentId.trim() : '';
+      if (!parentId || parentId === f.id || !byId.has(parentId)) {
+        rootFolders.push(f);
+        continue;
+      }
+      const list = childFoldersByParent.get(parentId) || [];
+      list.push(f);
+      childFoldersByParent.set(parentId, list);
+    }
+
+    const folderOptions: Array<{ id: string; label: string; depth: number }> = [];
+    const walkFolderOptions = (f: MoodboardFolder, depth: number) => {
+      folderOptions.push({ id: f.id, label: String(f.name || 'Folder'), depth });
+      const kids = childFoldersByParent.get(f.id) || [];
+      for (const k of kids) walkFolderOptions(k, depth + 1);
+    };
+    for (const f of rootFolders) walkFolderOptions(f, 0);
+
+    const shapeByIdLocal = new Map(layerShapes.map((s) => [s.id, s]));
+    const connectorByIdLocal = new Map(layerConnectors.map((c) => [c.id, c]));
+    const imageByIdLocal = new Map(layerImages.map((img) => [img.id, img]));
+    const textByIdLocal = new Map(layerTexts.map((t) => [t.id, t]));
+
+    const getItem = (ref: LayerRef): any => {
+      if (ref.kind === 'shape') return shapeByIdLocal.get(ref.id);
+      if (ref.kind === 'connector') return connectorByIdLocal.get(ref.id);
+      if (ref.kind === 'image') return imageByIdLocal.get(ref.id);
+      return textByIdLocal.get(ref.id);
+    };
+
+    const fallbackNameFor = (ref: LayerRef, item: any): string => {
+      if (ref.kind === 'shape') {
+        const base = String((item as any)?.shape) === 'ellipse' ? 'Ellipse' : 'Rect';
+        return `${maskShapeIdsForUi.has(ref.id) ? 'Frame: ' : ''}${base}`;
+      }
+      if (ref.kind === 'connector') return `Connector: ${String((item as any)?.kind) === 'arrow' ? 'Arrow' : 'Line'}`;
+      if (ref.kind === 'image') return String((item as any)?.mask?.shapeId || '').trim() ? 'Image (masked)' : 'Image';
+      const raw = String((item as any)?.text || '').trim();
+      const first = raw.split(/\r?\n/)[0] || '';
+      const snippet = first.length > 28 ? `${first.slice(0, 28)}…` : first;
+      return snippet ? `Text: ${snippet}` : 'Text';
+    };
+
+    const displayNameFor = (ref: LayerRef, item: any): string => {
+      const n = String((item as any)?.name || '').trim();
+      return n || fallbackNameFor(ref, item);
+    };
+
+    const layerOrderDesc = layerOrderAsc.slice().reverse();
+    const itemsByFolder = new Map<string, LayerRef[]>();
+    const rootItems: LayerRef[] = [];
+    for (const r of layerOrderDesc) {
+      const ref: LayerRef = { kind: r.kind, id: r.id };
+      const it = getItem(ref);
+      if (!it) continue;
+      const fid = folderIdOf(it);
+      if (fid && byId.has(fid)) {
+        const list = itemsByFolder.get(fid) || [];
+        list.push(ref);
+        itemsByFolder.set(fid, list);
+      } else {
+        rootItems.push(ref);
+      }
+    }
+
+    const q = String(layersSearch || '').trim().toLowerCase();
+    const visibleItemKeys = new Set<string>();
+    const visibleFolderIds = new Set<string>();
+
+    const addFolderChain = (folderId: string) => {
+      let curId = folderId;
+      let guard = 0;
+      while (curId && byId.has(curId) && guard++ < 1000) {
+        if (visibleFolderIds.has(curId)) break;
+        visibleFolderIds.add(curId);
+        const f = byId.get(curId);
+        const pid = typeof f?.parentId === 'string' ? f.parentId.trim() : '';
+        curId = pid && pid !== curId ? pid : '';
+      }
+    };
+
+    if (q) {
+      for (const f of folders) {
+        if (!f || typeof f.id !== 'string') continue;
+        const name = String(f.name || '').trim().toLowerCase();
+        if (name.includes(q)) addFolderChain(f.id);
+      }
+
+      for (const r of layerOrderDesc) {
+        const ref: LayerRef = { kind: r.kind, id: r.id };
+        const it = getItem(ref);
+        if (!it) continue;
+        const name = displayNameFor(ref, it).toLowerCase();
+        const tags = normalizeTagList((it as any)?.tags)
+          .join(' ')
+          .toLowerCase();
+        if (!name.includes(q) && !tags.includes(q)) continue;
+        visibleItemKeys.add(`${ref.kind}:${ref.id}`);
+        const fid = folderIdOf(it);
+        if (fid) addFolderChain(fid);
+      }
+    }
+
+    const rows: LayerTreeRow[] = [];
+    const forceExpand = !!q;
+    const isCollapsed = (id: string) => !forceExpand && collapsedFolderIds.has(id);
+
+    const walk = (f: MoodboardFolder, depth: number) => {
+      if (q && !visibleFolderIds.has(f.id)) return;
+      rows.push({ kind: 'folder', id: f.id, depth });
+      if (isCollapsed(f.id)) return;
+      const kids = childFoldersByParent.get(f.id) || [];
+      for (const k of kids) walk(k, depth + 1);
+      const items = itemsByFolder.get(f.id) || [];
+      for (const ref of items) {
+        const key = `${ref.kind}:${ref.id}`;
+        if (q && !visibleItemKeys.has(key)) continue;
+        rows.push({ kind: 'item', ref, depth: depth + 1 });
+      }
+    };
+
+    for (const f of rootFolders) walk(f, 0);
+    for (const ref of rootItems) {
+      const key = `${ref.kind}:${ref.id}`;
+      if (q && !visibleItemKeys.has(key)) continue;
+      rows.push({ kind: 'item', ref, depth: 0 });
+    }
+
+    return { rows, folderOptions };
+  }, [
+    collapsedFolderIds,
+    layerConnectors,
+    layerFolders,
+    layerImages,
+    layerOrderAsc,
+    layerShapes,
+    layerTexts,
+    layersSearch,
+    maskShapeIdsForUi,
+  ]);
+
   const maskSelImageId = selection.length === 2 ? selection.find((s) => s.kind === 'image')?.id ?? null : null;
   const maskSelShapeId = selection.length === 2 ? selection.find((s) => s.kind === 'shape')?.id ?? null : null;
   const canApplyMask = !!maskSelImageId && !!maskSelShapeId;
@@ -4523,6 +5008,7 @@ export function MoodboardCanvas({
       const sel = selectedBoxSel;
       if (!sel || (sel.kind !== 'image' && sel.kind !== 'shape' && sel.kind !== 'text')) return;
       const cur = valueRef.current;
+      const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
       const minSize = 0.02;
 
       const applyPatch = (box: any) => {
@@ -4539,7 +5025,7 @@ export function MoodboardCanvas({
         const idx = (cur.images || []).findIndex((img) => img && img.id === sel.id);
         if (idx < 0) return;
         const img = cur.images[idx];
-        if (!img || img.locked) return;
+        if (!img || isItemEffectivelyLocked(img, folderFlags)) return;
         const nextImages = cur.images.map((x, i) => (i === idx ? applyPatch(x) : x));
         commit({ ...cur, images: nextImages });
         return;
@@ -4550,7 +5036,7 @@ export function MoodboardCanvas({
         const idx = shapes.findIndex((s) => s && s.id === sel.id);
         if (idx < 0) return;
         const s = shapes[idx];
-        if (!s || s.locked) return;
+        if (!s || isItemEffectivelyLocked(s, folderFlags)) return;
         const nextShapes = shapes.map((x, i) => (i === idx ? applyPatch(x) : x));
         commit({ ...cur, shapes: nextShapes });
         return;
@@ -4560,7 +5046,7 @@ export function MoodboardCanvas({
       const idx = texts.findIndex((t) => t && t.id === sel.id);
       if (idx < 0) return;
       const t = texts[idx];
-      if (!t || t.locked) return;
+      if (!t || isItemEffectivelyLocked(t, folderFlags)) return;
       const nextTexts = texts.map((x, i) => (i === idx ? applyPatch(x) : x));
       commit({ ...cur, texts: nextTexts });
     },
@@ -4869,7 +5355,70 @@ export function MoodboardCanvas({
         ) : null}
         {showLayers ? (
           <div className={styles.layersPanel} aria-label="Layers">
-            <div className={styles.layersHeader}>Layers</div>
+            <div className={styles.layersHeader}>
+              <div>Layers</div>
+              <button className={styles.layerBtn} type="button" onClick={() => setShowLayers(false)} title="Close">
+                Close
+              </button>
+            </div>
+
+            <div className={styles.layersTools}>
+              <input
+                className={styles.layersSearch}
+                value={layersSearch}
+                onChange={(e) => setLayersSearch(e.target.value)}
+                placeholder="Search layers…"
+              />
+
+              <div className={styles.layersToolsRow}>
+                <button
+                  className={styles.layerBtn}
+                  type="button"
+                  onClick={() => createFolder({ parentId: activeFolderId || undefined })}
+                  title={activeFolderId ? 'Create folder inside the selected folder' : 'Create folder at root'}
+                >
+                  New folder
+                </button>
+
+                <button className={styles.layerBtn} type="button" onClick={setTagsForSelection} disabled={!selection.length} title="Set tags on selection">
+                  Tags…
+                </button>
+
+                <select
+                  className={styles.layersSelect}
+                  value={moveSelectionFolderPick}
+                  disabled={!selection.length}
+                  onChange={(e) => {
+                    const v = String(e.target.value || '');
+                    if (!v) return;
+                    if (v === '__none__') setFolderForSelection(null);
+                    else setFolderForSelection(v);
+                    setMoveSelectionFolderPick('');
+                  }}
+                  title="Move selection to folder"
+                >
+                  <option value="">Move selection…</option>
+                  <option value="__none__">(no folder)</option>
+                  {layersTree.folderOptions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {`${'\u00A0'.repeat(f.depth * 2)}${f.label}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.layersToolsHint}>
+                <span>
+                  Folder target:{' '}
+                  {activeFolderId ? String(folderById.get(activeFolderId)?.name || 'Folder') : 'Root'}
+                </span>
+                {activeFolderId ? (
+                  <button className={styles.layerBtn} type="button" onClick={() => setActiveFolderId('')} title="Clear folder target">
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <div className={styles.layerRow}>
               <div className={styles.layerName}>Ink</div>
               <div className={styles.layerActions}>
@@ -4894,6 +5443,78 @@ export function MoodboardCanvas({
               </div>
             </div>
 
+            <div className={styles.foldersHeader}>Folders</div>
+            <div className={styles.foldersList}>
+              {layersTree.folderOptions.length ? (
+                layersTree.folderOptions.map((fo) => {
+                  const f = folderById.get(fo.id);
+                  if (!f) return null;
+                  const effectiveHidden = !!folderFlagsForUi.get(fo.id)?.hidden;
+                  const effectiveLocked = !!folderFlagsForUi.get(fo.id)?.locked;
+                  const padLeft = 8 + fo.depth * 14;
+                  return (
+                    <div
+                      key={`folder:${fo.id}`}
+                      className={`${styles.layerRow} ${styles.folderRow}`}
+                      data-selected={activeFolderId === fo.id ? '1' : '0'}
+                      style={{ paddingLeft: `${padLeft}px` }}
+                    >
+                      <button
+                        className={styles.layerPick}
+                        type="button"
+                        onClick={() => setActiveFolderId(fo.id)}
+                        title="Select folder (sets folder target)"
+                      >
+                        {effectiveHidden ? '(hidden) ' : ''}
+                        {String(f.name || 'Folder')}
+                      </button>
+
+                      <div className={styles.layerActions}>
+                        <button
+                          className={styles.layerBtn}
+                          data-active={effectiveHidden ? '1' : '0'}
+                          onClick={() => toggleFolderHidden(fo.id)}
+                          title={effectiveHidden ? 'Show folder contents' : 'Hide folder contents'}
+                          type="button"
+                        >
+                          {effectiveHidden ? 'Show' : 'Hide'}
+                        </button>
+                        <button
+                          className={styles.layerBtn}
+                          data-active={effectiveLocked ? '1' : '0'}
+                          onClick={() => toggleFolderLocked(fo.id)}
+                          title={effectiveLocked ? 'Unlock folder contents' : 'Lock folder contents'}
+                          type="button"
+                        >
+                          {effectiveLocked ? 'Unlock' : 'Lock'}
+                        </button>
+                        <button className={styles.layerBtn} type="button" onClick={() => renameFolder(fo.id)} title="Rename folder">
+                          Rename
+                        </button>
+                        <button className={styles.layerBtn} type="button" onClick={() => createFolder({ parentId: fo.id })} title="New subfolder">
+                          +Sub
+                        </button>
+                        <button
+                          className={styles.layerBtn}
+                          type="button"
+                          onClick={() => setFolderForSelection(fo.id)}
+                          disabled={!selection.length}
+                          title="Move selection into this folder"
+                        >
+                          Put sel
+                        </button>
+                        <button className={styles.layerBtn} type="button" onClick={() => deleteFolder(fo.id)} title="Delete folder">
+                          Del
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className={styles.layersEmpty}>No folders yet.</div>
+              )}
+            </div>
+
             <div className={styles.layersList}>
               {layerOrderAsc
                 .slice()
@@ -4915,8 +5536,8 @@ export function MoodboardCanvas({
                   if (!item) return null;
 
                   const isSelected = selection.some((s) => s.kind === ref.kind && s.id === ref.id);
-                  const hidden = !!(item as any).hidden;
-                  const locked = !!(item as any).locked;
+                  const hidden = isItemEffectivelyHidden(item, folderFlagsForUi);
+                  const locked = isItemEffectivelyLocked(item, folderFlagsForUi);
                   const gid = String((item as any).groupId ?? '').trim();
 
                   const fallbackName =
@@ -4934,6 +5555,14 @@ export function MoodboardCanvas({
                             })();
 
                   const displayName = String((item as any).name || '').trim() || fallbackName;
+                  const q = String(layersSearch || '').trim().toLowerCase();
+                  if (q) {
+                    const tags = normalizeTagList((item as any)?.tags)
+                      .join(' ')
+                      .toLowerCase();
+                    const name = displayName.toLowerCase();
+                    if (!name.includes(q) && !tags.includes(q)) return null;
+                  }
 
                   return (
                     <div key={key} className={styles.layerRow} data-selected={isSelected ? '1' : '0'}>
@@ -4945,21 +5574,21 @@ export function MoodboardCanvas({
                             if (gid) {
                               const members: Selection = [];
                               for (const c of layerConnectors) {
-                                if (!c || c.hidden) continue;
+                                if (!c || isItemEffectivelyHidden(c, folderFlagsForUi)) continue;
                                 if (String((c as any).groupId ?? '') === gid) members.push({ kind: 'connector', id: c.id });
                               }
                               for (const s of layerShapes) {
-                                if (!s || s.hidden) continue;
+                                if (!s || isItemEffectivelyHidden(s, folderFlagsForUi)) continue;
                                 if (String((s as any).groupId ?? '') === gid) members.push({ kind: 'shape', id: s.id });
                               }
                               for (const t of layerTexts) {
-                              if (!t || t.hidden) continue;
-                              if (String((t as any).groupId ?? '') === gid) members.push({ kind: 'text', id: t.id });
-                            }
-                            for (const img of layerImages) {
-                              if (!img || img.hidden) continue;
-                              if (String((img as any).groupId ?? '') === gid) members.push({ kind: 'image', id: img.id });
-                            }
+                                if (!t || isItemEffectivelyHidden(t, folderFlagsForUi)) continue;
+                                if (String((t as any).groupId ?? '') === gid) members.push({ kind: 'text', id: t.id });
+                              }
+                              for (const img of layerImages) {
+                                if (!img || isItemEffectivelyHidden(img, folderFlagsForUi)) continue;
+                                if (String((img as any).groupId ?? '') === gid) members.push({ kind: 'image', id: img.id });
+                              }
                             const hit: SelectedItem = { kind: ref.kind, id: ref.id };
                             const rest = members.filter((m) => !(m.kind === hit.kind && m.id === hit.id));
                             const nextSel: Selection = [hit, ...rest];

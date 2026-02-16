@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: DONE
 
 ## Summary
 Upgrade the layers panel with folders (nested groups), per-layer tags, and search within a board.
@@ -10,7 +10,7 @@ Upgrade the layers panel with folders (nested groups), per-layer tags, and searc
 ## Why
 - Power users need organization tools once boards grow.
 - Makes masking/framing and complex compositions manageable.
-- Spec: `CastKit_Codex_Spec_v00.051.md` §11.27.
+- Spec: `CastKit_Codex_Spec_v00.052.md` §11.27.
 
 ## Scope
 ### In
@@ -23,12 +23,13 @@ Upgrade the layers panel with folders (nested groups), per-layer tags, and searc
 - Global tag taxonomy (this is board-local only).
 
 ## Acceptance criteria
-- [ ] Folders can be created/renamed/nested and persist in moodboard JSON.
-- [ ] Search filters the layers list deterministically.
+- [x] Folders can be created/renamed/nested and persist in moodboard JSON.
+- [x] Search filters the layers list deterministically (name + tags).
 
 ## Test plan
+- [x] `npx tsc --noEmit`
+- [x] `npm test`
 - [ ] Manual: large board organization flow.
 
 ## Notes
 - Do NOT touch `D:`.
-

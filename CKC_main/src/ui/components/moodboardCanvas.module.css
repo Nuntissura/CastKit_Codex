@@ -64,8 +64,76 @@
 }
 
 .layersHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-weight: 800;
   margin-bottom: 8px;
+  gap: 8px;
+}
+
+.layersTools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.layersToolsRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.layersSearch {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text);
+  font: inherit;
+}
+
+.layersSelect {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text);
+  font: inherit;
+  min-width: 160px;
+}
+
+.layersToolsHint {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.foldersHeader {
+  font-weight: 800;
+  margin-top: 10px;
+}
+
+.foldersList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.folderRow {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.layersEmpty {
+  color: var(--text-secondary);
+  padding: 8px;
+  border: 1px dashed var(--glass-border);
 }
 
 .layersList {
