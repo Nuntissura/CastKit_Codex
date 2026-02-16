@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add higher quality export options for moodboards: hi-res PNG, export selection only, and PDF export/print.
@@ -10,7 +10,7 @@ Add higher quality export options for moodboards: hi-res PNG, export selection o
 ## Why
 - Moodboards become shareable artifacts.
 - Current export uses viewport canvas; needs a “real export” path.
-- Spec: `CastKit_Codex_Spec_v00.051.md` §11.29.
+- Spec: `CastKit_Codex_Spec_v00.052.md` §11.29.
 
 ## Scope
 ### In
@@ -31,4 +31,3 @@ Add higher quality export options for moodboards: hi-res PNG, export selection o
 
 ## Notes
 - Do NOT touch `D:`.
-

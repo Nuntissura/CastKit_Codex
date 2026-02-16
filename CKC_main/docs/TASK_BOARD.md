@@ -97,7 +97,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0079 | Moodboard: guides/rulers + smart snapping | DONE | Codex | Guides + rulers + smart snapping w/ visible cues (`npm test`, `npx tsc --noEmit`). |
 | WP-0080 | Moodboard: layer folders + search/tags | DONE | Codex | Nested folders + board-local tags + search (`npm test`, `npx tsc --noEmit`). |
 | WP-0081 | Moodboard: styling (opacity/blend/shadow) | DONE | Codex | Per-layer styling (non-destructive). |
-| WP-0082 | Moodboard: export powerhouse | BACKLOG | Codex | Hi-res + selection export + PDF. |
+| WP-0082 | Moodboard: export powerhouse | IN_PROGRESS | Codex | Hi-res + selection export + PDF. |
 | WP-0083 | Global full-text search | BACKLOG | TBD | Search across character sheets, notes, stories, moodboards, image metadata with context previews. |
 | WP-0084 | AI-assisted image tagging | BACKLOG | TBD | Auto-tag images on import using CLIP/BLIP; bulk tag existing images; local + cloud options. |
 | WP-0085 | Character templates & cloning | BACKLOG | TBD | Save/load character templates; clone characters; built-in template library; batch character creation. |
