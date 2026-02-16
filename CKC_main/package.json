@@ -14,6 +14,9 @@
     "package:win:raw": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
     "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
     "release:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
+    "package:mac:raw": "bash scripts/package_mac.sh",
+    "package:mac": "bash scripts/release_mac.sh --bump patch",
+    "release:mac": "bash scripts/release_mac.sh --bump patch",
     "electron:build": "npm run package:win"
   },
   "dependencies": {
@@ -48,12 +51,30 @@
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
     "win": {
       "target": [
         "nsis",
         "portable"
       ],
       "icon": "app/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     }
   }
 }

@@ -1,0 +1,75 @@
+name: Release (macOS)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build_macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: CKC_main/package-lock.json
+
+      - name: Install dependencies
+        working-directory: CKC_main
+        run: npm ci --legacy-peer-deps
+
+      - name: Package (DMG + ZIP)
+        working-directory: CKC_main
+        run: npm run package:mac:raw
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest="CKC_GOV/targets/CKC/artifacts/LATEST_BUILD.txt"
+          if [[ ! -f "$latest" ]]; then
+            echo "Missing: $latest" >&2
+            exit 1
+          fi
+
+          artifact_line="$(grep -E '^artifacts:' "$latest" | head -n 1 || true)"
+          if [[ -z "$artifact_line" ]]; then
+            echo "LATEST_BUILD.txt missing 'artifacts:' line" >&2
+            exit 1
+          fi
+
+          artifacts_raw="$(echo "${artifact_line#artifacts:}" | xargs)"
+          if [[ -z "$artifacts_raw" ]]; then
+            echo "LATEST_BUILD.txt has empty 'artifacts:' value" >&2
+            exit 1
+          fi
+
+          latest_dir="$(cd "$(dirname "$latest")" && pwd)"
+          artifacts_path="$artifacts_raw"
+          if [[ "${artifacts_path:0:1}" != "/" ]]; then
+            artifacts_path="$latest_dir/$artifacts_path"
+          fi
+          artifacts_path="$(cd "$artifacts_path" && pwd)"
+
+          mkdir -p release_assets
+          shopt -s nullglob
+          cp -f "$artifacts_path"/*.dmg release_assets/ || true
+          cp -f "$artifacts_path"/*.zip release_assets/ || true
+
+          echo "Release assets:"
+          ls -lah release_assets
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_assets/*
+          generate_release_notes: true
+

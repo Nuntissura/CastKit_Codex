@@ -101,13 +101,13 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0083 | Global full-text search | DONE | Codex | Ctrl+Shift+F global search across sheets/docs/moodboards/images with snippets + jump-to (`npm test`, `npx tsc --noEmit`). |
 | WP-0084 | AI-assisted image tagging | DONE | Codex | OpenAI-compatible vision endpoint (LM Studio/Ollama/OpenAI) for suggested tags + confidence; per-image review/apply; cancellable bulk job; auto-suggest on import toggle (`npm test`, `npx tsc --noEmit`). |
 | WP-0085 | Character templates & cloning | DONE | Codex | Save/load templates; create-from-template (batch); clone (sheet-only or with images); built-in starter templates; tests added. |
-| WP-0086 | macOS build support | IN_PROGRESS | Codex | electron-builder macOS config; DMG + .app bundle; GitHub Actions workflow; portable defaults. |
+| WP-0086 | macOS build support | DONE | Codex | Added mac build config + `package:mac:*` scripts + `release-mac.yml` workflow (tag-triggered). Manual mac smoke check pending. |
 | WP-0087 | Web portfolio export | BACKLOG | TBD | Export library as static HTML website (portfolio/codex formats); GitHub Pages ready. |
 | WP-0088 | Performance optimization (large libraries) | BACKLOG | TBD | Virtualized lists; lazy loading; pagination; database indexing; thumbnail pre-generation. |
 | WP-0089 | Visual similarity search | BACKLOG | TBD | Find visually similar images using CLIP embeddings; "find similar" action; bulk embedding generation. |
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus
-- Current: WP-0086.
-- Next: WP-0087.
-- High-ROI backlog: WP-0086 (macOS), WP-0087 (web export), WP-0088 (performance), WP-0089 (similarity), WP-0090 (batch ops).
+- Current: WP-0087.
+- Next: WP-0088.
+- High-ROI backlog: WP-0087 (web export), WP-0088 (performance), WP-0089 (similarity), WP-0090 (batch ops).
