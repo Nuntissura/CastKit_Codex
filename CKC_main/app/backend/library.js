@@ -4554,6 +4554,295 @@ class CKCLibrary {
     return { ok: true, outDir: packDir, manifestPath };
   }
 
+  async exportWebPortfolio({
+    outDir = null,
+    characterIds = null,
+    format = 'portfolio',
+    imageMode = 'all',
+    fieldMode = 'safe',
+  } = {}) {
+    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    assertNotForbiddenDrive(exportRoot, 'Export destination');
+    ensureDir(exportRoot);
+
+    const safeFormat = String(format ?? '').trim().toLowerCase() === 'codex' ? 'codex' : 'portfolio';
+    const safeImageMode = (() => {
+      const m = String(imageMode ?? '').trim().toLowerCase();
+      if (m === 'carousel' || m === 'frontpage' || m === 'all') return m;
+      return 'all';
+    })();
+    const safeFieldMode = (() => {
+      const m = String(fieldMode ?? '').trim().toLowerCase();
+      if (m === 'none' || m === 'all' || m === 'safe') return m;
+      return 'safe';
+    })();
+
+    const folderName = `web-portfolio-${toIsoSafeTimestamp()}`;
+    const siteDir = uniquePath(exportRoot, sanitizeFileName(null, folderName));
+    assertNotForbiddenDrive(siteDir, 'Export destination');
+    ensureDir(siteDir);
+
+    const dirs = {
+      characters: path.join(siteDir, 'characters'),
+      images: path.join(siteDir, 'images'),
+      assets: path.join(siteDir, 'assets'),
+      icons: path.join(siteDir, 'assets', 'icons'),
+    };
+    ensureDir(dirs.characters);
+    ensureDir(dirs.images);
+    ensureDir(dirs.assets);
+    ensureDir(dirs.icons);
+
+    const escapeHtml = (text) =>
+      String(text ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+
+    const templateDir = path.join(__dirname, '..', 'templates', 'web-portfolio');
+    const readTemplate = (fileName, fallback) => {
+      try {
+        const abs = path.join(templateDir, fileName);
+        if (fs.existsSync(abs)) return fs.readFileSync(abs, 'utf8');
+      } catch {
+        // ignore
+      }
+      return fallback;
+    };
+
+    const defaultCss = `:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0d10;color:#e9eef5}a{color:inherit}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace}img{max-width:100%}.topbar{position:sticky;top:0;background:rgba(10,12,15,0.9);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.12);padding:12px 16px;display:flex;gap:12px;align-items:center;z-index:2}.title{font-weight:900;letter-spacing:0.02em}.wrap{padding:16px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.card{display:block;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.04);text-decoration:none;overflow:hidden}.card:hover{background:rgba(255,255,255,0.06)}.cardImg{aspect-ratio:1/1;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center}.cardImg img{width:100%;height:100%;object-fit:cover}.cardBody{padding:10px 12px}.cardName{font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.muted{color:rgba(233,238,245,0.7);font-size:0.9rem}.backLink{display:inline-block;margin:16px 16px 0;color:rgba(233,238,245,0.75);text-decoration:none}.backLink:hover{color:#e9eef5}.page{max-width:1100px;margin:0 auto;padding:0 16px 30px}.h1{font-size:1.6rem;font-weight:900;margin:10px 0}.fields{display:flex;flex-direction:column;gap:8px;margin:14px 0}.field{border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.04);padding:10px 12px}.fieldTop{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.fid{font-weight:900}.label{color:rgba(233,238,245,0.7)}.value{white-space:pre-wrap;word-break:break-word;margin-top:6px;color:#e9eef5}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.gallery img{width:100%;height:auto;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.02)}`;
+
+    const defaultIndexHtml = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>CastKit Codex Export</title><link rel="stylesheet" href="assets/style.css"/></head><body><div class="topbar"><div class="title">CastKit Codex — Web Export</div><div class="muted">{{EXPORT_SUBTITLE}}</div></div><div class="wrap"><div class="grid">{{CHAR_CARDS}}</div></div></body></html>`;
+
+    const defaultCharacterHtml = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>{{CHAR_NAME}}</title><link rel="stylesheet" href="../assets/style.css"/></head><body><a class="backLink" href="../index.html">← Back</a><div class="page"><div class="h1">{{CHAR_NAME}}</div><div class="muted">ID: <code>{{CHAR_ID}}</code></div>{{FIELDS_BLOCK}}<div class="gallery">{{IMAGES}}</div></div></body></html>`;
+
+    const css = readTemplate('style.css', defaultCss);
+    const indexTpl = readTemplate('index.html', defaultIndexHtml);
+    const charTpl = readTemplate('character.html', defaultCharacterHtml);
+    const appJs = readTemplate('app.js', '');
+
+    fs.writeFileSync(path.join(dirs.assets, 'style.css'), css, 'utf8');
+    fs.writeFileSync(path.join(dirs.assets, 'app.js'), appJs, 'utf8');
+
+    const wantedIdsRaw = Array.isArray(characterIds) ? characterIds : [];
+    const wanted = new Set(wantedIdsRaw.map((x) => String(x ?? '').trim()).filter(Boolean));
+
+    const rows = await all(
+      this.db,
+      `SELECT character_id
+       FROM Character
+       WHERE is_system = 0
+       ORDER BY created_at ASC`
+    );
+    const ids = rows.map((r) => String(r.character_id ?? '').trim()).filter(Boolean);
+    const finalIds = wanted.size ? ids.filter((id) => wanted.has(id)) : ids;
+
+    const templateCache = new Map(); // templateId -> { ast, labelById, safeFieldIds, allFieldIds }
+    const safeSpinoffName = 'LLM Pack (strict) — Safe Subset';
+
+    const getTemplateInfo = async (templateId) => {
+      const tid = String(templateId ?? '').trim() || this.defaultTemplateId;
+      if (templateCache.has(tid)) return templateCache.get(tid);
+
+      const ast = await this.getTemplateAst(tid);
+      const labelById = new Map();
+      const allFieldIds = [];
+      for (const section of ast.sections || []) {
+        for (const f of section.fields || []) {
+          labelById.set(f.id, f.label);
+          if (f.type === 'rule') continue;
+          allFieldIds.push(f.id);
+        }
+      }
+
+      let safeFieldIds = allFieldIds.slice();
+      try {
+        const row = await get(
+          this.db,
+          `SELECT field_id_list FROM TemplateSpinOff WHERE template_id = ? AND name = ? AND is_builtin = 1 LIMIT 1`,
+          [tid, safeSpinoffName]
+        );
+        if (row?.field_id_list) {
+          const parsed = JSON.parse(String(row.field_id_list ?? '[]'));
+          if (Array.isArray(parsed)) {
+            const valid = new Set(ast.sections.flatMap((s) => s.fields.map((f) => f.id)));
+            safeFieldIds = parsed.map((x) => String(x)).filter((id) => valid.has(id));
+          }
+        }
+      } catch {
+        // ignore and fallback to all fields
+      }
+
+      const info = { ast, labelById, allFieldIds, safeFieldIds };
+      templateCache.set(tid, info);
+      return info;
+    };
+
+    const cards = [];
+    let exportedCharacters = 0;
+    let exportedImages = 0;
+
+    for (const cid of finalIds) {
+      const character = await this.getCharacter(cid);
+      if (!character) continue;
+
+      const publicId = String(character.publicId || '').trim() || shortStableIdForPath(cid);
+      const fileBase = sanitizeFileName(publicId, `char_${shortStableIdForPath(cid)}`);
+      const pageFileName = sanitizeFileName(null, `${fileBase}.html`);
+
+      const info = await getTemplateInfo(character.templateId);
+      const fieldIds =
+        safeFieldMode === 'none'
+          ? []
+          : safeFieldMode === 'all'
+          ? info.allFieldIds
+          : safeFieldMode === 'safe'
+          ? info.safeFieldIds
+          : info.safeFieldIds;
+
+      const fieldsHtml = [];
+      for (const fid of fieldIds) {
+        const raw = String(character.valuesById?.[fid] ?? '');
+        const value = raw.trim();
+        if (!value) continue;
+        const label = String(info.labelById.get(fid) ?? '');
+        fieldsHtml.push(
+          `<div class="field"><div class="fieldTop"><span class="fid">${escapeHtml(fid)}</span><span class="label">${escapeHtml(
+            label
+          )}</span></div><div class="value">${escapeHtml(raw)}</div></div>`
+        );
+      }
+      const fieldsBlock =
+        fieldsHtml.length && safeFormat === 'portfolio'
+          ? `<details class="fieldsDetails"><summary>Details</summary><div class="fields">${fieldsHtml.join(
+              ''
+            )}</div></details>`
+          : fieldsHtml.length
+          ? `<div class="fields">${fieldsHtml.join('')}</div>`
+          : '';
+
+      const charImages = Array.isArray(character.images) ? character.images : [];
+      const selectedImages = (() => {
+        if (safeImageMode === 'all') return charImages;
+        const tag = safeImageMode === 'frontpage' ? 'frontpage' : safeImageMode === 'carousel' ? 'carousel' : null;
+        if (!tag) return charImages;
+        return charImages.filter((img) => Array.isArray(img.tags) && img.tags.includes(tag));
+      })();
+
+      const imagesDir = path.join(dirs.images, fileBase);
+      ensureDir(imagesDir);
+
+      const imgTags = [];
+      for (const img of selectedImages) {
+        const imageId = String(img?.id ?? '').trim();
+        if (!imageId) continue;
+
+        const srcAbs = await this.getImageAbsPath({ imageId, kind: 'original' });
+        if (!srcAbs || !fs.existsSync(srcAbs)) continue;
+
+        const srcExt = path.extname(srcAbs).toLowerCase();
+        const baseName = sanitizeFileName(null, `${shortStableIdForPath(imageId)}${srcExt || '.img'}`);
+        const destAbs = uniquePath(imagesDir, baseName);
+        const destRel = `../images/${encodeURIComponent(fileBase)}/${encodeURIComponent(path.basename(destAbs))}`;
+
+        let wrote = false;
+        if (this.electronNativeImage) {
+          try {
+            const nimg = this.electronNativeImage.createFromPath(srcAbs);
+            const size = nimg.getSize();
+            const maxDim = Math.max(Number(size?.width) || 0, Number(size?.height) || 0);
+            const shouldResize = maxDim > 2048;
+            const resized = shouldResize
+              ? (Number(size?.width) || 0) >= (Number(size?.height) || 0)
+                ? nimg.resize({ width: 2048 })
+                : nimg.resize({ height: 2048 })
+              : nimg;
+            const bytes = resized.toJPEG(80);
+            const jpgAbs = destAbs.replace(/\.[^.]+$/, '') + '.jpg';
+            fs.writeFileSync(jpgAbs, bytes);
+            imgTags.push(`<img src="${destRel.replace(/\.[^.]+$/, '.jpg')}" alt="" loading="lazy" />`);
+            wrote = true;
+          } catch {
+            wrote = false;
+          }
+        }
+
+        if (!wrote) {
+          fs.copyFileSync(srcAbs, destAbs);
+          imgTags.push(`<img src="${destRel}" alt="" loading="lazy" />`);
+        }
+
+        exportedImages += 1;
+      }
+
+      // Icon
+      let iconRel = '';
+      const iconImageId = String(character.iconImageId || '').trim();
+      if (iconImageId) {
+        const srcAbs = await this.getImageAbsPath({ imageId: iconImageId, kind: 'thumb' });
+        if (srcAbs && fs.existsSync(srcAbs)) {
+          const ext = path.extname(srcAbs).toLowerCase() || '.png';
+          const destAbs = path.join(dirs.icons, `${fileBase}${ext}`);
+          try {
+            fs.copyFileSync(srcAbs, destAbs);
+            iconRel = `assets/icons/${encodeURIComponent(path.basename(destAbs))}`;
+          } catch {
+            iconRel = '';
+          }
+        }
+      }
+
+      const pageHtml = charTpl
+        .replaceAll('{{CHAR_NAME}}', escapeHtml(character.displayName))
+        .replaceAll('{{CHAR_ID}}', escapeHtml(publicId))
+        .replaceAll('{{FIELDS_BLOCK}}', fieldsBlock)
+        .replaceAll('{{IMAGES}}', imgTags.join(''));
+
+      fs.writeFileSync(path.join(dirs.characters, pageFileName), pageHtml, 'utf8');
+
+      const cardImg = iconRel ? `<img src="${escapeHtml(iconRel)}" alt="" />` : `<div class="muted">No icon</div>`;
+      cards.push(
+        `<a class="card" href="characters/${encodeURIComponent(pageFileName)}"><div class="cardImg">${cardImg}</div><div class="cardBody"><div class="cardName">${escapeHtml(
+          character.displayName
+        )}</div><div class="muted"><code>${escapeHtml(publicId)}</code></div></div></a>`
+      );
+
+      exportedCharacters += 1;
+    }
+
+    const subtitle = `${exportedCharacters} characters • ${exportedImages} images • ${safeFormat}`;
+    const indexHtml = indexTpl
+      .replaceAll('{{EXPORT_SUBTITLE}}', escapeHtml(subtitle))
+      .replaceAll('{{CHAR_CARDS}}', cards.join(''));
+    fs.writeFileSync(path.join(siteDir, 'index.html'), indexHtml, 'utf8');
+
+    const readmeLines = [
+      'CastKit Codex — Web Export',
+      '',
+      `Format: ${safeFormat}`,
+      `Image mode: ${safeImageMode}`,
+      `Field mode: ${safeFieldMode}`,
+      '',
+      'Open index.html in a browser. This export is fully offline (no CDN dependencies).',
+      'License: not set by CastKit Codex. If you publish this site, add a LICENSE file or otherwise state your intended license.',
+      '',
+    ];
+    fs.writeFileSync(path.join(siteDir, 'README.txt'), readmeLines.join('\n'), 'utf8');
+
+    await this._audit('webPortfolio.export', null, {
+      outDir: siteDir,
+      characterCount: exportedCharacters,
+      imageCount: exportedImages,
+      format: safeFormat,
+      imageMode: safeImageMode,
+      fieldMode: safeFieldMode,
+    });
+
+    return { ok: true, outDir: siteDir, characterCount: exportedCharacters, imageCount: exportedImages };
+  }
+
   async exportMoodboardPng({ docId = null, title = 'Moodboard', pngBase64, outDir = null } = {}) {
     const base64 = String(pngBase64 ?? '').trim();
     if (!base64) throw new Error('pngBase64 is required');

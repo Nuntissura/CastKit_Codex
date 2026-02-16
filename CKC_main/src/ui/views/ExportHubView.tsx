@@ -429,6 +429,12 @@ export function ExportHubView({
   const [allTags, setAllTags] = React.useState<string[]>([]);
   const [mediaSelectedIds, setMediaSelectedIds] = React.useState<string[]>([]);
 
+  // --- Web portfolio export ---
+  const [webExportScope, setWebExportScope] = React.useState<'all' | 'selected'>('all');
+  const [webExportFormat, setWebExportFormat] = React.useState<'portfolio' | 'codex'>('portfolio');
+  const [webExportImageMode, setWebExportImageMode] = React.useState<'all' | 'carousel' | 'frontpage'>('all');
+  const [webExportFieldMode, setWebExportFieldMode] = React.useState<'none' | 'safe' | 'all'>('safe');
+
   const allImageIds = React.useMemo(() => {
     return (selectedCharacter?.images || []).map((i) => i.id);
   }, [selectedCharacter?.images]);
@@ -751,6 +757,34 @@ export function ExportHubView({
     shareMoodboardIds,
   ]);
 
+  const exportWebPortfolio = React.useCallback(async () => {
+    if (!exportRoot) {
+      setError('Export folder is not set yet.');
+      return;
+    }
+    if (webExportScope === 'selected' && !selectedCharacterId) {
+      setError('Choose a character first.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const characterIds = webExportScope === 'selected' ? [selectedCharacterId!] : null;
+      const res = await window.ckc.exportWebPortfolio({
+        outDir: exportRoot,
+        characterIds,
+        format: webExportFormat,
+        imageMode: webExportImageMode,
+        fieldMode: webExportFieldMode,
+      });
+      if (res?.outDir) setLastExportPath(res.outDir);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [exportRoot, selectedCharacterId, webExportFieldMode, webExportFormat, webExportImageMode, webExportScope]);
+
   const toggleIdInList = React.useCallback((id: string, list: string[], setList: (next: string[]) => void) => {
     const v = String(id || '').trim();
     if (!v) return;
@@ -1008,6 +1042,63 @@ export function ExportHubView({
           <div className={styles.row}>
             <button className={styles.btnSecondary} onClick={() => void exportSharePack()} disabled={isUiBusy || !selectedCharacterId}>
               Export share pack
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Web portfolio export</div>
+
+          <div className={styles.muted}>Exports a static HTML site (offline, no CDN) under <code>web-portfolio-...</code>.</div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Scope</div>
+            <select className={styles.select} value={webExportScope} onChange={(e) => setWebExportScope(e.target.value as any)} disabled={isUiBusy}>
+              <option value="all">All characters</option>
+              <option value="selected">Selected character only</option>
+            </select>
+          </div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Format</div>
+            <select className={styles.select} value={webExportFormat} onChange={(e) => setWebExportFormat(e.target.value as any)} disabled={isUiBusy}>
+              <option value="portfolio">Portfolio (image-first)</option>
+              <option value="codex">Codex (text-first)</option>
+            </select>
+          </div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Images</div>
+            <select
+              className={styles.select}
+              value={webExportImageMode}
+              onChange={(e) => setWebExportImageMode(e.target.value as any)}
+              disabled={isUiBusy}
+            >
+              <option value="all">All</option>
+              <option value="carousel">Carousel only</option>
+              <option value="frontpage">Frontpage only</option>
+            </select>
+          </div>
+
+          <div className={styles.row}>
+            <div className={styles.label}>Fields</div>
+            <select
+              className={styles.select}
+              value={webExportFieldMode}
+              onChange={(e) => setWebExportFieldMode(e.target.value as any)}
+              disabled={isUiBusy}
+            >
+              <option value="none">None</option>
+              <option value="safe">Safe subset</option>
+              <option value="all">All fields</option>
+            </select>
+            <span className={styles.muted}>Safe subset is based on the built-in template spin-off.</span>
+          </div>
+
+          <div className={styles.row}>
+            <button className={styles.btnSecondary} onClick={() => void exportWebPortfolio()} disabled={isUiBusy || !exportRoot}>
+              Export web portfolio
             </button>
           </div>
         </div>

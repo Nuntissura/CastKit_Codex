@@ -791,6 +791,13 @@ interface Window {
       imageIds?: string[];
       docIdsByType?: { notes?: string[]; stories?: string[]; moodboard?: string[] };
     }) => Promise<{ ok: true; outDir: string; manifestPath: string }>;
+    exportWebPortfolio: (params: {
+      outDir?: string | null;
+      characterIds?: string[] | null;
+      format?: 'portfolio' | 'codex';
+      imageMode?: 'all' | 'carousel' | 'frontpage';
+      fieldMode?: 'none' | 'safe' | 'all';
+    }) => Promise<{ ok: true; outDir: string; characterCount: number; imageCount: number }>;
     exportMoodboardPng: (params: {
       docId?: string | null;
       title?: string;

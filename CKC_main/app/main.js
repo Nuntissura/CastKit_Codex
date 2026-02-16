@@ -1791,6 +1791,11 @@ function registerIpcHandlers() {
         return lib.exportSharePack(params || {});
     });
 
+    ipcMain.handle('ckc:exportWebPortfolio', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportWebPortfolio(params || {});
+    });
+
     ipcMain.handle('ckc:exportMoodboardPng', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.exportMoodboardPng(params || {});

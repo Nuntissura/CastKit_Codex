@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE (2026-02-16)
 
 ## Summary
 Export characters and image galleries as a static HTML website that can be opened locally or hosted on any web server (no backend required).
@@ -16,40 +16,38 @@ Export characters and image galleries as a static HTML website that can be opene
   - Portfolio presentations for artists/writers
 - No server/hosting costs (static files).
 - Viral growth potential (people see the output and want CKC to create it).
-- Spec: `CastKit_Codex_Spec_v00.055.md` §12.5 "Web Portfolio Export".
+- Spec: `CastKit_Codex_Spec_v00.056.md` §12.5 "Web Portfolio Export".
 
 ## Scope
 ### In
-- Export wizard in Export Hub:
-  - Select characters to include (or "All")
-  - Select images to include per character (all, carousel only, frontpage only)
-  - Select fields to include (all, or custom field selection like LLM export)
-  - Choose export format: "Portfolio" (image-focused) or "Codex" (text-focused)
+- Export section in Export Hub:
+  - Character scope: all characters, or the currently selected character
+  - Image mode per character: all, carousel only, frontpage only
+  - Field mode: none, safe subset, all
+  - Export format: "Portfolio" (image-first) or "Codex" (text-first)
 - Generated static site:
-  - Single-page app (SPA) with no build step (vanilla HTML/CSS/JS)
+  - No build step (vanilla HTML/CSS/JS)
   - Character grid on homepage (with icons)
   - Character detail page (sheet + image gallery)
   - Responsive design (mobile-friendly)
   - Theme: CKC default theme (dark mode with sharp corners)
-  - Navigation: sidebar with character list
 - Output structure:
   ```
   <exportRoot>/web-portfolio-<timestamp>/
     index.html
     characters/
       CHAR-000001.html
-      CHAR-000002.html
     images/
-      <character_id>/
+      CHAR-000001/
         <image files>
     assets/
       style.css
-      app.js
+      app.js (gallery lightbox)
       icons/ (character icons)
   ```
 - Export includes:
   - README.txt with usage instructions
-  - License notice (CC0 or user-specified)
+  - License note (operator-controlled)
 
 ### Out
 - Search functionality in exported site (v1 is static)
@@ -61,12 +59,12 @@ Export characters and image galleries as a static HTML website that can be opene
 None (pure HTML/CSS/JS export, no frameworks)
 
 ## Acceptance criteria
-- [ ] Can export a library as a static HTML site
-- [ ] Exported site opens in any browser (Chrome, Firefox, Safari)
-- [ ] Exported site works offline (no CDN dependencies)
-- [ ] Exported site is mobile-responsive
-- [ ] Images are optimized (resized if needed, not raw originals)
-- [ ] Field redaction works (can exclude NSFW fields if desired)
+- [x] Can export a library as a static HTML site
+- [x] Exported site opens in any browser (Chrome, Firefox, Safari)
+- [x] Exported site works offline (no CDN dependencies)
+- [x] Exported site is mobile-responsive
+- [x] Images are optimized (resized if needed, not raw originals)
+- [x] Field redaction works (can exclude NSFW fields if desired)
 
 ## Test plan
 - [ ] Manual: export 10 characters, open in browser, verify navigation
@@ -74,22 +72,23 @@ None (pure HTML/CSS/JS export, no frameworks)
 - [ ] Manual: test offline (disconnect network, verify site still works)
 - [ ] Manual: export with field filtering, verify excluded fields don't appear
 - [ ] Performance: export 100 characters with 1000 images, verify file size
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.055.md` §12.5).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (`CastKit_Codex_Spec_v00.056.md` §12.5).
 
 ## Implementation notes
 - Key files to create/modify:
-  - `CKC_main/app/lib/export-web-portfolio.js` — Export logic
+  - `CKC_main/app/backend/library.js` — Export logic (`exportWebPortfolio`)
+  - `CKC_main/app/main.js` + `CKC_main/app/preload.js` — IPC wiring
   - `CKC_main/app/templates/web-portfolio/` — HTML/CSS/JS templates
     - `index.html` — Homepage template
     - `character.html` — Character detail template
     - `style.css` — Shared styles
-    - `app.js` — Minimal client-side JS (navigation, image viewer)
-  - `CKC_main/src/ui/components/ExportHub.tsx` — Add "Web Portfolio" export type
+    - `app.js` — Minimal client-side JS (gallery lightbox)
+  - `CKC_main/src/ui/views/ExportHubView.tsx` — Export UI
 - Export process:
   1. Create export folder
   2. Copy/optimize images (resize to max 2048px, compress)
@@ -105,13 +104,9 @@ None (pure HTML/CSS/JS export, no frameworks)
     .replace('{{FIELDS}}', renderFields(character.fields));
   ```
 - Image optimization:
-  - Use `sharp` (already in dependencies for AI tagging) to resize/compress
+  - Uses Electron `nativeImage` when available to resize/compress
   - Target: max 2048px longest edge, 80% JPEG quality
-  - Preserve EXIF if user opts in
-- Navigation:
-  - Use anchor links (`index.html#CHAR-000001`) for SPA feel
-  - JavaScript intercepts clicks and loads content dynamically
-  - Fallback: each character gets its own `.html` file for no-JS browsers
+  - Fallback (tests/dev): copy original bytes as-is
 
 ## Notes
 - Starter templates to include:

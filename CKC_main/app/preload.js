@@ -140,6 +140,7 @@ contextBridge.exposeInMainWorld('ckc', {
     exportBundle: (params) => ipcRenderer.invoke('ckc:exportBundle', params),
     exportImageSet: (params) => ipcRenderer.invoke('ckc:exportImageSet', params),
     exportSharePack: (params) => ipcRenderer.invoke('ckc:exportSharePack', params),
+    exportWebPortfolio: (params) => ipcRenderer.invoke('ckc:exportWebPortfolio', params),
     exportMoodboardPng: (params) => ipcRenderer.invoke('ckc:exportMoodboardPng', params),
     exportMoodboardPdf: (params) => ipcRenderer.invoke('ckc:exportMoodboardPdf', params),
     listVersions: (characterId) => ipcRenderer.invoke('ckc:listVersions', characterId),

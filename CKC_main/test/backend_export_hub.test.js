@@ -88,3 +88,47 @@ test('export hub: moodboard png + image set + share pack write to chosen outDir'
   lib.close();
 });
 
+test('export hub: web portfolio export writes to chosen outDir', async (t) => {
+  const { makeInstance, libraryRoot } = makeLib(t);
+  const lib = makeInstance();
+  await lib.initialize();
+
+  const characterId = await lib.createCharacter({ displayName: 'Web Export Test' });
+
+  const srcPath = path.join(libraryRoot, 'one.png');
+  fs.writeFileSync(srcPath, Buffer.from('fakepng', 'utf8'));
+  const imported = await lib.importImages({ characterId, filePaths: [srcPath], duplicatePolicy: 'skip' });
+  assert.equal(imported.imported.length, 1);
+
+  const outDir = path.join(libraryRoot, 'out');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const res = await lib.exportWebPortfolio({
+    outDir,
+    characterIds: [characterId],
+    format: 'portfolio',
+    imageMode: 'all',
+    fieldMode: 'none',
+  });
+  assert.equal(res.ok, true);
+  assert.ok(res.outDir.startsWith(outDir));
+  assert.equal(res.characterCount, 1);
+  assert.equal(res.imageCount, 1);
+
+  assert.ok(fs.existsSync(path.join(res.outDir, 'index.html')));
+  assert.ok(fs.existsSync(path.join(res.outDir, 'README.txt')));
+  assert.ok(fs.existsSync(path.join(res.outDir, 'assets', 'style.css')));
+
+  const pages = fs.readdirSync(path.join(res.outDir, 'characters')).filter((f) => f.endsWith('.html'));
+  assert.equal(pages.length, 1);
+
+  const pageHtml = fs.readFileSync(path.join(res.outDir, 'characters', pages[0]), 'utf8');
+  assert.ok(pageHtml.includes('../images/'));
+
+  const characterFolders = fs.readdirSync(path.join(res.outDir, 'images'));
+  assert.equal(characterFolders.length, 1);
+  const imageFiles = fs.readdirSync(path.join(res.outDir, 'images', characterFolders[0]));
+  assert.equal(imageFiles.length, 1);
+
+  lib.close();
+});
