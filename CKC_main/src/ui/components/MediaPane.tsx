@@ -154,6 +154,9 @@ export function MediaPane({
   const [primarySelectedId, setPrimarySelectedId] = React.useState<string | null>(images[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>(() => (images[0]?.id ? [images[0].id] : []));
   const [showThumbnails, setShowThumbnails] = React.useState<boolean>(defaultShowThumbnails);
+  const defaultThumbLimit = 500;
+  const thumbLimitStep = 500;
+  const [thumbLimit, setThumbLimit] = React.useState<number>(defaultThumbLimit);
   const [showControls, setShowControls] = React.useState<boolean>(defaultShowControls);
   const [busyImageId, setBusyImageId] = React.useState<string | null>(null);
   const [imageBacklinks, setImageBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
@@ -262,6 +265,38 @@ export function MediaPane({
       return true;
     });
   }, [images, filterFavoriteOnly, filterRatingOp, filterRatingValue, filterColorEnabled, filterColorHex, filterColorThreshold, paletteById]);
+
+  React.useEffect(() => {
+    // Reset thumbnail limit when switching image datasets (new character / new list).
+    setThumbLimit(defaultThumbLimit);
+  }, [images.length, images[0]?.id]);
+
+  React.useEffect(() => {
+    // Keep the cap sane as the filtered list grows/shrinks.
+    setThumbLimit((prev) => Math.min(filteredImages.length, Math.max(prev, defaultThumbLimit)));
+  }, [filteredImages.length]);
+
+  const filteredIndexById = React.useMemo(() => {
+    const out = new Map<string, number>();
+    for (let i = 0; i < filteredImages.length; i++) out.set(filteredImages[i].id, i);
+    return out;
+  }, [filteredImages]);
+
+  React.useEffect(() => {
+    if (!primarySelectedId) return;
+    const idx = filteredIndexById.get(primarySelectedId);
+    if (idx == null) return;
+    if (idx < thumbLimit) return;
+    setThumbLimit((prev) => Math.min(filteredImages.length, Math.max(prev, idx + thumbLimitStep)));
+  }, [primarySelectedId, filteredIndexById, filteredImages.length, thumbLimit]);
+
+  const thumbImages = React.useMemo(() => {
+    if (!showThumbnails) return [];
+    const n = Math.min(filteredImages.length, Math.max(0, thumbLimit));
+    return filteredImages.slice(0, n);
+  }, [filteredImages, showThumbnails, thumbLimit]);
+
+  const hasMoreThumbs = showThumbnails && filteredImages.length > thumbLimit;
 
   const filtersActive = filterFavoriteOnly || filterRatingOp !== 'any' || filterColorEnabled;
   const hasAnyImages = images.length > 0;
@@ -1652,7 +1687,7 @@ export function MediaPane({
             evt.currentTarget.scrollLeft += evt.deltaY;
           }}
         >
-          {filteredImages.map((img) => {
+          {thumbImages.map((img) => {
             const carouselActive = (img.tags || []).includes('carousel');
             return (
               <div key={img.id} className={styles.thumbItem}>
@@ -1679,11 +1714,30 @@ export function MediaPane({
                   title={img.tags?.length ? img.tags.join(', ') : undefined}
                   disabled={isBusy}
                 >
-                  <img className={styles.thumbImg} src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`} alt="" />
+                  <img
+                    className={styles.thumbImg}
+                    src={`ckc://thumb/${encodeURIComponent(img.id)}?r=${reloadToken}`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </button>
               </div>
             );
           })}
+
+          {hasMoreThumbs ? (
+            <div className={styles.thumbItem}>
+              <button
+                className={styles.thumbMoreBtn}
+                disabled={isBusy}
+                onClick={() => setThumbLimit((prev) => Math.min(filteredImages.length, prev + thumbLimitStep))}
+                title="Render more thumbnails"
+              >
+                +{Math.min(thumbLimitStep, Math.max(0, filteredImages.length - thumbLimit))} more
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

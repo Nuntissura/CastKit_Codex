@@ -139,6 +139,8 @@ export function LibraryView({
   const minRightPx = 420;
 
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
+  const characterPageSize = 200;
+  const [characterPage, setCharacterPage] = React.useState<number>(0);
   const [carouselImages, setCarouselImages] = React.useState<
     Array<{ id: string; favorite: boolean; rating: number; notes: string; tags: string[] }>
   >([]);
@@ -542,6 +544,12 @@ export function LibraryView({
       cancelled = true;
     };
   }, [queryText, cleanedTagFilters, cleanedTagExcludeFilters, tagMode, scopeFlags, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
+
+  React.useEffect(() => {
+    if (!characters) return;
+    const maxPage = Math.max(0, Math.ceil(characters.length / characterPageSize) - 1);
+    setCharacterPage((p) => Math.min(p, maxPage));
+  }, [characters, characterPageSize]);
 
   React.useEffect(() => {
     reloadCarousel();
@@ -1266,6 +1274,23 @@ export function LibraryView({
     libraryLeftFracRef.current = next;
     void window.ckc.setConfig({ layoutLibrary2: { leftFrac: next } });
   }, [layoutWidth, splitterPx, minLeftPx, minRightPx]);
+
+  const characterPageInfo = React.useMemo(() => {
+    if (!characters) return null;
+    const total = characters.length;
+    const pageCount = Math.max(1, Math.ceil(total / characterPageSize));
+    const page = Math.max(0, Math.min(characterPage, pageCount - 1));
+    const start = page * characterPageSize;
+    const end = Math.min(total, start + characterPageSize);
+    return {
+      total,
+      pageCount,
+      page,
+      start,
+      end,
+      items: characters.slice(start, end),
+    };
+  }, [characters, characterPage, characterPageSize]);
 
   return (
     <div className={styles.layout} ref={layoutRef} style={{ gridTemplateColumns: libraryGridTemplateColumns }}>
@@ -2677,8 +2702,34 @@ export function LibraryView({
         ) : characters.length === 0 ? (
           <div className={styles.muted}>No characters found.</div>
         ) : (
-          <div className={styles.characterList}>
-            {characters.map((c) => (
+          <>
+            {characterPageInfo && characterPageInfo.pageCount > 1 ? (
+              <div className={styles.characterPager}>
+                <span className={styles.muted}>
+                  Showing {characterPageInfo.start + 1}-{characterPageInfo.end} of {characterPageInfo.total} (page {characterPageInfo.page + 1}/
+                  {characterPageInfo.pageCount})
+                </span>
+                <div className={styles.characterPagerButtons}>
+                  <button
+                    onClick={() => setCharacterPage((p) => Math.max(0, p - 1))}
+                    disabled={characterPageInfo.page <= 0}
+                    title="Previous page"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => setCharacterPage((p) => Math.min(characterPageInfo.pageCount - 1, p + 1))}
+                    disabled={characterPageInfo.page >= characterPageInfo.pageCount - 1}
+                    title="Next page"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className={styles.characterList}>
+              {(characterPageInfo ? characterPageInfo.items : characters).map((c) => (
               <button key={c.id} className={styles.characterItem} onClick={() => onOpenCharacter(c.id)}>
                 <div className={styles.characterItemInner}>
                   <div className={styles.characterIcon}>
@@ -2687,6 +2738,8 @@ export function LibraryView({
                         className={styles.characterIconImg}
                         src={`ckc://thumb/${encodeURIComponent(c.iconImageId)}`}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           objectPosition: `${Math.round(clamp01(c.iconFocusX) * 100)}% ${Math.round(clamp01(c.iconFocusY) * 100)}%`,
                         }}
@@ -2714,7 +2767,8 @@ export function LibraryView({
                 </div>
               </button>
             ))}
-          </div>
+            </div>
+          </>
         )}
 
         <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>

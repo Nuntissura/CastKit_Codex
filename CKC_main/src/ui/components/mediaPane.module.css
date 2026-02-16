@@ -492,6 +492,23 @@
   box-shadow: 0 0 0 2px rgba(255, 120, 120, 0.28) inset;
 }
 
+.thumbMoreBtn {
+  height: 180px;
+  width: 280px;
+  padding: 8px;
+  border: 1px dashed var(--glass-border);
+  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.thumbMoreBtn:hover {
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
 .thumbImg {
   height: 100%;
   width: 100%;

@@ -81,6 +81,8 @@ async function ensureSchemaUpgrades(db) {
   // Human-friendly Character IDs (public IDs, stable per character).
   await ensureColumn(db, 'Character', 'public_id', 'TEXT');
   await run(db, 'CREATE UNIQUE INDEX IF NOT EXISTS idx_character_public_id ON Character(public_id)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_character_created_at ON Character(created_at)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_character_updated_at ON Character(updated_at)');
 
   // Character icon + focus framing (Library list).
   await ensureColumn(db, 'Character', 'icon_image_id', 'TEXT');
@@ -93,6 +95,8 @@ async function ensureSchemaUpgrades(db) {
   // ImageAsset: allow duplicates (no unique index), plus optional tags and reference-mode.
   await run(db, 'DROP INDEX IF EXISTS idx_image_dedupe');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_added_at ON ImageAsset(added_at)');
   await ensureColumn(db, 'ImageAsset', 'tags_json', "TEXT NOT NULL DEFAULT '[]'");
   await ensureColumn(db, 'ImageAsset', 'suggested_tags_json', "TEXT NOT NULL DEFAULT '[]'");
   await ensureColumn(db, 'ImageAsset', 'auto_tagged_at', 'DATETIME');
@@ -102,6 +106,10 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', 'source_note', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'palette_json', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'dhash_hex', 'TEXT');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json)');
+
+  // Field values: speed up cross-character lookups (value suggestions, exports, etc.).
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_field_value_field_id ON FieldValue(field_id)');
 
   // Tag rules can optionally be template-scoped.
   await ensureColumn(db, 'TagRule', 'template_id', 'TEXT');
