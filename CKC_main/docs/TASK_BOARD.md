@@ -104,7 +104,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0086 | macOS build support | DONE | Codex | Added mac build config + `package:mac:*` scripts + `release-mac.yml` workflow (tag-triggered). Manual mac smoke check pending. |
 | WP-0087 | Web portfolio export | DONE | Codex | Export Hub export writes static HTML site (index + per-character pages) with image/field filtering + safe subset mode (`npm test`, `npx tsc --noEmit`). |
 | WP-0088 | Performance optimization (large libraries) | DONE | Codex | Added DB indexes + character list pagination + capped thumbnail rendering (Load more) (`npm test`, `npx tsc --noEmit`). |
-| WP-0089 | Visual similarity search | BACKLOG | TBD | Find visually similar images using CLIP embeddings; "find similar" action; bulk embedding generation. |
+| WP-0089 | Visual similarity search | IN_PROGRESS | Codex | Add "Find similar" using dHash distance (no heavy deps); show results with distance threshold + jump-to. |
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus

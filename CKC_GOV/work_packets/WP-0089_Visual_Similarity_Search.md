@@ -1,8 +1,8 @@
 # Work Packet: WP-0089 — Visual similarity search
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add "Find similar images" feature that uses perceptual hashing or embeddings to find visually similar images in the library.
@@ -12,7 +12,7 @@ Add "Find similar images" feature that uses perceptual hashing or embeddings to 
 - Text tags don't capture visual similarity (e.g., similar poses, compositions, color schemes).
 - Helps users discover forgotten references and find alternatives.
 - Complements existing color search (WP-0066) and near-duplicate finder (WP-0067).
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.7 "Visual Similarity Search".
+- Spec: `CastKit_Codex_Spec_v00.057.md` §12.7 "Visual Similarity Search".
 
 ## Scope
 ### In
@@ -62,7 +62,7 @@ Add "Find similar images" feature that uses perceptual hashing or embeddings to 
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.7).
+- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.057.md` §12.7).
 
 ## Implementation notes
 - Key files to create/modify:
