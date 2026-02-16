@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld('ckc', {
     getTemplateDetail: (templateId) => ipcRenderer.invoke('ckc:getTemplateDetail', templateId),
     setDefaultTemplateId: (templateId) => ipcRenderer.invoke('ckc:setDefaultTemplateId', templateId),
     importTemplateFromDialog: () => ipcRenderer.invoke('ckc:importTemplateFromDialog'),
+    listCharacterTemplates: () => ipcRenderer.invoke('ckc:listCharacterTemplates'),
+    getCharacterTemplate: (params) => ipcRenderer.invoke('ckc:getCharacterTemplate', params),
+    saveCharacterTemplateFromCharacter: (params) => ipcRenderer.invoke('ckc:saveCharacterTemplateFromCharacter', params),
+    createCharactersFromTemplate: (params) => ipcRenderer.invoke('ckc:createCharactersFromTemplate', params),
+    cloneCharacter: (params) => ipcRenderer.invoke('ckc:cloneCharacter', params),
 
     listCharacters: (params) => ipcRenderer.invoke('ckc:listCharacters', params),
     listAllTags: () => ipcRenderer.invoke('ckc:listAllTags'),

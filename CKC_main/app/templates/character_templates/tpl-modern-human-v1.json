@@ -1,0 +1,14 @@
+{
+  "template_id": "tpl-modern-human-v1",
+  "name": "Modern Human",
+  "description": "Baseline modern human (original) with normal time model.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-ID-004", "value": "original" },
+    { "field_id": "CHAR-TIME-001", "value": "normal" },
+    { "field_id": "CHAR-WRK-004", "value": "unknown" }
+  ],
+  "reference_images": []
+}

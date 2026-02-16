@@ -1,0 +1,14 @@
+{
+  "template_id": "tpl-fantasy-creature-v1",
+  "name": "Fantasy Creature",
+  "description": "Fictional creature baseline with prompt anchors.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-ID-004", "value": "fictional" },
+    { "field_id": "CHAR-ID-006", "value": "Creature" },
+    { "field_id": "CHAR-VIS-001", "value": "[\"fantasy\",\"mythic\",\"creature\"]" }
+  ],
+  "reference_images": []
+}

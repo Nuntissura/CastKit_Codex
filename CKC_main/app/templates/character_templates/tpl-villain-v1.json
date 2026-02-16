@@ -1,0 +1,15 @@
+{
+  "template_id": "tpl-villain-v1",
+  "name": "Villain",
+  "description": "Villain baseline with motivation and control profile.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-ID-006", "value": "Villain" },
+    { "field_id": "CHAR-PSY-001", "value": "Calm calculating subtly amused" },
+    { "field_id": "CHAR-PSY-004", "value": "Power and control over others" },
+    { "field_id": "CHAR-PSY-015", "value": "8/10" }
+  ],
+  "reference_images": []
+}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { LibraryDrawer } from '../components/LibraryDrawer';
 import { MediaPane } from '../components/MediaPane';
+import { CloneCharacterModal, SaveCharacterTemplateModal } from '../components/CharacterTemplateActionModals';
 import { MoodboardCanvas, makeMoodId, type MoodboardSelectionItem, type MoodboardState } from '../components/MoodboardCanvas';
 import { SheetIngestMergeTools } from '../components/SheetIngestMergeTools';
 import { SheetEditor } from '../components/SheetEditor';
@@ -184,6 +185,8 @@ export function CharacterView({
   const [linksError, setLinksError] = React.useState<string | null>(null);
   const [requestedImageId, setRequestedImageId] = React.useState<string | null>(null);
   const [mediaSelectedIds, setMediaSelectedIds] = React.useState<string[]>([]);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = React.useState<boolean>(false);
+  const [isCloneOpen, setIsCloneOpen] = React.useState<boolean>(false);
 
   const [pendingDocNeedle, setPendingDocNeedle] = React.useState<{ docType: 'notes' | 'stories'; needle: string } | null>(null);
   const notesTextRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -3106,6 +3109,25 @@ export function CharacterView({
                   <div className={styles.sectionTitle}>Tools</div>
                   <div className={styles.smallNote}>Character icon is shown in the Library list. Focus sliders control the crop.</div>
 
+                  <div style={{ margin: '10px 0', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                      className={styles.btnSecondary}
+                      onClick={() => setIsSaveTemplateOpen(true)}
+                      disabled={!characterId || !character}
+                      title="Save this character as a reusable template"
+                    >
+                      Save as templateâ€¦
+                    </button>
+                    <button
+                      className={styles.btnSecondary}
+                      onClick={() => setIsCloneOpen(true)}
+                      disabled={!characterId || !character}
+                      title="Clone this character (sheet-only or with images)"
+                    >
+                      Clone characterâ€¦
+                    </button>
+                  </div>
+
                   <div className={styles.iconRow}>
                     <div className={styles.iconPreview}>
                       {iconDraftImageId ? (
@@ -3749,6 +3771,21 @@ export function CharacterView({
           )}
         </aside>
       </div>
+
+      <SaveCharacterTemplateModal
+        isOpen={isSaveTemplateOpen}
+        onClose={() => setIsSaveTemplateOpen(false)}
+        characterId={String(characterId || '')}
+        defaultName={String(character?.displayName || '').trim() || 'Template'}
+      />
+
+      <CloneCharacterModal
+        isOpen={isCloneOpen}
+        onClose={() => setIsCloneOpen(false)}
+        sourceCharacterId={String(characterId || '')}
+        defaultDisplayName={`${String(character?.displayName || '').trim() || 'Unnamed'} (clone)`}
+        onCloned={(nextId) => onNavigateCharacter(nextId)}
+      />
     </>
   );
 }

@@ -1425,6 +1425,31 @@ function registerIpcHandlers() {
         return lib.importTemplateFromFile({ filePath: result.filePaths[0] });
     });
 
+    ipcMain.handle('ckc:listCharacterTemplates', async () => {
+        const lib = await ensureLibrary();
+        return lib.listCharacterTemplates();
+    });
+
+    ipcMain.handle('ckc:getCharacterTemplate', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getCharacterTemplate(params || {});
+    });
+
+    ipcMain.handle('ckc:saveCharacterTemplateFromCharacter', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.saveCharacterTemplateFromCharacter(params || {});
+    });
+
+    ipcMain.handle('ckc:createCharactersFromTemplate', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.createCharactersFromTemplate(params || {});
+    });
+
+    ipcMain.handle('ckc:cloneCharacter', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.cloneCharacter(params || {});
+    });
+
     ipcMain.handle('ckc:listCharacters', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.listCharacters(params || {});

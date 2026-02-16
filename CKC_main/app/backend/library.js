@@ -979,6 +979,30 @@ class CKCLibrary {
     return String(id).trim().replace(/[^\w.\-]+/g, '_');
   }
 
+  _sanitizeCharacterTemplateId(id) {
+    const raw = String(id ?? '').trim();
+    const safe = raw
+      .replace(/[^\w.\-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^[-.]+/, '')
+      .replace(/[-.]+$/, '');
+    return safe || `tpl_${Date.now()}`;
+  }
+
+  _getBuiltInCharacterTemplatesDir() {
+    return path.join(__dirname, '..', 'templates', 'character_templates');
+  }
+
+  _getUserCharacterTemplateJsonPath(templateId) {
+    const id = this._sanitizeCharacterTemplateId(templateId);
+    return path.join(this.getPaths().templatesDir, `CHARACTER_TEMPLATE__${id}.json`);
+  }
+
+  _getUserCharacterTemplateImagesDir(templateId) {
+    const id = this._sanitizeCharacterTemplateId(templateId);
+    return path.join(this.getPaths().templatesDir, `CHARACTER_TEMPLATE__${id}__images`);
+  }
+
   async importTemplateFromFile({ filePath, templateId, overwrite = true }) {
     if (!filePath) throw new Error('Missing filePath');
     const raw = fs.readFileSync(filePath, 'utf8');
@@ -1023,6 +1047,524 @@ class CKCLibrary {
       fieldCount: ast.sections.reduce((acc, s) => acc + s.fields.length, 0),
       blockSchemaCount: ast.blockSchemas.length,
     };
+  }
+
+  _normalizeCharacterTemplateDetail(parsed, { sourcePath, isBuiltIn }) {
+    const obj = parsed && typeof parsed === 'object' ? parsed : {};
+    const templateId = this._sanitizeCharacterTemplateId(obj.template_id ?? obj.templateId ?? path.basename(sourcePath, path.extname(sourcePath)));
+    const name = String(obj.name ?? obj.template_name ?? templateId).trim() || templateId;
+    const description = String(obj.description ?? '').trim();
+    const version = String(obj.version ?? '1.0').trim() || '1.0';
+    const sheetTemplateId = String(obj.sheet_template_id ?? obj.sheetTemplateId ?? this.defaultTemplateId).trim() || this.defaultTemplateId;
+
+    const rawFields = Array.isArray(obj.fields) ? obj.fields : [];
+    const fields = rawFields
+      .map((f) => {
+        if (!f || typeof f !== 'object') return null;
+        const fieldId = String(f.field_id ?? f.fieldId ?? '').trim();
+        if (!fieldId) return null;
+        const value = f.value == null ? '' : String(f.value);
+        return { fieldId, value };
+      })
+      .filter(Boolean);
+
+    const rawImgs = Array.isArray(obj.reference_images) ? obj.reference_images : Array.isArray(obj.referenceImages) ? obj.referenceImages : [];
+    const referenceImages = rawImgs
+      .map((img) => {
+        if (!img || typeof img !== 'object') return null;
+        const relPath = String(img.path ?? img.rel_path ?? img.relPath ?? '').trim().replaceAll('\\', '/');
+        if (!relPath) return null;
+        const fileHash = String(img.file_hash ?? img.fileHash ?? '').trim();
+        const favorite = !!img.favorite;
+        const rating = Math.max(0, Math.min(5, Number(img.rating) || 0));
+        const notes = String(img.notes ?? '');
+        const tags = Array.isArray(img.tags) ? img.tags.map((t) => String(t ?? '').trim()).filter(Boolean) : [];
+        const sourceUrl = img.source_url == null ? null : String(img.source_url ?? '').trim() || null;
+        const sourceNote = img.source_note == null ? '' : String(img.source_note ?? '');
+        const storageMode = String(img.storage_mode ?? img.storageMode ?? 'copy').trim() || 'copy';
+        return { relPath, fileHash, favorite, rating, notes, tags, sourceUrl, sourceNote, storageMode };
+      })
+      .filter(Boolean);
+
+    let updatedAt = null;
+    try {
+      const st = fs.statSync(sourcePath);
+      updatedAt = st?.mtime ? st.mtime.toISOString() : null;
+    } catch {
+      updatedAt = null;
+    }
+
+    return {
+      templateId,
+      name,
+      description,
+      version,
+      sheetTemplateId,
+      fields,
+      referenceImages,
+      isBuiltIn: !!isBuiltIn,
+      sourcePath,
+      updatedAt,
+    };
+  }
+
+  async listCharacterTemplates() {
+    const out = new Map(); // templateId -> summary
+
+    // Built-in templates (shipped with app)
+    try {
+      const builtInDir = this._getBuiltInCharacterTemplatesDir();
+      if (fs.existsSync(builtInDir)) {
+        for (const name of fs.readdirSync(builtInDir)) {
+          if (!name.toLowerCase().endsWith('.json')) continue;
+          const abs = path.join(builtInDir, name);
+          try {
+            const raw = fs.readFileSync(abs, 'utf8');
+            const parsed = JSON.parse(raw);
+            const detail = this._normalizeCharacterTemplateDetail(parsed, { sourcePath: abs, isBuiltIn: true });
+            out.set(detail.templateId, {
+              id: detail.templateId,
+              name: detail.name,
+              description: detail.description,
+              version: detail.version,
+              sheetTemplateId: detail.sheetTemplateId,
+              fieldCount: detail.fields.length,
+              imageCount: detail.referenceImages.length,
+              updatedAt: detail.updatedAt,
+              isBuiltIn: true,
+            });
+          } catch {
+            // ignore invalid built-in template
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // User templates (stored in libraryRoot/templates)
+    const templatesDir = this.getPaths().templatesDir;
+    ensureDir(templatesDir);
+    const prefix = 'CHARACTER_TEMPLATE__';
+    for (const name of fs.readdirSync(templatesDir)) {
+      if (!name.startsWith(prefix) || !name.toLowerCase().endsWith('.json')) continue;
+      const abs = path.join(templatesDir, name);
+      try {
+        const raw = fs.readFileSync(abs, 'utf8');
+        const parsed = JSON.parse(raw);
+        const detail = this._normalizeCharacterTemplateDetail(parsed, { sourcePath: abs, isBuiltIn: false });
+        out.set(detail.templateId, {
+          id: detail.templateId,
+          name: detail.name,
+          description: detail.description,
+          version: detail.version,
+          sheetTemplateId: detail.sheetTemplateId,
+          fieldCount: detail.fields.length,
+          imageCount: detail.referenceImages.length,
+          updatedAt: detail.updatedAt,
+          isBuiltIn: false,
+        });
+      } catch {
+        // ignore invalid user template
+      }
+    }
+
+    const rows = Array.from(out.values());
+    rows.sort((a, b) => {
+      const ab = a.isBuiltIn ? 1 : 0;
+      const bb = b.isBuiltIn ? 1 : 0;
+      if (ab !== bb) return ab - bb;
+      return String(a.name || '').localeCompare(String(b.name || '')) || String(a.id || '').localeCompare(String(b.id || ''));
+    });
+    return rows;
+  }
+
+  async getCharacterTemplate({ templateId } = {}) {
+    const id = String(templateId ?? '').trim();
+    if (!id) throw new Error('templateId is required');
+
+    const userPath = this._getUserCharacterTemplateJsonPath(id);
+    if (fs.existsSync(userPath)) {
+      const raw = fs.readFileSync(userPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      return this._normalizeCharacterTemplateDetail(parsed, { sourcePath: userPath, isBuiltIn: false });
+    }
+
+    const builtInDir = this._getBuiltInCharacterTemplatesDir();
+    if (fs.existsSync(builtInDir)) {
+      for (const name of fs.readdirSync(builtInDir)) {
+        if (!name.toLowerCase().endsWith('.json')) continue;
+        const abs = path.join(builtInDir, name);
+        try {
+          const raw = fs.readFileSync(abs, 'utf8');
+          const parsed = JSON.parse(raw);
+          const detail = this._normalizeCharacterTemplateDetail(parsed, { sourcePath: abs, isBuiltIn: true });
+          if (detail.templateId === this._sanitizeCharacterTemplateId(id)) return detail;
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    throw new Error(`Character template not found: ${id}`);
+  }
+
+  async saveCharacterTemplateFromCharacter({
+    characterId,
+    templateId = null,
+    name = null,
+    description = '',
+    includeImages = false,
+    overwrite = true,
+  } = {}) {
+    const idRaw = templateId || name || null;
+    const safeId = this._sanitizeCharacterTemplateId(idRaw);
+
+    const cId = String(characterId ?? '').trim();
+    if (!cId) throw new Error('characterId is required');
+    const character = await this.getCharacter(cId);
+    if (!character) throw new Error('Character not found');
+
+    const templateName = String(name ?? character.displayName ?? safeId).trim() || safeId;
+    const sheetTemplateId = String(character.templateId ?? this.defaultTemplateId).trim() || this.defaultTemplateId;
+
+    const jsonPath = this._getUserCharacterTemplateJsonPath(safeId);
+    const imagesDir = this._getUserCharacterTemplateImagesDir(safeId);
+
+    if (!overwrite && fs.existsSync(jsonPath)) {
+      throw new Error(`Template already exists: ${safeId}`);
+    }
+
+    // Reset images folder on overwrite (best-effort).
+    try {
+      if (fs.existsSync(imagesDir)) fs.rmSync(imagesDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+
+    const templateAst = await this.getTemplateAst(sheetTemplateId);
+
+    const fields = [];
+    for (const section of templateAst.sections || []) {
+      for (const field of section.fields || []) {
+        const fid = String(field?.id ?? '').trim();
+        if (!fid) continue;
+        if (fid === 'CHAR-ID-001') continue; // never template the system-managed public ID
+        if (field.type === 'rule') continue; // never store rule descriptor lines in templates
+        const text = character.valuesById && Object.prototype.hasOwnProperty.call(character.valuesById, fid) ? character.valuesById[fid] : '';
+        if (!String(text ?? '').trim().length) continue;
+        fields.push({ field_id: fid, value: String(text) });
+      }
+    }
+
+    const referenceImages = [];
+    if (includeImages) {
+      ensureDir(imagesDir);
+      const usedNames = new Set();
+
+      for (const img of character.images || []) {
+        const imageId = String(img?.id ?? '').trim();
+        if (!imageId) continue;
+
+        const srcAbs = await this.getImageAbsPath({ imageId, kind: 'original' });
+        if (!srcAbs || !fs.existsSync(srcAbs)) continue;
+
+        const ext = path.extname(srcAbs) || path.extname(String(img?.relativePath ?? '')) || '.png';
+        let baseName = path.basename(String(img?.relativePath ?? '').replaceAll('/', path.sep));
+        if (!baseName || baseName === '.' || baseName === path.sep) {
+          const pref = String(img?.fileHash ?? '').slice(0, 16) || randomId('imgfile_');
+          baseName = `${pref}${ext}`;
+        }
+
+        // ensure unique in template images folder
+        let finalName = baseName;
+        if (usedNames.has(finalName.toLowerCase())) {
+          const stem = finalName.replace(path.extname(finalName), '') || 'img';
+          const e = path.extname(finalName) || ext;
+          let i = 2;
+          while (usedNames.has(`${stem}__dup${i}${e}`.toLowerCase())) i += 1;
+          finalName = `${stem}__dup${i}${e}`;
+        }
+        usedNames.add(finalName.toLowerCase());
+
+        const destAbs = path.join(imagesDir, finalName);
+        fs.copyFileSync(srcAbs, destAbs);
+
+        const folderName = path.basename(imagesDir);
+        const relPath = path.join(folderName, finalName).replaceAll('\\', '/');
+
+        referenceImages.push({
+          path: relPath,
+          file_hash: String(img?.fileHash ?? '').trim(),
+          favorite: !!img?.favorite,
+          rating: Math.max(0, Math.min(5, Number(img?.rating) || 0)),
+          notes: String(img?.notes ?? ''),
+          tags: Array.isArray(img?.tags) ? img.tags.map((t) => String(t ?? '').trim()).filter(Boolean) : [],
+          storage_mode: String(img?.storageMode ?? 'copy'),
+          source_url: img?.sourceUrl == null ? null : String(img?.sourceUrl ?? '').trim() || null,
+          source_note: String(img?.sourceNote ?? ''),
+        });
+      }
+    }
+
+    const doc = {
+      template_id: safeId,
+      name: templateName,
+      description: String(description ?? '').trim(),
+      version: '1.0',
+      sheet_template_id: sheetTemplateId,
+      include_images: !!includeImages,
+      fields,
+      reference_images: referenceImages,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(jsonPath, JSON.stringify(doc, null, 2), 'utf8');
+    await this._audit('characterTemplate.save', cId, { templateId: safeId, includeImages: !!includeImages });
+
+    return { ok: true, templateId: safeId, path: jsonPath, imageCount: referenceImages.length, fieldCount: fields.length };
+  }
+
+  async _importCharacterTemplateImagesToCharacter({ characterId, templateDetail }) {
+    const cId = String(characterId ?? '').trim();
+    if (!cId) throw new Error('characterId is required');
+
+    const paths = this.getCharacterPaths(cId);
+    ensureDir(paths.imagesOriginalDir);
+    ensureDir(paths.imagesThumbDir);
+
+    const templatesDir = this.getPaths().templatesDir;
+    const usedNames = new Set();
+
+    for (const img of templateDetail?.referenceImages || []) {
+      const rel = String(img?.relPath ?? '').trim().replaceAll('\\', '/');
+      if (!rel) continue;
+      const srcAbs = path.join(templatesDir, rel.replaceAll('/', path.sep));
+      if (!fs.existsSync(srcAbs)) continue;
+
+      const srcBase = path.basename(rel.replaceAll('/', path.sep));
+      const ext = path.extname(srcBase) || path.extname(srcAbs) || '.png';
+      let baseName = srcBase || `${String(img?.fileHash ?? '').slice(0, 16) || randomId('imgfile_')}${ext}`;
+
+      let finalName = baseName;
+      if (usedNames.has(finalName.toLowerCase())) {
+        const stem = finalName.replace(path.extname(finalName), '') || 'img';
+        const e = path.extname(finalName) || ext;
+        let i = 2;
+        while (usedNames.has(`${stem}__dup${i}${e}`.toLowerCase())) i += 1;
+        finalName = `${stem}__dup${i}${e}`;
+      }
+      usedNames.add(finalName.toLowerCase());
+
+      const destRel = path.join('images', 'original', finalName).replaceAll('\\', '/');
+      const destAbs = path.join(paths.base, destRel.replaceAll('/', path.sep));
+      ensureDir(path.dirname(destAbs));
+      fs.copyFileSync(srcAbs, destAbs);
+
+      let width = null;
+      let height = null;
+      if (this.electronNativeImage) {
+        try {
+          const nimg = this.electronNativeImage.createFromPath(destAbs);
+          const size = nimg.getSize();
+          width = Number(size?.width) || null;
+          height = Number(size?.height) || null;
+
+          const stem = path.basename(finalName, path.extname(finalName));
+          const thumbAbs = path.join(paths.imagesThumbDir, `${stem}.png`);
+          const thumb = nimg.resize({ width: 320 });
+          fs.writeFileSync(thumbAbs, thumb.toPNG());
+        } catch {
+          // best-effort thumbs only
+        }
+      }
+
+      const imageId = randomId('img_');
+      const tagsJson = JSON.stringify(Array.isArray(img?.tags) ? img.tags : []);
+      await run(
+        this.db,
+        `INSERT INTO ImageAsset(
+           image_id, character_id, relative_path, file_hash, width, height,
+           favorite, rating, notes, tags_json,
+           storage_mode, source_path, source_url, source_note
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          imageId,
+          cId,
+          destRel,
+          String(img?.fileHash ?? '').trim() || sha256Hex(fs.readFileSync(destAbs)),
+          width,
+          height,
+          img?.favorite ? 1 : 0,
+          Math.max(0, Math.min(5, Number(img?.rating) || 0)),
+          String(img?.notes ?? ''),
+          tagsJson,
+          'copy',
+          srcAbs,
+          img?.sourceUrl ?? null,
+          String(img?.sourceNote ?? ''),
+        ]
+      );
+    }
+  }
+
+  async createCharactersFromTemplate({ templateId, count = 1, includeImages = true, numberNames = true } = {}) {
+    const detail = await this.getCharacterTemplate({ templateId });
+    const n = Math.max(1, Math.min(500, Number(count) || 1));
+
+    const valuesById = {};
+    for (const f of detail.fields || []) {
+      if (!f) continue;
+      const fid = String(f.fieldId ?? '').trim();
+      if (!fid) continue;
+      if (fid === 'CHAR-ID-001') continue;
+      valuesById[fid] = f.value == null ? '' : String(f.value);
+    }
+
+    const baseName = String(detail.name ?? 'Unnamed').trim() || 'Unnamed';
+    const created = [];
+
+    for (let i = 0; i < n; i += 1) {
+      const displayName = n > 1 && numberNames ? `${baseName} ${i + 1}` : baseName;
+      const characterId = await this.createCharacter({ displayName, templateId: detail.sheetTemplateId });
+
+      const nextValues = { ...valuesById };
+      nextValues['CHAR-ID-002'] = displayName;
+      const saveRes = await this.saveCharacter({
+        characterId,
+        valuesById: nextValues,
+        validationMode: 'strict',
+        allowSaveWithErrors: true,
+        source: 'import',
+        versionNotes: `Created from character template: ${detail.templateId}`,
+      });
+
+      if (includeImages && Array.isArray(detail.referenceImages) && detail.referenceImages.length > 0) {
+        await this._importCharacterTemplateImagesToCharacter({ characterId, templateDetail: detail });
+      }
+
+      created.push({ characterId, ok: !!saveRes?.ok, issues: saveRes?.issues || [] });
+    }
+
+    await this._audit('characterTemplate.createFromTemplate', null, { templateId: detail.templateId, count: created.length });
+    return { ok: true, templateId: detail.templateId, created };
+  }
+
+  async cloneCharacter({ sourceCharacterId, includeImages = true, displayName = null } = {}) {
+    const srcId = String(sourceCharacterId ?? '').trim();
+    if (!srcId) throw new Error('sourceCharacterId is required');
+
+    const src = await this.getCharacter(srcId);
+    if (!src) throw new Error('Character not found');
+
+    const baseName = String(displayName ?? '').trim() || `${src.displayName} (clone)`;
+    const newId = await this.createCharacter({ displayName: baseName, templateId: src.templateId });
+
+    const clonedValues = { ...(src.valuesById || {}) };
+    delete clonedValues['CHAR-ID-001'];
+    clonedValues['CHAR-ID-002'] = baseName;
+
+    await this.saveCharacter({
+      characterId: newId,
+      valuesById: clonedValues,
+      validationMode: 'strict',
+      allowSaveWithErrors: true,
+      source: 'import',
+      versionNotes: `Cloned from ${src.publicId || srcId}`,
+    });
+
+    if (includeImages) {
+      const fromPaths = this.getCharacterPaths(srcId);
+      const toPaths = this.getCharacterPaths(newId);
+      const rows = await all(
+        this.db,
+        `SELECT image_id, relative_path, file_hash, width, height, added_at, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note, palette_json, dhash_hex
+         FROM ImageAsset WHERE character_id = ?
+         ORDER BY added_at ASC`,
+        [srcId]
+      );
+
+      const idMap = new Map();
+      for (const r of rows) {
+        const oldImageId = String(r.image_id ?? '').trim();
+        if (!oldImageId) continue;
+        const newImageId = randomId('img_');
+        idMap.set(oldImageId, newImageId);
+
+        const srcAbs = await this.getImageAbsPath({ imageId: oldImageId, kind: 'original' });
+        const rel = String(r.relative_path ?? '').trim();
+        const destAbs = path.join(toPaths.base, rel.replaceAll('/', path.sep));
+        ensureDir(path.dirname(destAbs));
+        if (srcAbs && fs.existsSync(srcAbs)) fs.copyFileSync(srcAbs, destAbs);
+
+        // Copy thumb if it exists (best-effort).
+        try {
+          const fileName = path.basename(rel.replaceAll('/', path.sep));
+          const stem = fileName.replace(path.extname(fileName), '');
+          const fromThumb = path.join(fromPaths.imagesThumbDir, `${stem}.png`);
+          const toThumb = path.join(toPaths.imagesThumbDir, `${stem}.png`);
+          if (fs.existsSync(fromThumb)) fs.copyFileSync(fromThumb, toThumb);
+        } catch {
+          // ignore
+        }
+
+        await run(
+          this.db,
+          `INSERT INTO ImageAsset(
+             image_id, character_id, relative_path, file_hash, width, height, added_at,
+             favorite, rating, notes, tags_json,
+             storage_mode, source_path, source_url, source_note,
+             suggested_tags_json, auto_tagged_at,
+             palette_json, dhash_hex
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', NULL, ?, ?)`,
+          [
+            newImageId,
+            newId,
+            rel,
+            r.file_hash,
+            r.width ?? null,
+            r.height ?? null,
+            r.added_at ?? null,
+            r.favorite ? 1 : 0,
+            Math.max(0, Math.min(5, Number(r.rating) || 0)),
+            r.notes ?? '',
+            r.tags_json ?? '[]',
+            r.storage_mode ?? 'copy',
+            r.source_path ?? null,
+            r.source_url ?? null,
+            r.source_note ?? null,
+            r.palette_json ?? null,
+            r.dhash_hex ?? null,
+          ]
+        );
+
+        try {
+          const ann = await get(this.db, 'SELECT annotations_json FROM ImageAnnotation WHERE image_id = ?', [oldImageId]);
+          if (ann && ann.annotations_json != null) {
+            await run(this.db, 'INSERT OR REPLACE INTO ImageAnnotation(image_id, annotations_json) VALUES(?, ?)', [
+              newImageId,
+              String(ann.annotations_json ?? '{}'),
+            ]);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // Copy character icon mapping if possible.
+      const iconOld = String(src.iconImageId ?? '').trim();
+      if (iconOld && idMap.has(iconOld)) {
+        await run(
+          this.db,
+          'UPDATE Character SET icon_image_id = ?, icon_focus_x = ?, icon_focus_y = ? WHERE character_id = ?',
+          [idMap.get(iconOld), src.iconFocusX ?? 0.5, src.iconFocusY ?? 0.5, newId]
+        );
+      }
+    }
+
+    await this._audit('character.clone', srcId, { clonedCharacterId: newId, includeImages: !!includeImages });
+    return { ok: true, characterId: newId };
   }
 
   async ensureTemplateLoaded() {

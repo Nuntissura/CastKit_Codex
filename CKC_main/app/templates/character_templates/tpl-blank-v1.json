@@ -1,0 +1,10 @@
+{
+  "template_id": "tpl-blank-v1",
+  "name": "Blank Character",
+  "description": "Empty template with no prefilled fields.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [],
+  "reference_images": []
+}

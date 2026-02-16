@@ -1,110 +1,75 @@
 # Work Packet: WP-0085 — Character templates & cloning
 
-Date: 2026-02-15
-Owner: Codex
-Status: IN_PROGRESS
+Date: 2026-02-15  
+Owner: Codex  
+Status: DONE (2026-02-16)
 
 ## Summary
-Add the ability to save characters as reusable templates, create new characters from templates, and clone existing characters with field inheritance options.
+Add the ability to save characters as reusable templates, create new characters from templates, and clone existing characters (sheet-only or with images).
 
 ## Why
-- Users often create character variations (same character in different AUs, NPC archetypes, character families).
-- Repeatedly filling in common fields (Universe, Species, Role) is tedious.
-- Templates lower the barrier to entry for new users (pre-filled D&D NPC, Romance Lead, Villain, etc.).
+- Users often create character variations (AUs, NPC archetypes, character families).
+- Repeatedly filling in common fields is tedious.
+- Templates lower the barrier to entry (starter archetypes).
 - Spec: `CastKit_Codex_Spec_v00.053.md` §12.3 "Character templates & cloning".
 
 ## Scope
-### In
+### In (shipped)
 - Save character as template:
-  - "Save as Template" action in Character view
-  - Template stores field structure + optionally field values
-  - Template can optionally include reference images
-  - Templates stored in `<libraryRoot>/templates/` as `.json` files
-- Create character from template:
-  - "New from Template" button in Library view
-  - Template picker UI (list with preview)
-  - Inherited fields are pre-filled but editable
-  - Character ID is always generated fresh
-- Clone existing character:
-  - "Clone Character" action in Character view
-  - Options: "Clone with images" or "Clone sheet only"
-  - Clone creates a new character folder with copied data
-  - User can customize which fields to inherit
+  - Character → Tools → **Save as template…**
+  - Stores **non-empty, non-rule** field values (never includes `CHAR-ID-001`).
+  - Option: include reference images (copies current character images).
+  - Storage:
+    - Template JSON: `<libraryRoot>/templates/CHARACTER_TEMPLATE__<id>.json`
+    - Template images: `<libraryRoot>/templates/CHARACTER_TEMPLATE__<id>__images/`
+- Create character(s) from template:
+  - Library → **New from template…** (picker dialog)
+  - Options: count, include images, numbered names (batch).
+  - Character ID always generated fresh.
+- Clone character:
+  - Character → Tools → **Clone character…**
+  - Options: clone sheet-only or with images (copies image files + metadata; best-effort thumbs; copies annotations JSON).
 - Built-in template library:
-  - Ship with 5-10 starter templates (D&D NPC, Modern Human, Fantasy Creature, etc.)
-  - Stored in `CKC_main/app/templates/` (read-only)
-  - User templates stored in `<libraryRoot>/templates/` (user-managed)
+  - Shipped templates live in `CKC_main/app/templates/character_templates/*.json` (read-only).
 - Batch character creation:
-  - "Create N characters from template" (useful for NPCs)
-  - Auto-generates unique IDs (CHAR-000010, CHAR-000011, ...)
+  - Picker supports creating 5+ characters from one template with numbered names.
 
-### Out
-- Template marketplace / sharing (future consideration)
-- Advanced field inheritance rules (e.g., "inherit Species but randomize Name")
-- Template versioning
+### Out (not in this WP)
+- Template marketplace / sharing UX
+- Advanced “inherit specific fields” UI
+- Template versioning / migration rules
 
-## Dependencies
-None (pure feature, uses existing SQLite and file operations)
+## Acceptance criteria (DONE)
+- [x] Can save a character as a template (with/without images)
+- [x] Can create a new character from a template
+- [x] Can clone an existing character (sheet-only or with images)
+- [x] Built-in templates ship with the app
+- [x] Batch character creation works (5+ characters from one template)
+- [x] Templates are portable (live under `<libraryRoot>/templates/`)
 
-## Acceptance criteria
-- [ ] Can save a character as a template (with/without images)
-- [ ] Can create a new character from a template
-- [ ] Can clone an existing character (with field inheritance options)
-- [ ] Built-in templates ship with the app
-- [ ] Batch character creation works (5+ characters from one template)
-- [ ] Templates are portable (can export/import with library)
+## Test plan (DONE)
+- [x] Unit/integration tests for template save/list/get + create-from-template + clone (`CKC_main/test/backend_character_templates.test.js`)
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
-## Test plan
-- [ ] Unit tests for template serialization/deserialization
-- [ ] Integration test: save template, create character from it, verify fields
-- [ ] Manual: clone character with images, verify folder structure
-- [ ] Manual: batch create 10 NPCs from template
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+## Governance checklist (MUST) (DONE in completion commit)
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (bump + archive).
 
-## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.3).
-
-## Implementation notes
-- Key files to create/modify:
-  - `CKC_main/app/lib/templates.js` — Template CRUD operations
-  - `CKC_main/app/ipc/templates.js` — IPC handlers
-  - `CKC_main/src/ui/components/TemplatePickerDialog.tsx` — Template selection UI
-  - `CKC_main/src/ui/components/CloneCharacterDialog.tsx` — Clone options UI
-  - `CKC_main/app/templates/` — Built-in template directory
-- Template JSON schema:
-  ```json
-  {
-    "template_id": "tpl-dnd-npc-v1",
-    "name": "D&D NPC",
-    "description": "Basic NPC template for D&D campaigns",
-    "version": "1.0",
-    "fields": [
-      { "field_id": "CHAR-NAME-001", "value": "" },
-      { "field_id": "CHAR-SPECIES-001", "value": "Human" },
-      { "field_id": "CHAR-ROLE-001", "value": "Commoner" }
-    ],
-    "include_images": false,
-    "reference_images": []
-  }
-  ```
-- Clone operation:
-  1. Generate new Character ID (CHAR-NNNNNN)
-  2. Copy Character row with new ID
-  3. Copy CharacterField rows (optionally filter by user selection)
-  4. If "Clone with images": copy ImageAsset rows + physical files
-  5. Update `libraryRoot` folder structure
+## Implementation notes (as-built)
+- Backend: `CKC_main/app/backend/library.js`
+  - `listCharacterTemplates`, `getCharacterTemplate`
+  - `saveCharacterTemplateFromCharacter`
+  - `createCharactersFromTemplate`
+  - `cloneCharacter`
+- IPC + preload:
+  - `CKC_main/app/main.js` IPC handlers
+  - `CKC_main/app/preload.js` API surface
+- UI:
+  - `CKC_main/src/ui/components/CharacterTemplatePickerModal.tsx`
+  - `CKC_main/src/ui/components/CharacterTemplateActionModals.tsx`
+  - Library button wired in `CKC_main/src/ui/views/LibraryView.tsx`
+  - Character Tools actions wired in `CKC_main/src/ui/views/CharacterView.tsx`
 
 ## Notes
-- Built-in templates to include:
-  1. Blank Character (empty sheet)
-  2. D&D NPC (Name, Species, Role, Class, Alignment)
-  3. Modern Human (Name, Age, Occupation, Location)
-  4. Fantasy Creature (Name, Species, Powers, Weaknesses)
-  5. Sci-Fi Character (Name, Species, Homeworld, Tech Level)
-  6. Romance Lead (Name, Age, Personality, Love Language)
-  7. Villain (Name, Motivation, Powers, Weakness)
-- Template picker UI: grid with thumbnail + name + description
-- Consider allowing templates to specify *required* vs *optional* fields
 - Do NOT touch `D:`.

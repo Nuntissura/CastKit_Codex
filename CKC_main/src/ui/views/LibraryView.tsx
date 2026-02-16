@@ -1,6 +1,7 @@
 import React from 'react';
 import { MediaPane } from '../components/MediaPane';
 import { CommandBar } from '../components/CommandBar';
+import { CharacterTemplatePickerModal } from '../components/CharacterTemplatePickerModal';
 import { useElementWidth } from '../hooks/useElementWidth';
 import styles from './libraryView.module.css';
 
@@ -149,6 +150,7 @@ export function LibraryView({
   const [showInboxBar, setShowInboxBar] = React.useState<boolean>(false);
   const [showTagsBar, setShowTagsBar] = React.useState<boolean>(false);
   const [leftMode, setLeftMode] = React.useState<'carousel' | 'inbox'>('carousel');
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = React.useState<boolean>(false);
 
   const [queryText, setQueryText] = React.useState<string>('');
   const [favoriteOnly, setFavoriteOnly] = React.useState<boolean>(false);
@@ -2730,6 +2732,14 @@ export function LibraryView({
             New character
           </button>
           <button
+            onClick={() => {
+              setError(null);
+              setIsTemplatePickerOpen(true);
+            }}
+          >
+            New from templateâ€¦
+          </button>
+          <button
             onClick={async () => {
               setError(null);
               try {
@@ -2744,6 +2754,12 @@ export function LibraryView({
           </button>
         </div>
       </aside>
+
+      <CharacterTemplatePickerModal
+        isOpen={isTemplatePickerOpen}
+        onClose={() => setIsTemplatePickerOpen(false)}
+        onCreated={(characterId) => onOpenCharacter(characterId)}
+      />
     </div>
   );
 }

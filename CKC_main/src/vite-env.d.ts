@@ -577,6 +577,62 @@ type CKCAiTaggingJobStatus = {
   result: null | { ok: true; processed: number; suggested: number; failed: number; total: number };
 };
 
+type CKCCharacterTemplateListItem = {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  sheetTemplateId: string;
+  fieldCount: number;
+  imageCount: number;
+  updatedAt: string | null;
+  isBuiltIn: boolean;
+};
+
+type CKCCharacterTemplateImage = {
+  relPath: string;
+  fileHash: string;
+  favorite: boolean;
+  rating: number;
+  notes: string;
+  tags: string[];
+  sourceUrl: string | null;
+  sourceNote: string;
+  storageMode: string;
+};
+
+type CKCCharacterTemplateDetail = {
+  templateId: string;
+  name: string;
+  description: string;
+  version: string;
+  sheetTemplateId: string;
+  fields: Array<{ fieldId: string; value: string }>;
+  referenceImages: CKCCharacterTemplateImage[];
+  isBuiltIn: boolean;
+  sourcePath: string;
+  updatedAt: string | null;
+};
+
+type CKCSaveCharacterTemplateResult = {
+  ok: true;
+  templateId: string;
+  path: string;
+  imageCount: number;
+  fieldCount: number;
+};
+
+type CKCCreateCharactersFromTemplateResult = {
+  ok: true;
+  templateId: string;
+  created: Array<{ characterId: string; ok: boolean; issues: CKCValidationIssue[] }>;
+};
+
+type CKCCloneCharacterResult = {
+  ok: true;
+  characterId: string;
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -672,6 +728,23 @@ interface Window {
     deleteSavedSearch: (searchId: string) => Promise<{ ok: true }>;
     getTemplate: () => Promise<CKCTemplateAst>;
     getTemplateDetail: (templateId?: string | null) => Promise<CKCTemplateDetail | null>;
+    listCharacterTemplates: () => Promise<CKCCharacterTemplateListItem[]>;
+    getCharacterTemplate: (params: { templateId: string }) => Promise<CKCCharacterTemplateDetail>;
+    saveCharacterTemplateFromCharacter: (params: {
+      characterId: string;
+      templateId?: string | null;
+      name?: string | null;
+      description?: string | null;
+      includeImages?: boolean;
+      overwrite?: boolean;
+    }) => Promise<CKCSaveCharacterTemplateResult>;
+    createCharactersFromTemplate: (params: {
+      templateId: string;
+      count?: number;
+      includeImages?: boolean;
+      numberNames?: boolean;
+    }) => Promise<CKCCreateCharactersFromTemplateResult>;
+    cloneCharacter: (params: { sourceCharacterId: string; includeImages?: boolean; displayName?: string | null }) => Promise<CKCCloneCharacterResult>;
     listSpinOffs: (params?: unknown) => Promise<CKCSpinOffListItem[]>;
     getSpinOff: (spinoffId: string) => Promise<CKCSpinOffDetail>;
     createSpinOff: (params?: unknown) => Promise<string>;

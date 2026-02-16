@@ -1,0 +1,16 @@
+{
+  "template_id": "tpl-romance-lead-v1",
+  "name": "Romance Lead",
+  "description": "Romance-forward baseline with committed focus.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-ID-006", "value": "Romance Lead" },
+    { "field_id": "CHAR-ROM-001", "value": "committed" },
+    { "field_id": "CHAR-ROM-004", "value": "initiator" },
+    { "field_id": "CHAR-PSY-001", "value": "Warm attentive playful when safe" },
+    { "field_id": "CHAR-PSY-004", "value": "Connection and mutual care" }
+  ],
+  "reference_images": []
+}

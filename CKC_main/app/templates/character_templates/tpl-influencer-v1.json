@@ -1,0 +1,14 @@
+{
+  "template_id": "tpl-influencer-v1",
+  "name": "Influencer",
+  "description": "Public figure baseline with audience model enabled.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-AUD-001", "value": "enabled" },
+    { "field_id": "CHAR-AUD-002", "value": "influencer" },
+    { "field_id": "CHAR-AUD-009", "value": "frequent" }
+  ],
+  "reference_images": []
+}

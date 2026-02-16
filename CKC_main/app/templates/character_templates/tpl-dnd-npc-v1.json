@@ -1,0 +1,14 @@
+{
+  "template_id": "tpl-dnd-npc-v1",
+  "name": "D&D NPC",
+  "description": "Quick NPC baseline (fictional) with prompt anchors.",
+  "version": "1.0",
+  "sheet_template_id": "v2.00",
+  "include_images": false,
+  "fields": [
+    { "field_id": "CHAR-ID-004", "value": "fictional" },
+    { "field_id": "CHAR-ID-006", "value": "NPC" },
+    { "field_id": "CHAR-VIS-001", "value": "[\"fantasy\",\"npc\"]" }
+  ],
+  "reference_images": []
+}
