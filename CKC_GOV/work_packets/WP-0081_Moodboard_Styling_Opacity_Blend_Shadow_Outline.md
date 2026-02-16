@@ -2,14 +2,14 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: BACKLOG
+Status: IN_PROGRESS
 
 ## Summary
 Add per-layer styling controls so moodboards can be used for real composition: opacity, blend modes, shadows, and outlines.
 
 ## Why
 - Without styling, shapes/masks feel limited.
-- Spec: `CastKit_Codex_Spec_v00.051.md` §11.28.
+- Spec: `CastKit_Codex_Spec_v00.052.md` §11.28.
 
 ## Scope
 ### In
@@ -30,4 +30,3 @@ Add per-layer styling controls so moodboards can be used for real composition: o
 
 ## Notes
 - Do NOT touch `D:`.
-
