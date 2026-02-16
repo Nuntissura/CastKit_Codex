@@ -1,8 +1,8 @@
 # Work Packet: WP-0087 — Web portfolio export
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Export characters and image galleries as a static HTML website that can be opened locally or hosted on any web server (no backend required).
@@ -16,7 +16,7 @@ Export characters and image galleries as a static HTML website that can be opene
   - Portfolio presentations for artists/writers
 - No server/hosting costs (static files).
 - Viral growth potential (people see the output and want CKC to create it).
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.5 "Web Portfolio Export".
+- Spec: `CastKit_Codex_Spec_v00.055.md` §12.5 "Web Portfolio Export".
 
 ## Scope
 ### In
@@ -79,7 +79,7 @@ None (pure HTML/CSS/JS export, no frameworks)
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.5).
+- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.055.md` §12.5).
 
 ## Implementation notes
 - Key files to create/modify:
