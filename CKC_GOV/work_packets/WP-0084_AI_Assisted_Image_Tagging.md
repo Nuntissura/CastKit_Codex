@@ -1,8 +1,8 @@
 # Work Packet: WP-0084 — AI-assisted image tagging
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add AI-powered automatic tagging for images on import and bulk tagging for existing untagged/under-tagged images using local vision models or cloud APIs.

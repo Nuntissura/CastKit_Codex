@@ -99,7 +99,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0081 | Moodboard: styling (opacity/blend/shadow) | DONE | Codex | Per-layer styling (non-destructive). |
 | WP-0082 | Moodboard: export powerhouse | DONE | Codex | Hi-res + selection export + PDF. |
 | WP-0083 | Global full-text search | DONE | Codex | Ctrl+Shift+F global search across sheets/docs/moodboards/images with snippets + jump-to (`npm test`, `npx tsc --noEmit`). |
-| WP-0084 | AI-assisted image tagging | BACKLOG | TBD | Auto-tag images on import using CLIP/BLIP; bulk tag existing images; local + cloud options. |
+| WP-0084 | AI-assisted image tagging | IN_PROGRESS | Codex | Tag suggestions (confidence) via local OpenAI-compatible vision + review/apply UI; bulk job + cancel. |
 | WP-0085 | Character templates & cloning | BACKLOG | TBD | Save/load character templates; clone characters; built-in template library; batch character creation. |
 | WP-0086 | macOS build support | BACKLOG | TBD | electron-builder macOS config; DMG + .app bundle; GitHub Actions workflow; portable defaults. |
 | WP-0087 | Web portfolio export | BACKLOG | TBD | Export library as static HTML website (portfolio/codex formats); GitHub Pages ready. |
