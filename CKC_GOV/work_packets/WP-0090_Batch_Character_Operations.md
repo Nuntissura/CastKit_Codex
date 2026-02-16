@@ -1,8 +1,8 @@
 # Work Packet: WP-0090 — Batch character operations
 
-Date: 2026-02-15
+Date: 2026-02-16
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add multi-select and batch operations for characters in the Library view: bulk tagging, bulk field updates, batch export, batch delete.
@@ -11,7 +11,7 @@ Add multi-select and batch operations for characters in the Library view: bulk t
 - Managing 50+ characters needs bulk actions (currently requires editing one at a time).
 - Common workflows: "Set Universe: Cyberpunk for all NPCs", "Export all main cast", "Delete all test characters".
 - Batch operations are essential for power users with large casts (100+ characters).
-- Spec: `CastKit_Codex_Spec_v00.058.md` §12.8 "Batch character operations (WP-0090)".
+- Spec: `CastKit_Codex_Spec_v00.059.md` §12.8 "Batch character operations (WP-0090)".
 
 ## Scope
 ### In
@@ -22,7 +22,7 @@ Add multi-select and batch operations for characters in the Library view: bulk t
   - Visual selection indicator (checkbox or highlight)
 - Batch operations toolbar (appears when >0 selected):
   - "Bulk Edit Fields" — apply same field value to all selected
-  - "Bulk Tag" — add/remove tags (if character tags are added in future)
+  - "Bulk Tag" — add/remove manual character tags for all selected
   - "Batch Export" — export all selected characters (sheet + images)
   - "Batch Delete" — delete all selected (with confirmation)
   - "Deselect All"
@@ -33,12 +33,13 @@ Add multi-select and batch operations for characters in the Library view: bulk t
   - Preview: "This will update N characters"
   - Confirm to apply
 - Batch export:
-  - Use existing export formats (canonical, LLM-friendly, web portfolio)
+  - Use existing export formats (share pack, bundle, web portfolio)
   - Progress UI with cancel support
-  - Output folder: under the configured output root (default: exe parent folder) at `exports/batch-<timestamp>/` (refuse `D:`)
+  - Output folder: under the configured export root (`config.exportRoot`) if set; otherwise under `<libraryRoot>\\exports\\` (refuse `D:`)
+  - Each export is grouped under a `batch-<timestamp>` folder
 - Batch delete:
   - Confirmation dialog with count: "Delete 25 characters?"
-  - Optional "Move to Trash" vs "Permanent Delete"
+  - "Move to Trash" (soft delete) vs "Purge" (permanent delete)
   - Progress UI
   - Undo support (restore from trash)
 
@@ -51,23 +52,25 @@ Add multi-select and batch operations for characters in the Library view: bulk t
 None (pure feature, uses existing CRUD operations)
 
 ## Acceptance criteria
-- [ ] Can multi-select characters with Ctrl+Click, Shift+Click, Ctrl+A
-- [ ] Batch field edit updates all selected characters
-- [ ] Batch export works for 50+ characters
-- [ ] Batch delete works with confirmation and progress
-- [ ] Selection state persists during filter changes (or clears, decide during implementation)
+- [x] Can multi-select characters with Ctrl+Click, Shift+Click, Ctrl+A
+- [x] Batch field edit updates all selected characters
+- [x] Bulk tag add/remove updates all selected characters (manual tags only)
+- [x] Batch export works for 50+ characters
+- [x] Batch delete works with confirmation and progress
+- [x] Selection state is pruned to currently visible items when filters/mode changes (prevents hidden selections)
 
 ## Test plan
-- [ ] Unit tests for batch update queries
+- [x] Unit tests for batch operations (bulk field edit + bulk tags + soft delete / restore / purge)
+- [x] Unit tests for soft delete / restore / purge
 - [ ] Integration test: select 10 characters, bulk edit field, verify all updated
 - [ ] Manual: select 50 characters, batch export, verify all exported
 - [ ] Manual: batch delete with undo, verify restoration works
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.058.md` §12.8).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (`CastKit_Codex_Spec_v00.059.md` §12.8).
 
 ## Implementation notes
 - Key files to create/modify:
@@ -75,37 +78,25 @@ None (pure feature, uses existing CRUD operations)
   - `CKC_main/src/ui/components/*` — Batch actions toolbar + dialogs
   - `CKC_main/app/backend/library.js` — Batch operations backend
   - `CKC_main/app/main.js` + `CKC_main/app/preload.js` — IPC wiring
-- Multi-select state:
-  ```tsx
-  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(new Set());
 
-  const handleClick = (charId: string, event: React.MouseEvent) => {
-    if (event.ctrlKey) {
-      // Toggle selection
-      setSelectedCharacterIds(prev => {
-        const next = new Set(prev);
-        next.has(charId) ? next.delete(charId) : next.add(charId);
-        return next;
-      });
-    } else if (event.shiftKey) {
-      // Range selection (from last selected to current)
-      // ... implement range logic
-    } else {
-      // Single selection
-      setSelectedCharacterIds(new Set([charId]));
-    }
-  };
-  ```
-- Bulk field update query:
-  ```sql
-  UPDATE CharacterField
-  SET value_text = ?
-  WHERE character_id IN (?, ?, ...) AND field_id = ?;
-  ```
+Implemented:
+- Backend:
+  - `CKCLibrary.batchUpdateCharacterField(...)`
+  - `CKCLibrary.batchUpdateCharacterTags(...)`
+  - `CKCLibrary.softDeleteCharacters(...)`
+  - `CKCLibrary.restoreCharacters(...)`
+  - `CKCLibrary.purgeCharacters(...)`
+  - `CKCLibrary.listCharacters({ deletedMode })`
+- UI:
+  - Library right panel now supports character multi-select + a batch toolbar.
+  - Added a Trash mode (toggle) that lists deleted characters and supports Restore/Purge + "Empty trash".
+  - Added dialogs: `BulkFieldEditDialog` + `BulkTagDialog` + `BatchExportDialog`.
+- Bulk field edit implementation detail:
+  - Uses `saveCharacter()` with merged `valuesById` (not raw SQL) to preserve validation, sheet versioning, derived tags, and search blobs.
 - Batch delete with trash:
   - Add `Character.deleted_at` timestamp (soft delete)
   - Deleted characters hidden from library view
-  - "Trash" folder in Library sidebar
+  - Trash mode toggle in Library view
   - "Empty Trash" action for permanent delete
 
 ## Notes

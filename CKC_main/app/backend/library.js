@@ -1913,6 +1913,7 @@ class CKCLibrary {
     scopeFlags = null,
     galleryFilters = null,
     includeSystem = false,
+    deletedMode = 'active',
   } = {}) {
     const flags = {
       ids: true,
@@ -1932,6 +1933,16 @@ class CKCLibrary {
     const params = [];
 
     if (!includeSystem) clauses.push('(is_system = 0)');
+
+    const deletedModeNorm = (() => {
+      const raw = String(deletedMode ?? '').trim().toLowerCase();
+      if (raw === 'all') return 'all';
+      if (raw === 'deleted' || raw === 'trash') return 'deleted';
+      return 'active';
+    })();
+
+    if (deletedModeNorm === 'active') clauses.push('(deleted_at IS NULL)');
+    else if (deletedModeNorm === 'deleted') clauses.push('(deleted_at IS NOT NULL)');
 
     const includeTags = (() => {
       const raw = Array.isArray(tagFilters) ? tagFilters : [];
@@ -2040,9 +2051,9 @@ class CKCLibrary {
     }
 
     let baseSql =
-      'SELECT character_id, public_id, display_name, template_id, template_version, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at FROM Character';
+      'SELECT character_id, public_id, display_name, template_id, template_version, icon_image_id, icon_focus_x, icon_focus_y, created_at, updated_at, deleted_at FROM Character';
     if (clauses.length > 0) baseSql += ` WHERE ${clauses.join(' AND ')}`;
-    baseSql += ' ORDER BY updated_at DESC';
+    baseSql += deletedModeNorm === 'deleted' ? ' ORDER BY deleted_at DESC, updated_at DESC' : ' ORDER BY updated_at DESC';
 
     const rows = await all(this.db, baseSql, params);
     return rows.map((r) => ({
@@ -2056,6 +2067,7 @@ class CKCLibrary {
       iconFocusY: Number.isFinite(Number(r.icon_focus_y)) ? Number(r.icon_focus_y) : 0.5,
       updatedAt: r.updated_at,
       createdAt: r.created_at,
+      deletedAt: r.deleted_at ?? null,
     }));
   }
 
@@ -4086,6 +4098,372 @@ class CKCLibrary {
     }
 
     return { ok: true, issues };
+  }
+
+  async batchUpdateCharacterField({
+    characterIds = [],
+    fieldId,
+    operation = 'set',
+    valueText = '',
+    validationMode = 'strict',
+    allowSaveWithErrors = false,
+  } = {}) {
+    const idsRaw = Array.isArray(characterIds) ? characterIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    const fid = String(fieldId ?? '').trim();
+    if (!fid) throw new Error('fieldId is required');
+
+    const op = (() => {
+      const raw = String(operation ?? '').trim().toLowerCase();
+      if (raw === 'append') return 'append';
+      if (raw === 'clear') return 'clear';
+      return 'set';
+    })();
+
+    const val = String(valueText ?? '');
+    const mode = String(validationMode ?? 'strict').trim() || 'strict';
+    const allow = !!allowSaveWithErrors;
+
+    const globalProtected = new Set(await this.listProtectedFieldIdsGlobal());
+    globalProtected.add('CHAR-ID-001');
+
+    const result = {
+      ok: true,
+      requested: ids.length,
+      updated: 0,
+      skipped: [],
+      errors: [],
+    };
+
+    for (const characterId of ids) {
+      try {
+        const existing = await this.getCharacter(characterId);
+        if (!existing) {
+          result.skipped.push({ characterId, reason: 'missing' });
+          continue;
+        }
+        if (existing.isSystem) {
+          result.skipped.push({ characterId, reason: 'system' });
+          continue;
+        }
+
+        const protectedIds = new Set(await this.listProtectedFieldIds(characterId));
+        if (protectedIds.has(fid) || globalProtected.has(fid)) {
+          result.skipped.push({ characterId, reason: 'protected', fieldId: fid });
+          continue;
+        }
+
+        const templateAst = await this.getTemplateAst(existing.templateId);
+        const field =
+          templateAst.sections?.flatMap((s) => s.fields || []).find((f) => String(f?.id ?? '') === fid) || null;
+        if (!field || field.type === 'rule') {
+          result.skipped.push({ characterId, reason: 'field_not_in_template', fieldId: fid });
+          continue;
+        }
+
+        const current = String(existing.valuesById?.[fid] ?? '');
+        const next = (() => {
+          if (op === 'clear') return '';
+          if (op === 'append') {
+            const add = String(val ?? '');
+            if (!add.trim()) return current;
+            if (!current.trim()) return add;
+            return `${current}\n${add}`;
+          }
+          return String(val ?? '');
+        })();
+
+        const merged = { ...(existing.valuesById || {}) };
+        merged[fid] = next;
+
+        const saveRes = await this.saveCharacter({
+          characterId,
+          valuesById: merged,
+          validationMode: mode,
+          allowSaveWithErrors: allow,
+          source: 'ui_edit',
+          versionNotes: `Batch edit: ${op} ${fid}.`,
+        });
+
+        if (!saveRes.ok) {
+          result.errors.push({
+            characterId,
+            message: `Validation failed for ${fid} (${saveRes.issues?.length ?? 0} issue(s)).`,
+            issues: saveRes.issues,
+          });
+          continue;
+        }
+
+        result.updated += 1;
+      } catch (err) {
+        result.errors.push({ characterId, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    await this._audit('character.batchUpdateField', null, {
+      fieldId: fid,
+      operation: op,
+      requested: ids.length,
+      updated: result.updated,
+      skipped: result.skipped.length,
+      errors: result.errors.length,
+    });
+    return result;
+  }
+
+  async batchUpdateCharacterTags({ characterIds = [], addTags = [], removeTags = [] } = {}) {
+    const idsRaw = Array.isArray(characterIds) ? characterIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+
+    const cleanTags = (raw) => {
+      const list = Array.isArray(raw) ? raw : [];
+      const seen = new Set();
+      const out = [];
+      for (const t of list) {
+        const s = String(t ?? '').trim();
+        if (!s) continue;
+        const k = s.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(s);
+      }
+      return out;
+    };
+
+    const cleanedAdd = cleanTags(addTags);
+    const cleanedRemove = cleanTags(removeTags);
+
+    const result = {
+      ok: true,
+      requested: ids.length,
+      updated: 0,
+      skipped: [],
+      errors: [],
+    };
+
+    if (ids.length === 0) return result;
+    if (cleanedAdd.length === 0 && cleanedRemove.length === 0) return result;
+
+    const templateCache = new Map(); // templateId -> ast
+
+    for (const characterId of ids) {
+      const cid = String(characterId ?? '').trim();
+      if (!cid) continue;
+
+      try {
+        const meta = await get(
+          this.db,
+          `SELECT character_id, display_name, template_id, is_system, deleted_at
+           FROM Character
+           WHERE character_id = ?`,
+          [cid]
+        );
+        if (!meta) {
+          result.skipped.push({ characterId: cid, reason: 'missing' });
+          continue;
+        }
+        if (meta.is_system) {
+          result.skipped.push({ characterId: cid, reason: 'system' });
+          continue;
+        }
+        if (meta.deleted_at) {
+          result.skipped.push({ characterId: cid, reason: 'deleted' });
+          continue;
+        }
+
+        let changed = 0;
+
+        await run(this.db, 'BEGIN');
+        try {
+          for (const tagText of cleanedRemove) {
+            const tagRow = await get(this.db, 'SELECT tag_id FROM Tag WHERE tag_text = ?', [tagText]);
+            if (!tagRow) continue;
+            const del = await run(
+              this.db,
+              `DELETE FROM CharacterTag WHERE character_id = ? AND tag_id = ? AND tag_type = 'manual'`,
+              [cid, tagRow.tag_id]
+            );
+            changed += Number(del?.changes) || 0;
+          }
+
+          for (const tagText of cleanedAdd) {
+            const tagId = await this._ensureTag(tagText);
+            const ins = await run(
+              this.db,
+              `INSERT OR IGNORE INTO CharacterTag(character_id, tag_id, tag_type) VALUES(?, ?, 'manual')`,
+              [cid, tagId]
+            );
+            changed += Number(ins?.changes) || 0;
+          }
+
+          await run(this.db, 'COMMIT');
+        } catch (err) {
+          await run(this.db, 'ROLLBACK');
+          throw err;
+        }
+
+        if (changed <= 0) {
+          result.skipped.push({ characterId: cid, reason: 'no_change' });
+          continue;
+        }
+
+        const tid = String(meta.template_id ?? '').trim() || this.defaultTemplateId;
+        const templateAst = templateCache.get(tid) || (await this.getTemplateAst(tid));
+        templateCache.set(tid, templateAst);
+
+        const fields = await all(this.db, 'SELECT field_id, value_text FROM FieldValue WHERE character_id = ?', [cid]);
+        const valuesById = {};
+        for (const f of fields) valuesById[f.field_id] = f.value_text ?? '';
+
+        await this._updateSearchBlob(templateAst, cid, String(meta.display_name ?? ''), valuesById);
+
+        result.updated += 1;
+      } catch (err) {
+        result.errors.push({ characterId: cid, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    await this._audit('character.batchTags', null, {
+      requested: ids.length,
+      updated: result.updated,
+      skipped: result.skipped.length,
+      errors: result.errors.length,
+      add: cleanedAdd.length,
+      remove: cleanedRemove.length,
+    });
+
+    return result;
+  }
+
+  async softDeleteCharacters({ characterIds = [] } = {}) {
+    const idsRaw = Array.isArray(characterIds) ? characterIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    if (ids.length === 0) return { ok: true, requested: 0, updated: 0, skipped: [] };
+
+    const skipped = [];
+    let updated = 0;
+
+    await run(this.db, 'BEGIN');
+    try {
+      for (const characterId of ids) {
+        const row = await get(this.db, `SELECT character_id, is_system, deleted_at FROM Character WHERE character_id = ?`, [
+          characterId,
+        ]);
+        if (!row) {
+          skipped.push({ characterId, reason: 'missing' });
+          continue;
+        }
+        if (row.is_system) {
+          skipped.push({ characterId, reason: 'system' });
+          continue;
+        }
+        if (row.deleted_at) {
+          skipped.push({ characterId, reason: 'already_deleted' });
+          continue;
+        }
+
+        await run(this.db, `UPDATE Character SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE character_id = ?`, [
+          characterId,
+        ]);
+        updated += 1;
+      }
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._audit('character.softDelete', null, { requested: ids.length, updated, skipped: skipped.length });
+    return { ok: true, requested: ids.length, updated, skipped };
+  }
+
+  async restoreCharacters({ characterIds = [] } = {}) {
+    const idsRaw = Array.isArray(characterIds) ? characterIds : [];
+    const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    if (ids.length === 0) return { ok: true, requested: 0, updated: 0, skipped: [] };
+
+    const skipped = [];
+    let updated = 0;
+
+    await run(this.db, 'BEGIN');
+    try {
+      for (const characterId of ids) {
+        const row = await get(this.db, `SELECT character_id, is_system, deleted_at FROM Character WHERE character_id = ?`, [
+          characterId,
+        ]);
+        if (!row) {
+          skipped.push({ characterId, reason: 'missing' });
+          continue;
+        }
+        if (row.is_system) {
+          skipped.push({ characterId, reason: 'system' });
+          continue;
+        }
+        if (!row.deleted_at) {
+          skipped.push({ characterId, reason: 'not_deleted' });
+          continue;
+        }
+
+        await run(this.db, `UPDATE Character SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE character_id = ?`, [
+          characterId,
+        ]);
+        updated += 1;
+      }
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._audit('character.restore', null, { requested: ids.length, updated, skipped: skipped.length });
+    return { ok: true, requested: ids.length, updated, skipped };
+  }
+
+  async purgeCharacters({ characterIds = null } = {}) {
+    const idsNorm = (() => {
+      if (characterIds == null) return null;
+      const idsRaw = Array.isArray(characterIds) ? characterIds : [];
+      return Array.from(new Set(idsRaw.map((x) => String(x ?? '').trim()).filter(Boolean)));
+    })();
+
+    const ids =
+      idsNorm !== null
+        ? idsNorm
+        : (await all(this.db, `SELECT character_id FROM Character WHERE is_system = 0 AND deleted_at IS NOT NULL`)).map((r) =>
+            String(r.character_id ?? '').trim()
+          );
+
+    const errors = [];
+    let purged = 0;
+
+    for (const characterId of ids) {
+      if (!characterId) continue;
+      try {
+        const del = await run(this.db, `DELETE FROM Character WHERE character_id = ? AND is_system = 0 AND deleted_at IS NOT NULL`, [
+          characterId,
+        ]);
+        const changes = Number(del?.changes) || 0;
+        if (changes <= 0) continue;
+      } catch (err) {
+        errors.push({ characterId, message: err instanceof Error ? err.message : String(err) });
+        continue;
+      }
+
+      purged += 1;
+
+      try {
+        const paths = this.getCharacterPaths(characterId);
+        if (fs.existsSync(paths.base)) {
+          if (typeof fs.rmSync === 'function') fs.rmSync(paths.base, { recursive: true, force: true });
+          else fs.rmdirSync(paths.base, { recursive: true });
+        }
+      } catch (err) {
+        errors.push({ characterId, message: `Failed to delete files: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+
+    await this._audit('character.purge', null, { requested: ids.length, purged, errors: errors.length });
+    return { ok: true, requested: ids.length, purged, errors };
   }
 
   async _upsertDerivedTags(templateAst, characterId, valuesById) {

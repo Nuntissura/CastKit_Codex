@@ -1671,6 +1671,36 @@ function registerIpcHandlers() {
         });
     });
 
+    ipcMain.handle('ckc:batchUpdateCharacterField', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params && typeof params === 'object' ? params : {};
+        return lib.batchUpdateCharacterField({
+            ...p,
+            validationMode: p.validationMode ?? appConfig.validationMode,
+            allowSaveWithErrors: p.allowSaveWithErrors ?? appConfig.allowSaveWithErrors,
+        });
+    });
+
+    ipcMain.handle('ckc:batchUpdateCharacterTags', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.batchUpdateCharacterTags(params || {});
+    });
+
+    ipcMain.handle('ckc:softDeleteCharacters', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.softDeleteCharacters(params || {});
+    });
+
+    ipcMain.handle('ckc:restoreCharacters', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.restoreCharacters(params || {});
+    });
+
+    ipcMain.handle('ckc:purgeCharacters', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.purgeCharacters(params || {});
+    });
+
     ipcMain.handle('ckc:addManualTag', async (_evt, params) => {
         const lib = await ensureLibrary();
         await lib.addManualTag(params.characterId, params.tagText);

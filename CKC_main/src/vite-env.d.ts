@@ -11,6 +11,7 @@ type CKCCharacterListItem = {
   iconFocusY: number;
   updatedAt: string;
   createdAt: string;
+  deletedAt: string | null;
 };
 
 type CKCGlobalImage = {
@@ -184,6 +185,17 @@ type CKCTemplateAst = {
   }>;
   blockSchemas: unknown[];
   unmappedLines: string[];
+};
+
+type CKCTemplateListItem = {
+  id: string;
+  version: string;
+  hash: string;
+  sourcePath: string | null;
+  updatedAt: string;
+  sectionCount: number;
+  fieldCount: number;
+  blockSchemaCount: number;
 };
 
 type CKCTemplateDetail = {
@@ -718,6 +730,7 @@ interface Window {
       mergeTags: (params: { fromTags: string[] | string; toTag: string }) => Promise<unknown>;
       renameTag: (params: { fromTag: string; toTag: string }) => Promise<unknown>;
       listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
+      listProtectedFieldIdsGlobal: () => Promise<string[]>;
     listAllTags: () => Promise<string[]>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
@@ -745,6 +758,7 @@ interface Window {
     updateSavedSearch: (params?: unknown) => Promise<{ ok: true }>;
     deleteSavedSearch: (searchId: string) => Promise<{ ok: true }>;
     getTemplate: () => Promise<CKCTemplateAst>;
+    listTemplates: () => Promise<CKCTemplateListItem[]>;
     getTemplateDetail: (templateId?: string | null) => Promise<CKCTemplateDetail | null>;
     listCharacterTemplates: () => Promise<CKCCharacterTemplateListItem[]>;
     getCharacterTemplate: (params: { templateId: string }) => Promise<CKCCharacterTemplateDetail>;
@@ -835,6 +849,11 @@ interface Window {
     copyText: (text: string) => void;
     setCharacterIcon: (params?: unknown) => Promise<{ ok: true }>;
     saveCharacter: (params: unknown) => Promise<unknown>;
+    batchUpdateCharacterField: (params: unknown) => Promise<unknown>;
+    batchUpdateCharacterTags: (params: unknown) => Promise<unknown>;
+    softDeleteCharacters: (params: unknown) => Promise<unknown>;
+    restoreCharacters: (params: unknown) => Promise<unknown>;
+    purgeCharacters: (params: unknown) => Promise<unknown>;
     importImages: (params: unknown) => Promise<unknown>;
     importFromUrl: (params: unknown) => Promise<unknown>;
     importClipboardImage: (params: { target?: 'inbox'; characterId?: string } | unknown) => Promise<CKCClipboardImageImportResult>;

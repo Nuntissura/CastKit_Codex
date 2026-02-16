@@ -117,6 +117,11 @@ contextBridge.exposeInMainWorld('ckc', {
     assignPublicCharacterIds: (params) => ipcRenderer.invoke('ckc:assignPublicCharacterIds', params),
     importCharacterFromSheetDialog: () => ipcRenderer.invoke('ckc:importCharacterFromSheetDialog'),
     saveCharacter: (params) => ipcRenderer.invoke('ckc:saveCharacter', params),
+    batchUpdateCharacterField: (params) => ipcRenderer.invoke('ckc:batchUpdateCharacterField', params),
+    batchUpdateCharacterTags: (params) => ipcRenderer.invoke('ckc:batchUpdateCharacterTags', params),
+    softDeleteCharacters: (params) => ipcRenderer.invoke('ckc:softDeleteCharacters', params),
+    restoreCharacters: (params) => ipcRenderer.invoke('ckc:restoreCharacters', params),
+    purgeCharacters: (params) => ipcRenderer.invoke('ckc:purgeCharacters', params),
 
     addManualTag: (params) => ipcRenderer.invoke('ckc:addManualTag', params),
     removeManualTag: (params) => ipcRenderer.invoke('ckc:removeManualTag', params),

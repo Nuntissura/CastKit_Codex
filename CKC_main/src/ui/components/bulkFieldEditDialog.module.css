@@ -1,0 +1,136 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 55;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 90px 20px;
+}
+
+.panel {
+  width: min(860px, 100%);
+  max-height: calc(100vh - 180px);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.title {
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.closeBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  background: var(--bg-accent);
+}
+
+.body {
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.control {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.textarea {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  min-width: 0;
+  resize: vertical;
+}
+
+.opRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.opBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.opBtn[data-active='1'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.opBtn:hover {
+  background: var(--bg-accent);
+}
+
+.preview {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  padding-top: 4px;
+}
+
+.error {
+  border: 1px solid rgba(255, 0, 0, 0.35);
+  background: rgba(255, 0, 0, 0.06);
+  padding: 8px 10px;
+}
+
+.result {
+  border: 1px solid rgba(0, 255, 140, 0.28);
+  background: rgba(0, 255, 140, 0.06);
+  padding: 8px 10px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--glass-border);
+}
+

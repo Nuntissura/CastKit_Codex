@@ -1,0 +1,173 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 55;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 90px 20px;
+}
+
+.panel {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 180px);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.title {
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.closeBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  background: var(--bg-accent);
+}
+
+.body {
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  padding-top: 10px;
+}
+
+.opRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.opBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.opBtn[data-active='1'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.opBtn:hover {
+  background: var(--bg-accent);
+}
+
+.baseRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.basePath {
+  min-width: 240px;
+  flex: 1 1 380px;
+}
+
+.baseButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.muted {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.error {
+  border: 1px solid rgba(255, 0, 0, 0.35);
+  background: rgba(255, 0, 0, 0.06);
+  padding: 8px 10px;
+}
+
+.progress {
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  padding: 10px 12px;
+}
+
+.progressTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.progressLabel {
+  font-weight: 800;
+}
+
+.progressNums {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.progressBar {
+  height: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent-color);
+  box-shadow: 0 0 12px var(--accent-glow);
+  width: 0%;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--glass-border);
+}
+

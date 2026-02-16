@@ -2,6 +2,9 @@ import React from 'react';
 import { MediaPane } from '../components/MediaPane';
 import { CommandBar } from '../components/CommandBar';
 import { CharacterTemplatePickerModal } from '../components/CharacterTemplatePickerModal';
+import { BulkFieldEditDialog } from '../components/BulkFieldEditDialog';
+import { BatchExportDialog } from '../components/BatchExportDialog';
+import { BulkTagDialog } from '../components/BulkTagDialog';
 import { useElementWidth } from '../hooks/useElementWidth';
 import styles from './libraryView.module.css';
 
@@ -141,6 +144,19 @@ export function LibraryView({
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
   const characterPageSize = 200;
   const [characterPage, setCharacterPage] = React.useState<number>(0);
+  const [characterListMode, setCharacterListMode] = React.useState<'active' | 'trash'>('active');
+  const [selectedCharacterIds, setSelectedCharacterIds] = React.useState<string[]>([]);
+  const [selectionAnchorCharacterId, setSelectionAnchorCharacterId] = React.useState<string | null>(null);
+  const [isBulkFieldEditOpen, setIsBulkFieldEditOpen] = React.useState<boolean>(false);
+  const [isBulkTagOpen, setIsBulkTagOpen] = React.useState<boolean>(false);
+  const [isBatchExportOpen, setIsBatchExportOpen] = React.useState<boolean>(false);
+  const [characterBatchBusy, setCharacterBatchBusy] = React.useState<boolean>(false);
+  const [characterBatchError, setCharacterBatchError] = React.useState<string | null>(null);
+  const selectedCharacterIdsRef = React.useRef<string[]>([]);
+
+  React.useEffect(() => {
+    selectedCharacterIdsRef.current = selectedCharacterIds;
+  }, [selectedCharacterIds]);
   const [carouselImages, setCarouselImages] = React.useState<
     Array<{ id: string; favorite: boolean; rating: number; notes: string; tags: string[] }>
   >([]);
@@ -524,6 +540,7 @@ export function LibraryView({
           tagExcludeFilters: cleanedTagExcludeFilters,
           tagMode,
           scopeFlags,
+          deletedMode: characterListMode === 'trash' ? 'deleted' : 'active',
           galleryFilters: {
             favoriteOnly,
             ratingOp: ratingOp === 'any' ? null : ratingOp,
@@ -543,13 +560,55 @@ export function LibraryView({
     return () => {
       cancelled = true;
     };
-  }, [queryText, cleanedTagFilters, cleanedTagExcludeFilters, tagMode, scopeFlags, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
+  }, [queryText, cleanedTagFilters, cleanedTagExcludeFilters, tagMode, scopeFlags, characterListMode, favoriteOnly, ratingOp, ratingValue, refreshNonce]);
 
   React.useEffect(() => {
     if (!characters) return;
     const maxPage = Math.max(0, Math.ceil(characters.length / characterPageSize) - 1);
     setCharacterPage((p) => Math.min(p, maxPage));
   }, [characters, characterPageSize]);
+
+  React.useEffect(() => {
+    setSelectedCharacterIds([]);
+    setSelectionAnchorCharacterId(null);
+    setCharacterBatchError(null);
+  }, [characterListMode]);
+
+  React.useEffect(() => {
+    if (!characters) return;
+    const allowed = new Set((characters || []).map((c) => String(c?.id ?? '').trim()).filter(Boolean));
+    setSelectedCharacterIds((prev) => (prev || []).filter((id) => allowed.has(id)));
+    setSelectionAnchorCharacterId((prev) => (prev && allowed.has(prev) ? prev : null));
+  }, [characters]);
+
+  React.useEffect(() => {
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.repeat) return;
+      if (isEditableActiveElement()) return;
+      if (characterBatchBusy) return;
+
+      if (evt.key === 'Escape') {
+        if (selectedCharacterIdsRef.current.length === 0) return;
+        evt.preventDefault();
+        setSelectedCharacterIds([]);
+        setSelectionAnchorCharacterId(null);
+        return;
+      }
+
+      const isAccel = evt.ctrlKey || evt.metaKey;
+      if (!isAccel) return;
+      if (evt.key !== 'a' && evt.key !== 'A') return;
+      if (!characters || characters.length === 0) return;
+
+      evt.preventDefault();
+      const ids = (characters || []).map((c) => c.id);
+      setSelectedCharacterIds(ids);
+      setSelectionAnchorCharacterId(ids[0] ?? null);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [characters, characterBatchBusy]);
 
   React.useEffect(() => {
     reloadCarousel();
@@ -1291,6 +1350,139 @@ export function LibraryView({
       items: characters.slice(start, end),
     };
   }, [characters, characterPage, characterPageSize]);
+
+  const selectedCharacterIdSet = React.useMemo(() => new Set(selectedCharacterIds), [selectedCharacterIds]);
+
+  const handleCharacterItemClick = React.useCallback(
+    (characterId: string, evt: React.MouseEvent<HTMLButtonElement>) => {
+      if (characterBatchBusy) return;
+
+      const id = String(characterId ?? '').trim();
+      if (!id) return;
+
+      const isAccel = evt.ctrlKey || evt.metaKey;
+      const isShift = evt.shiftKey;
+
+      const list = characters || [];
+
+      if (isShift) {
+        evt.preventDefault();
+        if (!selectionAnchorCharacterId) {
+          setSelectedCharacterIds([id]);
+          setSelectionAnchorCharacterId(id);
+          return;
+        }
+
+        const a = list.findIndex((c) => c.id === selectionAnchorCharacterId);
+        const b = list.findIndex((c) => c.id === id);
+        if (a < 0 || b < 0) {
+          setSelectedCharacterIds([id]);
+          setSelectionAnchorCharacterId(id);
+          return;
+        }
+
+        const start = Math.min(a, b);
+        const end = Math.max(a, b);
+        setSelectedCharacterIds(list.slice(start, end + 1).map((c) => c.id));
+        return;
+      }
+
+      if (isAccel) {
+        evt.preventDefault();
+        setSelectedCharacterIds((prev) => {
+          const cur = Array.isArray(prev) ? prev : [];
+          const has = cur.includes(id);
+          return has ? cur.filter((x) => x !== id) : [...cur, id];
+        });
+        setSelectionAnchorCharacterId(id);
+        return;
+      }
+
+      setSelectedCharacterIds([id]);
+      setSelectionAnchorCharacterId(id);
+      onOpenCharacter(id);
+    },
+    [characterBatchBusy, characters, onOpenCharacter, selectionAnchorCharacterId]
+  );
+
+  const deselectAllCharacters = React.useCallback(() => {
+    setSelectedCharacterIds([]);
+    setSelectionAnchorCharacterId(null);
+  }, []);
+
+  const moveSelectionToTrash = React.useCallback(async () => {
+    const ids = selectedCharacterIdsRef.current || [];
+    if (ids.length === 0) return;
+    const ok = window.confirm(`Move ${ids.length} character(s) to Trash?`);
+    if (!ok) return;
+
+    setCharacterBatchBusy(true);
+    setCharacterBatchError(null);
+    try {
+      await window.ckc.softDeleteCharacters({ characterIds: ids });
+      deselectAllCharacters();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setCharacterBatchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCharacterBatchBusy(false);
+    }
+  }, [deselectAllCharacters]);
+
+  const restoreSelectionFromTrash = React.useCallback(async () => {
+    const ids = selectedCharacterIdsRef.current || [];
+    if (ids.length === 0) return;
+    const ok = window.confirm(`Restore ${ids.length} character(s) from Trash?`);
+    if (!ok) return;
+
+    setCharacterBatchBusy(true);
+    setCharacterBatchError(null);
+    try {
+      await window.ckc.restoreCharacters({ characterIds: ids });
+      deselectAllCharacters();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setCharacterBatchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCharacterBatchBusy(false);
+    }
+  }, [deselectAllCharacters]);
+
+  const purgeSelection = React.useCallback(async () => {
+    const ids = selectedCharacterIdsRef.current || [];
+    if (ids.length === 0) return;
+    const ok = window.confirm(`Permanently delete ${ids.length} character(s)? This cannot be undone.`);
+    if (!ok) return;
+
+    setCharacterBatchBusy(true);
+    setCharacterBatchError(null);
+    try {
+      await window.ckc.purgeCharacters({ characterIds: ids });
+      deselectAllCharacters();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setCharacterBatchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCharacterBatchBusy(false);
+    }
+  }, [deselectAllCharacters]);
+
+  const emptyTrash = React.useCallback(async () => {
+    const ok = window.confirm('Empty Trash? This permanently deletes all trashed characters.');
+    if (!ok) return;
+
+    setCharacterBatchBusy(true);
+    setCharacterBatchError(null);
+    try {
+      await window.ckc.purgeCharacters({ characterIds: null });
+      deselectAllCharacters();
+      setRefreshNonce((n) => n + 1);
+    } catch (err: unknown) {
+      setCharacterBatchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCharacterBatchBusy(false);
+    }
+  }, [deselectAllCharacters]);
 
   return (
     <div className={styles.layout} ref={layoutRef} style={{ gridTemplateColumns: libraryGridTemplateColumns }}>
@@ -2693,11 +2885,83 @@ export function LibraryView({
         </div>
 
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Characters</div>
-          <div className={styles.panelSubtitle}>Select a character to edit the sheet.</div>
+          <div className={styles.panelHeaderTop}>
+            <div>
+              <div className={styles.panelTitle}>{characterListMode === 'trash' ? 'Trash' : 'Characters'}</div>
+              <div className={styles.panelSubtitle}>
+                {characterListMode === 'trash'
+                  ? 'Deleted characters. Restore them or permanently delete them.'
+                  : 'Select a character to edit the sheet.'}
+              </div>
+            </div>
+
+            <div className={styles.panelHeaderActions}>
+              <button
+                className={styles.modeBtn}
+                data-active={characterListMode === 'active' ? '1' : '0'}
+                type="button"
+                onClick={() => setCharacterListMode('active')}
+                disabled={characterBatchBusy}
+                title="Show active characters"
+              >
+                Characters
+              </button>
+              <button
+                className={styles.modeBtn}
+                data-active={characterListMode === 'trash' ? '1' : '0'}
+                type="button"
+                onClick={() => setCharacterListMode('trash')}
+                disabled={characterBatchBusy}
+                title="Show deleted characters"
+              >
+                Trash
+              </button>
+              {characterListMode === 'trash' ? (
+                <button type="button" onClick={emptyTrash} disabled={characterBatchBusy} title="Permanently delete all trashed characters">
+                  Empty trash
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {error ? <div className={styles.error}>{error}</div> : null}
+        {characterBatchError ? <div className={styles.error}>{characterBatchError}</div> : null}
+        {selectedCharacterIds.length > 0 ? (
+          <div className={styles.batchBar}>
+            <div className={styles.batchCount}>{selectedCharacterIds.length} character(s) selected</div>
+            <div className={styles.batchButtons}>
+              {characterListMode === 'active' ? (
+                <>
+                  <button type="button" onClick={() => setIsBulkFieldEditOpen(true)} disabled={characterBatchBusy}>
+                    Bulk edit fields…
+                  </button>
+                  <button type="button" onClick={() => setIsBulkTagOpen(true)} disabled={characterBatchBusy}>
+                    Bulk tag…
+                  </button>
+                  <button type="button" onClick={() => setIsBatchExportOpen(true)} disabled={characterBatchBusy}>
+                    Batch export…
+                  </button>
+                  <button type="button" onClick={moveSelectionToTrash} disabled={characterBatchBusy}>
+                    Batch delete…
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={restoreSelectionFromTrash} disabled={characterBatchBusy}>
+                    Restore
+                  </button>
+                  <button type="button" onClick={purgeSelection} disabled={characterBatchBusy}>
+                    Purge…
+                  </button>
+                </>
+              )}
+              <button type="button" onClick={deselectAllCharacters} disabled={characterBatchBusy}>
+                Deselect all
+              </button>
+            </div>
+          </div>
+        ) : null}
         {characters === null ? (
           <div className={styles.muted}>Loading…</div>
         ) : characters.length === 0 ? (
@@ -2730,44 +2994,54 @@ export function LibraryView({
             ) : null}
 
             <div className={styles.characterList}>
-              {(characterPageInfo ? characterPageInfo.items : characters).map((c) => (
-              <button key={c.id} className={styles.characterItem} onClick={() => onOpenCharacter(c.id)}>
-                <div className={styles.characterItemInner}>
-                  <div className={styles.characterIcon}>
-                    {c.iconImageId ? (
-                      <img
-                        className={styles.characterIconImg}
-                        src={`ckc://thumb/${encodeURIComponent(c.iconImageId)}`}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          objectPosition: `${Math.round(clamp01(c.iconFocusX) * 100)}% ${Math.round(clamp01(c.iconFocusY) * 100)}%`,
-                        }}
-                      />
-                    ) : (
-                      <div className={styles.characterIconPlaceholder}>No icon</div>
-                    )}
-                  </div>
+              {(characterPageInfo ? characterPageInfo.items : characters).map((c) => {
+                const selected = selectedCharacterIdSet.has(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    className={styles.characterItem}
+                    data-selected={selected ? '1' : '0'}
+                    type="button"
+                    onClick={(e) => handleCharacterItemClick(c.id, e)}
+                    aria-pressed={selected}
+                  >
+                    <div className={styles.characterItemInner}>
+                      <div className={styles.characterIcon}>
+                        {c.iconImageId ? (
+                          <img
+                            className={styles.characterIconImg}
+                            src={`ckc://thumb/${encodeURIComponent(c.iconImageId)}`}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            style={{
+                              objectPosition: `${Math.round(clamp01(c.iconFocusX) * 100)}% ${Math.round(clamp01(c.iconFocusY) * 100)}%`,
+                            }}
+                          />
+                        ) : (
+                          <div className={styles.characterIconPlaceholder}>No icon</div>
+                        )}
+                      </div>
 
-                    <div className={styles.characterText}>
-                    <div className={styles.characterName}>{c.displayName}</div>
-                    <div className={styles.characterMeta}>
-                      {(c as any).publicId ? (
-                        <>
-                          <span style={{ color: 'var(--text-secondary)' }}>ID:</span> <code>{String((c as any).publicId)}</code>{' '}
-                          â€¢ {c.templateId} {c.templateVersion}
-                        </>
-                      ) : (
-                        <>
-                          {c.templateId} {c.templateVersion}
-                        </>
-                      )}
+                      <div className={styles.characterText}>
+                        <div className={styles.characterName}>{c.displayName}</div>
+                        <div className={styles.characterMeta}>
+                          {(c as any).publicId ? (
+                            <>
+                              <span style={{ color: 'var(--text-secondary)' }}>ID:</span> <code>{String((c as any).publicId)}</code>{' '}
+                              â€¢ {c.templateId} {c.templateVersion}
+                            </>
+                          ) : (
+                            <>
+                              {c.templateId} {c.templateVersion}
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </button>
-            ))}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
@@ -2814,6 +3088,37 @@ export function LibraryView({
         isOpen={isTemplatePickerOpen}
         onClose={() => setIsTemplatePickerOpen(false)}
         onCreated={(characterId) => onOpenCharacter(characterId)}
+      />
+
+      <BulkFieldEditDialog
+        isOpen={isBulkFieldEditOpen}
+        characterIds={selectedCharacterIds}
+        onClose={() => setIsBulkFieldEditOpen(false)}
+        onApplied={() => {
+          setRefreshNonce((n) => n + 1);
+        }}
+      />
+
+      <BulkTagDialog
+        isOpen={isBulkTagOpen}
+        characterIds={selectedCharacterIds}
+        allTags={allTags}
+        onClose={() => setIsBulkTagOpen(false)}
+        onApplied={() => {
+          setIsBulkTagOpen(false);
+          setRefreshNonce((n) => n + 1);
+        }}
+      />
+
+      <BatchExportDialog
+        isOpen={isBatchExportOpen}
+        characterIds={selectedCharacterIds}
+        defaultExportsDir={defaultExportsDir}
+        onClose={() => setIsBatchExportOpen(false)}
+        onExported={(outDir) => {
+          setIsBatchExportOpen(false);
+          if (outDir) setLastExportPath(outDir);
+        }}
       />
     </div>
   );

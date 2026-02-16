@@ -92,6 +92,10 @@ async function ensureSchemaUpgrades(db) {
   // System characters (Inbox, future internal helpers). Hidden from normal lists by default.
   await ensureColumn(db, 'Character', 'is_system', 'INTEGER NOT NULL DEFAULT 0');
 
+  // Soft delete (Trash) for characters.
+  await ensureColumn(db, 'Character', 'deleted_at', 'DATETIME');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_character_deleted_at ON Character(deleted_at)');
+
   // ImageAsset: allow duplicates (no unique index), plus optional tags and reference-mode.
   await run(db, 'DROP INDEX IF EXISTS idx_image_dedupe');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash)');
