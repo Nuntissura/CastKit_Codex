@@ -1,8 +1,8 @@
 # Work Packet: WP-0085 — Character templates & cloning
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add the ability to save characters as reusable templates, create new characters from templates, and clone existing characters with field inheritance options.
@@ -11,7 +11,7 @@ Add the ability to save characters as reusable templates, create new characters 
 - Users often create character variations (same character in different AUs, NPC archetypes, character families).
 - Repeatedly filling in common fields (Universe, Species, Role) is tedious.
 - Templates lower the barrier to entry for new users (pre-filled D&D NPC, Romance Lead, Villain, etc.).
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.3 "Character Templates & Cloning".
+- Spec: `CastKit_Codex_Spec_v00.053.md` §12.3 "Character templates & cloning".
 
 ## Scope
 ### In
