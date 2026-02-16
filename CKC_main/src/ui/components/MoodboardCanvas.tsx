@@ -40,6 +40,28 @@ export type MoodboardStroke = {
   points: Array<{ x: number; y: number }>; // normalized 0..1
 };
 
+export type MoodboardBlendMode = 'normal' | 'multiply' | 'screen';
+
+export type MoodboardShadowStyle = {
+  color?: string; // prefer #RRGGBB
+  opacity?: number; // 0..1
+  blur?: number; // px
+  offsetX?: number; // px
+  offsetY?: number; // px
+};
+
+export type MoodboardOutlineStyle = {
+  color?: string; // prefer #RRGGBB
+  width?: number; // px
+};
+
+export type MoodboardLayerStyle = {
+  opacity?: number; // 0..1
+  blend?: MoodboardBlendMode;
+  shadow?: MoodboardShadowStyle;
+  outline?: MoodboardOutlineStyle;
+};
+
 export type MoodboardImage = {
   id: string;
   imageId: string;
@@ -52,6 +74,7 @@ export type MoodboardImage = {
   name?: string;
   folderId?: string;
   tags?: string[];
+  style?: MoodboardLayerStyle;
   mask?: { shapeId: string }; // clip this image to a shape frame (optional)
   groupId?: string;
   hidden?: boolean;
@@ -69,6 +92,7 @@ export type MoodboardText = {
   name?: string;
   folderId?: string;
   tags?: string[];
+  style?: MoodboardLayerStyle;
   text: string;
   fontSize?: number; // px
   color?: string; // CSS color (prefer #RRGGBB)
@@ -97,6 +121,7 @@ export type MoodboardShape = {
   name?: string;
   folderId?: string;
   tags?: string[];
+  style?: MoodboardLayerStyle;
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -115,6 +140,7 @@ export type MoodboardConnector = {
   name?: string;
   folderId?: string;
   tags?: string[];
+  style?: MoodboardLayerStyle;
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;
@@ -194,6 +220,83 @@ function compareZAsc(
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+function clampRange(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+function normalizeBlendMode(value: unknown): MoodboardBlendMode {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (s === 'multiply') return 'multiply';
+  if (s === 'screen') return 'screen';
+  return 'normal';
+}
+
+function canvasCompositeForBlend(blend: MoodboardBlendMode): GlobalCompositeOperation {
+  if (blend === 'multiply') return 'multiply';
+  if (blend === 'screen') return 'screen';
+  return 'source-over';
+}
+
+function parseHexRgb(hex: string): null | { r: number; g: number; b: number } {
+  const raw = typeof hex === 'string' ? hex.trim() : '';
+  if (!raw) return null;
+  const m = raw.match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (!m) return null;
+  let h = m[1] as string;
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const n = Number.parseInt(h, 16);
+  if (!Number.isFinite(n)) return null;
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+}
+
+function rgbaFromHex(hex: string, alpha: number): string {
+  const rgb = parseHexRgb(hex);
+  const a = clampRange(Number(alpha) || 0, 0, 1);
+  if (!rgb) return `rgba(0,0,0,${a})`;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`;
+}
+
+function cleanLayerStyle(style: MoodboardLayerStyle | undefined): MoodboardLayerStyle | undefined {
+  if (!style) return undefined;
+  const out: MoodboardLayerStyle = { ...style };
+
+  if (out.opacity != null) {
+    const op = clampRange(Number(out.opacity) || 0, 0, 1);
+    if (op >= 0.999) delete out.opacity;
+    else out.opacity = op;
+  }
+
+  if (out.blend != null) {
+    const blend = normalizeBlendMode(out.blend);
+    if (blend === 'normal') delete out.blend;
+    else out.blend = blend;
+  }
+
+  if (out.shadow != null) {
+    const shIn = out.shadow;
+    const blur = Math.max(0, Number(shIn?.blur) || 0);
+    const offsetX = Number(shIn?.offsetX) || 0;
+    const offsetY = Number(shIn?.offsetY) || 0;
+    const opacity = clampRange(Number(shIn?.opacity) || 0, 0, 1);
+    const color = typeof shIn?.color === 'string' && shIn.color.trim() ? shIn.color.trim() : '#000000';
+
+    if (opacity <= 0 || (blur <= 0 && !offsetX && !offsetY)) delete out.shadow;
+    else out.shadow = { color, opacity, blur, offsetX, offsetY };
+  }
+
+  if (out.outline != null) {
+    const olIn = out.outline;
+    const width = Math.max(0, Number(olIn?.width) || 0);
+    const color = typeof olIn?.color === 'string' && olIn.color.trim() ? olIn.color.trim() : '#111111';
+    if (width <= 0) delete out.outline;
+    else out.outline = { color, width };
+  }
+
+  if (!out.opacity && !out.blend && !out.shadow && !out.outline) return undefined;
+  return out;
 }
 
 function normalizeAngleDeg(deg: number): number {
@@ -955,6 +1058,37 @@ export function MoodboardCanvas({
       ctx.restore();
     }
 
+    const applyLayerStyleToCtx = (item: any, opts?: { shadow?: boolean }) => {
+      const style = ((item as any)?.style || null) as MoodboardLayerStyle | null;
+      const opacity = style && style.opacity != null ? clampRange(Number(style.opacity) || 0, 0, 1) : 1;
+      ctx.globalAlpha = opacity;
+      ctx.globalCompositeOperation = canvasCompositeForBlend(normalizeBlendMode(style?.blend));
+
+      const sh = opts?.shadow === false ? null : (style?.shadow || null);
+      if (sh) {
+        const shOpacity = clampRange(Number(sh.opacity) || 0.35, 0, 1);
+        const shColor = typeof sh.color === 'string' && sh.color.trim() ? sh.color.trim() : '#000000';
+        ctx.shadowColor = rgbaFromHex(shColor, shOpacity);
+        ctx.shadowBlur = Math.max(0, Number(sh.blur) || 12) * invZoom;
+        ctx.shadowOffsetX = (Number(sh.offsetX) || 0) * invZoom;
+        ctx.shadowOffsetY = (Number(sh.offsetY) || 8) * invZoom;
+      } else {
+        ctx.shadowColor = 'rgba(0,0,0,0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
+
+      return style || undefined;
+    };
+
+    const clearShadow = () => {
+      ctx.shadowColor = 'rgba(0,0,0,0)';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    };
+
     const drawShapeItem = (s: MoodboardShape) => {
       if (!s) return;
       if (isHidden(s)) return;
@@ -967,6 +1101,7 @@ export function MoodboardCanvas({
       const top = cy - h / 2;
 
       ctx.save();
+      const style = applyLayerStyleToCtx(s);
       const rotDeg = normalizeAngleDeg(Number(s.rot) || 0);
       if (rotDeg) {
         const rad = degToRad(rotDeg);
@@ -1013,6 +1148,14 @@ export function MoodboardCanvas({
         ctx.stroke();
       }
 
+      const outline = style?.outline;
+      if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+        clearShadow();
+        ctx.strokeStyle = outline.color || '#111111';
+        ctx.lineWidth = Math.max(1, Number(outline.width) || 1) * invZoom;
+        ctx.stroke();
+      }
+
       ctx.restore();
     };
 
@@ -1026,6 +1169,7 @@ export function MoodboardCanvas({
       const widthPx = Math.max(1, Number(c.width) || 3);
 
       ctx.save();
+      applyLayerStyleToCtx(c);
       ctx.strokeStyle = c.color || '#111111';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -1107,17 +1251,22 @@ export function MoodboardCanvas({
       const maskShape =
         typeof maskShapeId === 'string' && maskShapeId.trim() ? (shapeById.get(maskShapeId.trim()) as MoodboardShape | undefined) : undefined;
 
+      ctx.save();
+      const style = applyLayerStyleToCtx(img);
+
+      let outlineMask: null | { cx: number; cy: number; w: number; h: number; rotDeg: number; shape: 'rect' | 'ellipse' } = null;
       if (maskShape) {
         const mcx = (Number(maskShape.x) || 0) * rect.width;
         const mcy = (Number(maskShape.y) || 0) * rect.height;
         const mw = (Number(maskShape.w) || 0) * rect.width;
         const mh = (Number(maskShape.h) || 0) * rect.height;
         if (mw > 0 && mh > 0) {
+          outlineMask = { cx: mcx, cy: mcy, w: mw, h: mh, rotDeg: normalizeAngleDeg(Number(maskShape.rot) || 0), shape: maskShape.shape };
           const mleft = mcx - mw / 2;
           const mtop = mcy - mh / 2;
           ctx.save();
           ctx.save();
-          const maskRotDeg = normalizeAngleDeg(Number(maskShape.rot) || 0);
+          const maskRotDeg = outlineMask.rotDeg;
           if (maskRotDeg) {
             const rad = degToRad(maskRotDeg);
             ctx.translate(mcx, mcy);
@@ -1125,17 +1274,58 @@ export function MoodboardCanvas({
             ctx.translate(-mcx, -mcy);
           }
           ctx.beginPath();
-          if (maskShape.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
+          if (outlineMask.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
           else ctx.rect(mleft, mtop, mw, mh);
           ctx.restore();
           ctx.clip();
           drawImage();
           ctx.restore();
-          return;
+        } else {
+          drawImage();
+        }
+      } else {
+        drawImage();
+      }
+
+      const outline = style?.outline;
+      if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+        clearShadow();
+        ctx.strokeStyle = outline.color || '#111111';
+        ctx.lineWidth = Math.max(1, Number(outline.width) || 1) * invZoom;
+        if (outlineMask) {
+          const mcx = outlineMask.cx;
+          const mcy = outlineMask.cy;
+          const mw = outlineMask.w;
+          const mh = outlineMask.h;
+          const mleft = mcx - mw / 2;
+          const mtop = mcy - mh / 2;
+          ctx.save();
+          if (outlineMask.rotDeg) {
+            const rad = degToRad(outlineMask.rotDeg);
+            ctx.translate(mcx, mcy);
+            ctx.rotate(rad);
+            ctx.translate(-mcx, -mcy);
+          }
+          ctx.beginPath();
+          if (outlineMask.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
+          else ctx.rect(mleft, mtop, mw, mh);
+          ctx.restore();
+          ctx.stroke();
+        } else {
+          ctx.save();
+          if (imgRot) {
+            ctx.translate(cx, cy);
+            ctx.rotate(imgRot);
+            ctx.translate(-cx, -cy);
+          }
+          ctx.beginPath();
+          ctx.rect(dx, dy, dw, dh);
+          ctx.restore();
+          ctx.stroke();
         }
       }
 
-      drawImage();
+      ctx.restore();
     };
 
     const drawTextItem = (t: MoodboardText) => {
@@ -1156,6 +1346,7 @@ export function MoodboardCanvas({
       const bottomLimit = top + h - padding;
 
       ctx.save();
+      const style = applyLayerStyleToCtx(t);
       const rotDeg = normalizeAngleDeg(Number(t.rot) || 0);
       if (rotDeg) {
         const rad = degToRad(rotDeg);
@@ -1169,6 +1360,15 @@ export function MoodboardCanvas({
       ctx.fillRect(left, top, w, h);
       ctx.strokeRect(left + 0.5 * invZoom, top + 0.5 * invZoom, Math.max(0, w - invZoom), Math.max(0, h - invZoom));
 
+      const outline = style?.outline;
+      if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+        clearShadow();
+        ctx.strokeStyle = outline.color || '#111111';
+        ctx.lineWidth = Math.max(1, Number(outline.width) || 1) * invZoom;
+        ctx.strokeRect(left + 0.5 * invZoom, top + 0.5 * invZoom, Math.max(0, w - invZoom), Math.max(0, h - invZoom));
+      }
+
+      clearShadow(); // do not shadow glyphs
       ctx.beginPath();
       ctx.rect(left, top, w, h);
       ctx.clip();
@@ -4831,6 +5031,30 @@ export function MoodboardCanvas({
           ? layerTexts.find((t) => t && t.id === selectedBoxSel.id) ?? null
           : null;
 
+  const selectedInspectorItem =
+    selectedBoxSel?.kind === 'image'
+      ? imageById.get(selectedBoxSel.id) ?? null
+      : selectedBoxSel?.kind === 'shape'
+        ? shapeById.get(selectedBoxSel.id) ?? null
+        : selectedBoxSel?.kind === 'text'
+          ? textById.get(selectedBoxSel.id) ?? null
+          : selectedBoxSel?.kind === 'connector'
+            ? connectorById.get(selectedBoxSel.id) ?? null
+            : null;
+
+  const selectedInspectorLocked = selectedInspectorItem ? isItemEffectivelyLocked(selectedInspectorItem, folderFlagsForUi) : false;
+  const selectedInspectorStyle = (selectedInspectorItem as any)?.style as MoodboardLayerStyle | undefined;
+  const selectedInspectorOpacityPct = Math.round(clampRange(Number(selectedInspectorStyle?.opacity ?? 1) || 1, 0, 1) * 100);
+  const selectedInspectorBlend = normalizeBlendMode(selectedInspectorStyle?.blend);
+  const selectedInspectorShadow = selectedInspectorStyle?.shadow;
+  const selectedInspectorOutline = selectedInspectorStyle?.outline;
+
+  const colorForPicker = (raw: unknown, fallback: string): string => {
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    if (!parseHexRgb(s)) return fallback;
+    return s.startsWith('#') ? s : `#${s}`;
+  };
+
   const maskShapeIdsForUi = React.useMemo(() => {
     const out = new Set<string>();
     for (const img of layerImages) {
@@ -5051,6 +5275,67 @@ export function MoodboardCanvas({
       commit({ ...cur, texts: nextTexts });
     },
     [commit, selectedBoxSel]
+  );
+
+  const updateSelectedLayerStyle = React.useCallback(
+    (patcher: (prev: MoodboardLayerStyle | undefined) => MoodboardLayerStyle | undefined, mode: 'commit' | 'noHistory' = 'commit') => {
+      const sel = selectedBoxSel;
+      if (!sel) return;
+      const cur = valueRef.current;
+      const folderFlags = computeEffectiveFolderFlags(Array.isArray(cur.folders) ? cur.folders : []);
+      const apply = (next: MoodboardState) => {
+        if (mode === 'noHistory') applyNoHistory(next, { clearRedo: true });
+        else commit(next);
+      };
+
+      const patchItem = (item: any) => {
+        const nextStyle = cleanLayerStyle(patcher((item as any)?.style as MoodboardLayerStyle | undefined));
+        return { ...item, style: nextStyle };
+      };
+
+      if (sel.kind === 'image') {
+        const idx = (cur.images || []).findIndex((img) => img && img.id === sel.id);
+        if (idx < 0) return;
+        const img = cur.images[idx];
+        if (!img || isItemEffectivelyLocked(img, folderFlags)) return;
+        const nextImages = cur.images.map((x, i) => (i === idx ? (patchItem(x) as MoodboardImage) : x));
+        apply({ ...cur, images: nextImages });
+        return;
+      }
+
+      if (sel.kind === 'shape') {
+        const shapes = Array.isArray(cur.shapes) ? cur.shapes : [];
+        const idx = shapes.findIndex((s) => s && s.id === sel.id);
+        if (idx < 0) return;
+        const s = shapes[idx];
+        if (!s || isItemEffectivelyLocked(s, folderFlags)) return;
+        const nextShapes = shapes.map((x, i) => (i === idx ? (patchItem(x) as MoodboardShape) : x));
+        apply({ ...cur, shapes: nextShapes });
+        return;
+      }
+
+      if (sel.kind === 'text') {
+        const texts = Array.isArray(cur.texts) ? cur.texts : [];
+        const idx = texts.findIndex((t) => t && t.id === sel.id);
+        if (idx < 0) return;
+        const t = texts[idx];
+        if (!t || isItemEffectivelyLocked(t, folderFlags)) return;
+        const nextTexts = texts.map((x, i) => (i === idx ? (patchItem(x) as MoodboardText) : x));
+        apply({ ...cur, texts: nextTexts });
+        return;
+      }
+
+      if (sel.kind === 'connector') {
+        const connectors = Array.isArray(cur.connectors) ? cur.connectors : [];
+        const idx = connectors.findIndex((c) => c && c.id === sel.id);
+        if (idx < 0) return;
+        const c = connectors[idx];
+        if (!c || isItemEffectivelyLocked(c, folderFlags)) return;
+        const nextConnectors = connectors.map((x, i) => (i === idx ? (patchItem(x) as MoodboardConnector) : x));
+        apply({ ...cur, connectors: nextConnectors });
+      }
+    },
+    [applyNoHistory, commit, selectedBoxSel]
   );
 
   const addGuide = React.useCallback(
@@ -5806,7 +6091,7 @@ export function MoodboardCanvas({
             </div>
           </div>
         ) : null}
-        {showInspector && selectedBoxSel && selectedBoxItem ? (
+        {showInspector && selectedBoxSel && selectedInspectorItem ? (
           <div key={`${selectedBoxSel.kind}:${selectedBoxSel.id}`} className={styles.inspectorPanel} aria-label="Inspector">
             <div className={styles.inspectorHeader}>
               <div>Inspector</div>
@@ -5815,96 +6100,369 @@ export function MoodboardCanvas({
               </button>
             </div>
 
-            <div className={styles.inspectorGrid}>
-              <label className={styles.inspectorField}>
-                X%
-                <input
-                  className={styles.inspectorInput}
-                  type="number"
-                  step="0.1"
-                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).x) || 0) * 1000)) / 10)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onBlur={(e) => {
-                    const n = Number(e.currentTarget.value);
-                    if (!Number.isFinite(n)) return;
-                    updateSelectedBoxItem({ x: n / 100 });
-                  }}
-                />
-              </label>
+            {selectedBoxItem ? (
+              <div className={styles.inspectorGrid}>
+                <label className={styles.inspectorField}>
+                  X%
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="0.1"
+                    defaultValue={String(Math.round(((Number((selectedBoxItem as any).x) || 0) * 1000)) / 10)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      updateSelectedBoxItem({ x: n / 100 });
+                    }}
+                  />
+                </label>
 
-              <label className={styles.inspectorField}>
-                Y%
-                <input
-                  className={styles.inspectorInput}
-                  type="number"
-                  step="0.1"
-                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).y) || 0) * 1000)) / 10)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onBlur={(e) => {
-                    const n = Number(e.currentTarget.value);
-                    if (!Number.isFinite(n)) return;
-                    updateSelectedBoxItem({ y: n / 100 });
-                  }}
-                />
-              </label>
+                <label className={styles.inspectorField}>
+                  Y%
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="0.1"
+                    defaultValue={String(Math.round(((Number((selectedBoxItem as any).y) || 0) * 1000)) / 10)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      updateSelectedBoxItem({ y: n / 100 });
+                    }}
+                  />
+                </label>
 
-              <label className={styles.inspectorField}>
-                W%
-                <input
-                  className={styles.inspectorInput}
-                  type="number"
-                  step="0.1"
-                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).w) || 0) * 1000)) / 10)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onBlur={(e) => {
-                    const n = Number(e.currentTarget.value);
-                    if (!Number.isFinite(n)) return;
-                    updateSelectedBoxItem({ w: n / 100 });
-                  }}
-                />
-              </label>
+                <label className={styles.inspectorField}>
+                  W%
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="0.1"
+                    defaultValue={String(Math.round(((Number((selectedBoxItem as any).w) || 0) * 1000)) / 10)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      updateSelectedBoxItem({ w: n / 100 });
+                    }}
+                  />
+                </label>
 
-              <label className={styles.inspectorField}>
-                H%
-                <input
-                  className={styles.inspectorInput}
-                  type="number"
-                  step="0.1"
-                  defaultValue={String(Math.round(((Number((selectedBoxItem as any).h) || 0) * 1000)) / 10)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onBlur={(e) => {
-                    const n = Number(e.currentTarget.value);
-                    if (!Number.isFinite(n)) return;
-                    updateSelectedBoxItem({ h: n / 100 });
-                  }}
-                />
-              </label>
+                <label className={styles.inspectorField}>
+                  H%
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="0.1"
+                    defaultValue={String(Math.round(((Number((selectedBoxItem as any).h) || 0) * 1000)) / 10)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      updateSelectedBoxItem({ h: n / 100 });
+                    }}
+                  />
+                </label>
 
-              <label className={styles.inspectorField}>
-                Rot°
-                <input
-                  className={styles.inspectorInput}
-                  type="number"
-                  step="1"
-                  defaultValue={String(Math.round(normalizeAngleDeg(Number((selectedBoxItem as any).rot) || 0)))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onBlur={(e) => {
-                    const n = Number(e.currentTarget.value);
-                    if (!Number.isFinite(n)) return;
-                    updateSelectedBoxItem({ rot: n });
-                  }}
-                />
-              </label>
+                <label className={styles.inspectorField}>
+                  Rot°
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="1"
+                    defaultValue={String(Math.round(normalizeAngleDeg(Number((selectedBoxItem as any).rot) || 0)))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      updateSelectedBoxItem({ rot: n });
+                    }}
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <div className={styles.inspectorSection}>
+              <div className={styles.inspectorSectionTitle}>Style</div>
+
+              <div className={styles.inspectorGrid}>
+                <label className={styles.inspectorField}>
+                  Opacity%
+                  <input
+                    className={styles.inspectorInput}
+                    type="number"
+                    step="1"
+                    min={0}
+                    max={100}
+                    disabled={selectedInspectorLocked}
+                    defaultValue={String(selectedInspectorOpacityPct)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onBlur={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      if (!Number.isFinite(n)) return;
+                      const pct = clampRange(n, 0, 100);
+                      updateSelectedLayerStyle((prev) => ({ ...(prev || {}), opacity: pct / 100 }), 'commit');
+                    }}
+                  />
+                </label>
+
+                <label className={styles.inspectorField}>
+                  Blend
+                  <select
+                    className={styles.inspectorInput}
+                    value={selectedInspectorBlend}
+                    disabled={selectedInspectorLocked}
+                    onChange={(e) => {
+                      const nextBlend = normalizeBlendMode(e.currentTarget.value);
+                      updateSelectedLayerStyle((prev) => ({ ...(prev || {}), blend: nextBlend }), 'commit');
+                    }}
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="screen">Screen</option>
+                  </select>
+                </label>
+
+                <label className={`${styles.inspectorField} ${styles.inspectorSpan2}`}>
+                  <span className={styles.inspectorCheck}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedInspectorShadow}
+                      disabled={selectedInspectorLocked}
+                      onChange={(e) => {
+                        const enable = e.currentTarget.checked;
+                        updateSelectedLayerStyle((prev) => {
+                          const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                          if (enable) {
+                            next.shadow = prev?.shadow ?? { color: '#000000', opacity: 0.35, blur: 12, offsetX: 0, offsetY: 8 };
+                          } else {
+                            next.shadow = undefined;
+                          }
+                          return next;
+                        }, 'commit');
+                      }}
+                    />{' '}
+                    Shadow
+                  </span>
+                </label>
+
+                {selectedInspectorShadow ? (
+                  <>
+                    <label className={styles.inspectorField}>
+                      Blur px
+                      <input
+                        className={styles.inspectorInput}
+                        type="number"
+                        step="1"
+                        min={0}
+                        disabled={selectedInspectorLocked}
+                        defaultValue={String(Number(selectedInspectorShadow.blur) || 12)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        }}
+                        onBlur={(e) => {
+                          const n = Number(e.currentTarget.value);
+                          if (!Number.isFinite(n)) return;
+                          updateSelectedLayerStyle((prev) => {
+                            const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                            const sh = { ...(next.shadow || {}) } as MoodboardShadowStyle;
+                            sh.blur = Math.max(0, n);
+                            next.shadow = sh;
+                            return next;
+                          }, 'commit');
+                        }}
+                      />
+                    </label>
+
+                    <label className={styles.inspectorField}>
+                      Alpha%
+                      <input
+                        className={styles.inspectorInput}
+                        type="number"
+                        step="1"
+                        min={0}
+                        max={100}
+                        disabled={selectedInspectorLocked}
+                        defaultValue={String(Math.round(clampRange(Number(selectedInspectorShadow.opacity) || 0.35, 0, 1) * 100))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        }}
+                        onBlur={(e) => {
+                          const n = Number(e.currentTarget.value);
+                          if (!Number.isFinite(n)) return;
+                          const pct = clampRange(n, 0, 100);
+                          updateSelectedLayerStyle((prev) => {
+                            const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                            const sh = { ...(next.shadow || {}) } as MoodboardShadowStyle;
+                            sh.opacity = pct / 100;
+                            next.shadow = sh;
+                            return next;
+                          }, 'commit');
+                        }}
+                      />
+                    </label>
+
+                    <label className={styles.inspectorField}>
+                      Off X
+                      <input
+                        className={styles.inspectorInput}
+                        type="number"
+                        step="1"
+                        disabled={selectedInspectorLocked}
+                        defaultValue={String(Number(selectedInspectorShadow.offsetX) || 0)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        }}
+                        onBlur={(e) => {
+                          const n = Number(e.currentTarget.value);
+                          if (!Number.isFinite(n)) return;
+                          updateSelectedLayerStyle((prev) => {
+                            const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                            const sh = { ...(next.shadow || {}) } as MoodboardShadowStyle;
+                            sh.offsetX = n;
+                            next.shadow = sh;
+                            return next;
+                          }, 'commit');
+                        }}
+                      />
+                    </label>
+
+                    <label className={styles.inspectorField}>
+                      Off Y
+                      <input
+                        className={styles.inspectorInput}
+                        type="number"
+                        step="1"
+                        disabled={selectedInspectorLocked}
+                        defaultValue={String(Number(selectedInspectorShadow.offsetY) || 8)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        }}
+                        onBlur={(e) => {
+                          const n = Number(e.currentTarget.value);
+                          if (!Number.isFinite(n)) return;
+                          updateSelectedLayerStyle((prev) => {
+                            const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                            const sh = { ...(next.shadow || {}) } as MoodboardShadowStyle;
+                            sh.offsetY = n;
+                            next.shadow = sh;
+                            return next;
+                          }, 'commit');
+                        }}
+                      />
+                    </label>
+
+                    <label className={`${styles.inspectorField} ${styles.inspectorSpan2}`}>
+                      Shadow color
+                      <input
+                        type="color"
+                        disabled={selectedInspectorLocked}
+                        value={colorForPicker(selectedInspectorShadow.color, '#000000')}
+                        onChange={(e) => {
+                          const v = e.currentTarget.value;
+                          updateSelectedLayerStyle((prev) => {
+                            const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                            const sh = { ...(next.shadow || {}) } as MoodboardShadowStyle;
+                            sh.color = v;
+                            next.shadow = sh;
+                            return next;
+                          }, 'noHistory');
+                        }}
+                      />
+                    </label>
+                  </>
+                ) : null}
+
+                {selectedBoxItem ? (
+                  <>
+                    <label className={`${styles.inspectorField} ${styles.inspectorSpan2}`}>
+                      <span className={styles.inspectorCheck}>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedInspectorOutline}
+                          disabled={selectedInspectorLocked}
+                          onChange={(e) => {
+                            const enable = e.currentTarget.checked;
+                            updateSelectedLayerStyle((prev) => {
+                              const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                              if (enable) {
+                                next.outline = prev?.outline ?? { color: '#111111', width: 2 };
+                              } else {
+                                next.outline = undefined;
+                              }
+                              return next;
+                            }, 'commit');
+                          }}
+                        />{' '}
+                        Outline
+                      </span>
+                    </label>
+
+                    {selectedInspectorOutline ? (
+                      <>
+                        <label className={styles.inspectorField}>
+                          Width px
+                          <input
+                            className={styles.inspectorInput}
+                            type="number"
+                            step="1"
+                            min={0}
+                            disabled={selectedInspectorLocked}
+                            defaultValue={String(Number(selectedInspectorOutline.width) || 2)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                            }}
+                            onBlur={(e) => {
+                              const n = Number(e.currentTarget.value);
+                              if (!Number.isFinite(n)) return;
+                              updateSelectedLayerStyle((prev) => {
+                                const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                                const ol = { ...(next.outline || {}) } as MoodboardOutlineStyle;
+                                ol.width = Math.max(0, n);
+                                next.outline = ol;
+                                return next;
+                              }, 'commit');
+                            }}
+                          />
+                        </label>
+
+                        <label className={styles.inspectorField}>
+                          Color
+                          <input
+                            type="color"
+                            disabled={selectedInspectorLocked}
+                            value={colorForPicker(selectedInspectorOutline.color, '#111111')}
+                            onChange={(e) => {
+                              const v = e.currentTarget.value;
+                              updateSelectedLayerStyle((prev) => {
+                                const next = { ...(prev || {}) } as MoodboardLayerStyle;
+                                const ol = { ...(next.outline || {}) } as MoodboardOutlineStyle;
+                                ol.color = v;
+                                next.outline = ol;
+                                return next;
+                              }, 'noHistory');
+                            }}
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
         ) : null}

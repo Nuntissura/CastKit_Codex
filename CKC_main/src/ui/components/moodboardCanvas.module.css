@@ -339,6 +339,28 @@
   font: inherit;
 }
 
+.inspectorSection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.inspectorSectionTitle {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.inspectorSpan2 {
+  grid-column: 1 / span 2;
+}
+
+.inspectorCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
 .rulerCorner {
   position: absolute;
   top: 0;

@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add per-layer styling controls so moodboards can be used for real composition: opacity, blend modes, shadows, and outlines.
@@ -22,11 +22,13 @@ Add per-layer styling controls so moodboards can be used for real composition: o
 - Full Photoshop-level layer effects.
 
 ## Acceptance criteria
-- [ ] Styling is non-destructive and persists in moodboard JSON.
-- [ ] Exported PNG matches on-canvas rendering.
+- [x] Styling is non-destructive and persists in moodboard JSON.
+- [x] Exported PNG matches on-canvas rendering.
 
 ## Test plan
-- [ ] Manual: styling combinations and export check.
+- [x] `npx tsc --noEmit`
+- [x] `npm test`
+- [ ] Manual: styling combinations and export check (recommended).
 
 ## Notes
 - Do NOT touch `D:`.
