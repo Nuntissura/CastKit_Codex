@@ -6099,6 +6099,86 @@ class CKCLibrary {
     return { ok: true, imageId: id, dhash: stored };
   }
 
+  async findSimilarImages({ imageId, maxDistance = 10, limit = 20, maxImages = 10_000 } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const thr = Math.max(0, Math.min(32, Number(maxDistance) || 10));
+    const lim = Math.max(1, Math.min(200, Number(limit) || 20));
+    const max = Math.max(10, Math.min(100_000, Number(maxImages) || 10_000));
+
+    const targetRes = await this.getImageDhash({ imageId: id });
+    const target = String(targetRes?.dhash ?? '').trim().toLowerCase();
+    if (!target || !isHex64(target)) {
+      await this._audit('image.similar.search', null, { imageId: id, threshold: thr, limit: lim, maxImages: max, matched: 0, reason: 'missing_dhash' });
+      return { ok: true, imageId: id, threshold: thr, items: [], reason: 'missing_dhash' };
+    }
+
+    const rows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, c.display_name, ia.favorite, ia.rating, ia.tags_json, ia.dhash_hex, ia.added_at
+       FROM ImageAsset ia
+       JOIN Character c ON c.character_id = ia.character_id
+       WHERE ia.image_id != ?
+       ORDER BY ia.added_at DESC
+       LIMIT ?`,
+      [id, max]
+    );
+
+    const items = [];
+    let processed = 0;
+    for (const r of rows) {
+      processed += 1;
+      const candId = String(r.image_id ?? '').trim();
+      if (!candId) continue;
+      const dh = r.dhash_hex != null ? String(r.dhash_hex ?? '').trim().toLowerCase() : '';
+      if (!dh || !isHex64(dh)) continue;
+
+      const distance = hammingDistanceHex64(target, dh);
+      if (distance > thr) continue;
+
+      let tags = [];
+      try {
+        const parsed = JSON.parse(r.tags_json ?? '[]');
+        tags = Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+      } catch {
+        tags = [];
+      }
+
+      items.push({
+        imageId: candId,
+        characterId: String(r.character_id ?? '').trim(),
+        characterName: String(r.display_name ?? ''),
+        favorite: !!r.favorite,
+        rating: Number(r.rating) || 0,
+        tags,
+        distance,
+      });
+
+      if (processed % 500 === 0) await new Promise((res) => setTimeout(res, 0));
+    }
+
+    items.sort(
+      (a, b) =>
+        (a.distance || 0) - (b.distance || 0) ||
+        Number(b.favorite) - Number(a.favorite) ||
+        (b.rating || 0) - (a.rating || 0) ||
+        String(a.imageId).localeCompare(String(b.imageId))
+    );
+
+    const out = items.slice(0, lim);
+    await this._audit('image.similar.search', null, {
+      imageId: id,
+      threshold: thr,
+      limit: lim,
+      maxImages: max,
+      considered: rows.length,
+      matched: out.length,
+    });
+
+    return { ok: true, imageId: id, threshold: thr, limit: lim, totalConsidered: rows.length, matched: out.length, items: out };
+  }
+
   async scanNearDuplicateGroups({ threshold = 10, maxImages = 2500, maxPerGroup = 60, onProgress = null, isCancelled = null } = {}) {
     const thr = Math.max(0, Math.min(32, Number(threshold) || 10));
     const lim = Math.max(1, Math.min(50_000, Number(maxImages) || 2500));

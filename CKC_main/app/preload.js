@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('ckc', {
     startNearDuplicateScan: (params) => ipcRenderer.invoke('ckc:startNearDuplicateScan', params),
     getNearDuplicateScanStatus: (jobId) => ipcRenderer.invoke('ckc:getNearDuplicateScanStatus', jobId),
     cancelNearDuplicateScan: (jobId) => ipcRenderer.invoke('ckc:cancelNearDuplicateScan', jobId),
+    findSimilarImages: (params) => ipcRenderer.invoke('ckc:findSimilarImages', params),
     startLibraryBackup: (params) => ipcRenderer.invoke('ckc:startLibraryBackup', params),
     getLibraryBackupStatus: (jobId) => ipcRenderer.invoke('ckc:getLibraryBackupStatus', jobId),
     cancelLibraryBackup: (jobId) => ipcRenderer.invoke('ckc:cancelLibraryBackup', jobId),

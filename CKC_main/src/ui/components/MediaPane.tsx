@@ -134,6 +134,7 @@ export function MediaPane({
   onSelectionChange,
   onOpenDiagnostics,
   onPatchImageMeta,
+  onJumpToImage,
 }: {
   images: MediaImage[];
   defaultShowThumbnails?: boolean;
@@ -150,6 +151,7 @@ export function MediaPane({
   onSelectionChange?: (selectedIds: string[], primaryId: string | null) => void;
   onOpenDiagnostics?: () => void;
   onPatchImageMeta?: (imageId: string, patch: Partial<Pick<MediaImage, 'favorite' | 'rating' | 'notes' | 'tags' | 'sourceNote'>>) => void;
+  onJumpToImage?: (characterId: string, imageId: string) => void;
 }) {
   const [primarySelectedId, setPrimarySelectedId] = React.useState<string | null>(images[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>(() => (images[0]?.id ? [images[0].id] : []));
@@ -192,6 +194,25 @@ export function MediaPane({
   const [aiSelectedKeys, setAiSelectedKeys] = React.useState<Set<string>>(new Set());
   const [aiExpanded, setAiExpanded] = React.useState<boolean>(false);
   const [viewerError, setViewerError] = React.useState<boolean>(false);
+
+  // Similarity search (dHash-based).
+  const [similarOpen, setSimilarOpen] = React.useState<boolean>(false);
+  const [similarBusy, setSimilarBusy] = React.useState<boolean>(false);
+  const [similarError, setSimilarError] = React.useState<string | null>(null);
+  const [similarMaxDistance, setSimilarMaxDistance] = React.useState<number>(10);
+  const [similarResults, setSimilarResults] = React.useState<
+    Array<{
+      imageId: string;
+      characterId: string;
+      characterName: string;
+      favorite: boolean;
+      rating: number;
+      tags: string[];
+      distance: number;
+    }>
+  >([]);
+  const [similarTargetId, setSimilarTargetId] = React.useState<string | null>(null);
+
   const [reloadToken, setReloadToken] = React.useState<number>(0);
   const altLeftDownRef = React.useRef<boolean>(false);
   const selectionAnchorRef = React.useRef<string | null>(images[0]?.id ?? null);
@@ -1062,6 +1083,55 @@ export function MediaPane({
     [isBusy, filteredImages, primarySelectedId, selectedIds]
   );
 
+  const runSimilarSearch = React.useCallback(
+    async (targetId: string) => {
+      const tid = String(targetId || '').trim();
+      if (!tid) return;
+      setSimilarBusy(true);
+      setSimilarError(null);
+      try {
+        const res = await window.ckc.findSimilarImages({
+          imageId: tid,
+          maxDistance: similarMaxDistance,
+          limit: 40,
+          maxImages: 10_000,
+        });
+        setSimilarResults(Array.isArray(res?.items) ? res.items : []);
+        if (String(res?.reason || '') === 'missing_dhash') {
+          setSimilarError('No dHash available for this image yet. Tip: run the Near-duplicate scan to populate dHash.');
+        }
+      } catch (err: unknown) {
+        setSimilarError(err instanceof Error ? err.message : String(err));
+        setSimilarResults([]);
+      } finally {
+        setSimilarBusy(false);
+      }
+    },
+    [similarMaxDistance]
+  );
+
+  const openSimilar = React.useCallback(() => {
+    if (!primarySelectedId) {
+      setSimilarError('Select an image first.');
+      setSimilarResults([]);
+      setSimilarTargetId(null);
+      setSimilarOpen(true);
+      return;
+    }
+    setSimilarTargetId(primarySelectedId);
+    setSimilarOpen(true);
+    void runSimilarSearch(primarySelectedId);
+  }, [primarySelectedId, runSimilarSearch]);
+
+  React.useEffect(() => {
+    if (!similarOpen) return;
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') setSimilarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [similarOpen]);
+
   return (
     <div className={styles.root}>
       <div className={styles.topBar}>
@@ -1391,6 +1461,15 @@ export function MediaPane({
                       {pinMode ? 'Cancel pin' : 'Add pin'}
                     </button>
                   ) : null}
+
+                  <button
+                    className={styles.tagBtn}
+                    disabled={isBusy || selectionCount !== 1 || !primarySelected || similarBusy}
+                    onClick={openSimilar}
+                    title="Find visually similar images (dHash)"
+                  >
+                    {similarBusy ? 'Similar…' : 'Similar…'}
+                  </button>
                 </div>
 
                 {selectionCount === 1 && primarySelected ? (
@@ -1738,6 +1817,98 @@ export function MediaPane({
               </button>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {similarOpen ? (
+        <div className={styles.similarOverlay} role="dialog" aria-label="Similar images" onClick={() => setSimilarOpen(false)}>
+          <div className={styles.similarModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.similarHeader}>
+              <div>
+                <div className={styles.similarTitle}>Similar images</div>
+                <div className={styles.similarSub}>
+                  Target: <code>{similarTargetId ?? '(none)'}</code>
+                </div>
+              </div>
+
+              <div className={styles.similarHeaderRight}>
+                <label className={styles.similarLabel}>
+                  Max distance:{' '}
+                  <input
+                    className={styles.similarInput}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="32"
+                    value={String(similarMaxDistance)}
+                    onChange={(e) => setSimilarMaxDistance(Math.max(0, Math.min(32, Number(e.target.value) || 0)))}
+                    disabled={similarBusy}
+                  />
+                </label>
+                <button
+                  className={styles.tagBtn}
+                  disabled={similarBusy || !similarTargetId}
+                  onClick={() => similarTargetId && void runSimilarSearch(similarTargetId)}
+                >
+                  {similarBusy ? 'Searching…' : 'Search'}
+                </button>
+                <button className={styles.tagBtn} onClick={() => setSimilarOpen(false)} disabled={similarBusy}>
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.similarBody}>
+              {similarError ? <div className={styles.similarError}>{similarError}</div> : null}
+              {!similarBusy && similarResults.length === 0 ? <div className={styles.muted}>(no matches)</div> : null}
+
+              <div className={styles.similarGrid} aria-label="Similar images results">
+                {similarResults.map((r) => (
+                  <button
+                    key={r.imageId}
+                    className={styles.similarItem}
+                    onClick={() => {
+                      const imgId = String(r.imageId || '').trim();
+                      if (!imgId) return;
+                      if (filteredIndexById.has(imgId)) {
+                        selectionAnchorRef.current = imgId;
+                        setPrimarySelectedId(imgId);
+                        setSelectedIds([imgId]);
+                        setSimilarOpen(false);
+                        return;
+                      }
+                      if (typeof onJumpToImage === 'function') {
+                        const charId = String(r.characterId || '').trim();
+                        if (!charId) {
+                          setSimilarError('Cannot open this result (missing character id).');
+                          return;
+                        }
+                        setSimilarOpen(false);
+                        onJumpToImage(charId, imgId);
+                        return;
+                      }
+                      setSimilarError('Cannot open this result from this view (no jump handler).');
+                    }}
+                    title={r.tags?.length ? r.tags.join(', ') : undefined}
+                  >
+                    <img
+                      className={styles.similarThumb}
+                      src={`ckc://thumb/${encodeURIComponent(r.imageId)}?r=${reloadToken}`}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div className={styles.similarMeta}>
+                      <div className={styles.similarDistance}>d={r.distance}</div>
+                      <div className={styles.similarChar} title={r.characterName}>
+                        {r.characterName || r.characterId}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 

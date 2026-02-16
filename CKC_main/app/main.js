@@ -1200,6 +1200,11 @@ function registerIpcHandlers() {
         return { ok: true };
     });
 
+    ipcMain.handle('ckc:findSimilarImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.findSimilarImages(params || {});
+    });
+
     ipcMain.handle('ckc:startLibraryBackup', async (_evt, params) => {
         if (libraryBackupActiveJobId) {
             const existing = getLibraryBackupJob(libraryBackupActiveJobId);

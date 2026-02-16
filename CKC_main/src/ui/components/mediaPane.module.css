@@ -539,6 +539,133 @@
   border-color: var(--accent-color);
 }
 
+.similarOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.similarModal {
+  width: min(1100px, 100%);
+  max-height: min(880px, 100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.similarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.similarTitle {
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.similarSub {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.similarHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.similarLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.similarInput {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+.similarBody {
+  padding: 12px;
+  overflow: auto;
+}
+
+.similarError {
+  border: 1px solid rgba(255, 0, 0, 0.35);
+  background: rgba(255, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.similarGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.similarItem {
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  cursor: pointer;
+}
+
+.similarItem:hover {
+  border-color: var(--accent-color);
+}
+
+.similarThumb {
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.03);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.similarMeta {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.similarDistance {
+  font-weight: 800;
+}
+
+.similarChar {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .fullscreen {
   position: fixed;
   inset: 0;

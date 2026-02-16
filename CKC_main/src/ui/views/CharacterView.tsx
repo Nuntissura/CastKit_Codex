@@ -152,6 +152,7 @@ export function CharacterView({
   characterId,
   onBack,
   onNavigateCharacter,
+  onJumpToImage,
   selectImageId,
   onSelectImageHandled,
   openDocRequest,
@@ -166,6 +167,7 @@ export function CharacterView({
   characterId: string | null;
   onBack: () => void;
   onNavigateCharacter: (characterId: string) => void;
+  onJumpToImage?: (characterId: string, imageId: string) => void;
   selectImageId?: string | null;
   onSelectImageHandled?: () => void;
   openDocRequest?: { docType: CKCDocType; docId: string; focusNeedle?: string | null; moodboardLayerId?: string | null } | null;
@@ -2233,6 +2235,7 @@ export function CharacterView({
                 images={images}
                 emptyLabel="No images for this character yet."
                 onSelectionChange={(ids) => setMediaSelectedIds(ids)}
+                onJumpToImage={onJumpToImage}
                 onPatchImageMeta={(imageId, patch) => {
                   setCharacter((prev) => {
                     if (!prev) return prev;

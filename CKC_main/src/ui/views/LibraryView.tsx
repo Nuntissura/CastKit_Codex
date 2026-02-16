@@ -1346,6 +1346,7 @@ export function LibraryView({
                 }
               : undefined
           }
+          onJumpToImage={(characterId, imageId) => onOpenCharacter(characterId, imageId)}
           onOpenDiagnostics={() => setShowLibraryBar(true)}
           onPatchImageMeta={(imageId, patch) => {
             if (leftMode === 'carousel') {

@@ -674,6 +674,24 @@ interface Window {
       startNearDuplicateScan: (params?: { threshold?: number; maxImages?: number; maxPerGroup?: number } | null) => Promise<{ ok: true; jobId: string }>;
       getNearDuplicateScanStatus: (jobId: string) => Promise<CKCNearDuplicateScanJobStatus>;
       cancelNearDuplicateScan: (jobId: string) => Promise<{ ok: true }>;
+      findSimilarImages: (params: { imageId: string; maxDistance?: number; limit?: number; maxImages?: number }) => Promise<{
+        ok: true;
+        imageId: string;
+        threshold: number;
+        limit?: number;
+        totalConsidered?: number;
+        matched?: number;
+        reason?: string;
+        items: Array<{
+          imageId: string;
+          characterId: string;
+          characterName: string;
+          favorite: boolean;
+          rating: number;
+          tags: string[];
+          distance: number;
+        }>;
+      }>;
       startLibraryBackup: (params?: { outDirBase?: string | null; backupName?: string | null } | null) => Promise<{ ok: true; jobId: string }>;
       getLibraryBackupStatus: (jobId: string) => Promise<CKCLibraryBackupJobStatus>;
       cancelLibraryBackup: (jobId: string) => Promise<{ ok: true }>;

@@ -263,6 +263,13 @@ function MainApp() {
               setPendingFocusField(null);
               setPage('character');
             }}
+            onJumpToImage={(characterId, imageId) => {
+              setSelectedCharacterId(characterId);
+              setSelectedImageId(imageId);
+              setPendingOpenDoc(null);
+              setPendingFocusField(null);
+              setPage('character');
+            }}
             selectImageId={selectedImageId}
             onSelectImageHandled={() => setSelectedImageId(null)}
             openDocRequest={pendingOpenDoc}
