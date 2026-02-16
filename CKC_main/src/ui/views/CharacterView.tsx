@@ -1,7 +1,7 @@
 import React from 'react';
 import { LibraryDrawer } from '../components/LibraryDrawer';
 import { MediaPane } from '../components/MediaPane';
-import { MoodboardCanvas, makeMoodId, type MoodboardState } from '../components/MoodboardCanvas';
+import { MoodboardCanvas, makeMoodId, type MoodboardSelectionItem, type MoodboardState } from '../components/MoodboardCanvas';
 import { SheetIngestMergeTools } from '../components/SheetIngestMergeTools';
 import { SheetEditor } from '../components/SheetEditor';
 import { SheetVersionTools } from '../components/SheetVersionTools';
@@ -155,6 +155,8 @@ export function CharacterView({
   onSelectImageHandled,
   openDocRequest,
   onOpenDocRequestHandled,
+  focusFieldId,
+  onFocusFieldHandled,
   onOpenLibraryDrawer,
   isLibraryDrawerOpen,
   onCloseLibraryDrawer,
@@ -165,8 +167,10 @@ export function CharacterView({
   onNavigateCharacter: (characterId: string) => void;
   selectImageId?: string | null;
   onSelectImageHandled?: () => void;
-  openDocRequest?: { docType: CKCDocType; docId: string } | null;
+  openDocRequest?: { docType: CKCDocType; docId: string; focusNeedle?: string | null; moodboardLayerId?: string | null } | null;
   onOpenDocRequestHandled?: () => void;
+  focusFieldId?: string | null;
+  onFocusFieldHandled?: () => void;
   onOpenLibraryDrawer: () => void;
   isLibraryDrawerOpen: boolean;
   onCloseLibraryDrawer: () => void;
@@ -181,6 +185,11 @@ export function CharacterView({
   const [requestedImageId, setRequestedImageId] = React.useState<string | null>(null);
   const [mediaSelectedIds, setMediaSelectedIds] = React.useState<string[]>([]);
 
+  const [pendingDocNeedle, setPendingDocNeedle] = React.useState<{ docType: 'notes' | 'stories'; needle: string } | null>(null);
+  const notesTextRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const storiesTextRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [moodboardRequestedSelection, setMoodboardRequestedSelection] = React.useState<MoodboardSelectionItem[] | null>(null);
+
   const [notesBacklinks, setNotesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [storiesBacklinks, setStoriesBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
   const [moodboardBacklinks, setMoodboardBacklinks] = React.useState<CKCBacklinkEntry[]>([]);
@@ -194,6 +203,12 @@ export function CharacterView({
     setRequestedImageId(id);
     onSelectImageHandled?.();
   }, [selectImageId, onSelectImageHandled]);
+
+  React.useEffect(() => {
+    const fid = String(focusFieldId ?? '').trim();
+    if (!fid) return;
+    setRightTab('sheet');
+  }, [focusFieldId]);
 
   const splitterPx = 10;
   const minLeftPx2 = 360;
@@ -1480,6 +1495,8 @@ export function CharacterView({
     if (!req) return;
     const docId = String(req.docId ?? '').trim();
     if (!docId) return;
+    const focusNeedle = String(req.focusNeedle ?? '').trim();
+    const layerId = String(req.moodboardLayerId ?? '').trim();
 
     setIsDocsOpen(true);
     onCloseLibraryDrawer();
@@ -1488,16 +1505,19 @@ export function CharacterView({
       flushNotesAutosave();
       notesDocIdRef.current = docId;
       setNotesDocId(docId);
+      if (focusNeedle) setPendingDocNeedle({ docType: 'notes', needle: focusNeedle });
     } else if (req.docType === 'stories') {
       flushStoriesAutosave();
       storiesDocIdRef.current = docId;
       setStoriesDocId(docId);
       setDocsLowerType('stories');
+      if (focusNeedle) setPendingDocNeedle({ docType: 'stories', needle: focusNeedle });
     } else {
       flushMoodboardAutosave();
       moodboardDocIdRef.current = docId;
       setMoodboardDocId(docId);
       setDocsLowerType('moodboard');
+      if (layerId && layerId !== '__TITLE__') setMoodboardRequestedSelection([{ kind: 'text', id: layerId }]);
     }
 
     onOpenDocRequestHandled?.();
@@ -1509,6 +1529,47 @@ export function CharacterView({
     onOpenDocRequestHandled,
     openDocRequest,
   ]);
+
+  React.useEffect(() => {
+    const f = pendingDocNeedle;
+    if (!f) return;
+    const needle = String(f.needle ?? '').trim();
+    if (!needle) {
+      setPendingDocNeedle(null);
+      return;
+    }
+
+    const findIndex = (hay: string) => hay.toLowerCase().indexOf(needle.toLowerCase());
+
+    if (f.docType === 'notes') {
+      const ta = notesTextRef.current;
+      if (!ta) return;
+      const idx = findIndex(String(notesDraftContent ?? ''));
+      ta.focus();
+      if (idx >= 0) {
+        try {
+          ta.setSelectionRange(idx, idx + needle.length);
+        } catch {
+          // ignore
+        }
+      }
+      setPendingDocNeedle(null);
+      return;
+    }
+
+    const ta = storiesTextRef.current;
+    if (!ta) return;
+    const idx = findIndex(String(storiesDraftContent ?? ''));
+    ta.focus();
+    if (idx >= 0) {
+      try {
+        ta.setSelectionRange(idx, idx + needle.length);
+      } catch {
+        // ignore
+      }
+    }
+    setPendingDocNeedle(null);
+  }, [notesDraftContent, pendingDocNeedle, storiesDraftContent]);
 
   const updateStoriesBoard = React.useCallback(
     (updater: (prev: CKCStoryBoard) => CKCStoryBoard) => {
@@ -2264,6 +2325,7 @@ export function CharacterView({
 
                     <textarea
                       className={styles.docTextFlex}
+                      ref={notesTextRef}
                       value={notesDraftContent}
                       onChange={(e) => setNotesDraftContent(e.target.value)}
                       onBlur={() => flushNotesAutosave()}
@@ -2469,6 +2531,7 @@ export function CharacterView({
                         {storiesViewMode === 'text' ? (
                           <textarea
                             className={styles.docTextFlex}
+                            ref={storiesTextRef}
                             value={storiesDraftContent}
                             onChange={(e) => setStoriesDraftContent(e.target.value)}
                             onBlur={() => flushStoriesAutosave()}
@@ -2680,6 +2743,7 @@ export function CharacterView({
                               setIsImagePickerOpen(true);
                               setImagePickerSource('character');
                             }}
+                            requestedSelection={moodboardRequestedSelection ?? undefined}
                           />
                         </div>
 
@@ -3027,6 +3091,8 @@ export function CharacterView({
                       templateSections={templateAst.sections || []}
                       valuesById={draftValuesById}
                       onChange={(fieldId, value) => setDraftValuesById((prev) => ({ ...prev, [fieldId]: value }))}
+                      focusFieldId={focusFieldId}
+                      onFocusFieldHandled={onFocusFieldHandled}
                     />
                   )}
                 </>

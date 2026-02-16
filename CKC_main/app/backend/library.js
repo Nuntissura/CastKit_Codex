@@ -214,6 +214,9 @@ class CKCLibrary {
     this.db = null;
     this.template = null; // active default template AST
     this.templatesById = new Map(); // template_id -> AST
+
+    this._ftsEnsurePromise = null;
+    this._ftsAvailable = null;
   }
 
   getPaths() {
@@ -317,6 +320,407 @@ class CKCLibrary {
     await this.ensureBuiltinSafeSubsetPack();
     await this.ensureBuiltinAllFieldsPack();
     await this.ensureDefaultProtectedFields();
+  }
+
+  async _getMetaValue(key) {
+    const k = String(key ?? '').trim();
+    if (!k) return null;
+    try {
+      const row = await get(this.db, 'SELECT meta_value FROM CkcMeta WHERE meta_key = ?', [k]);
+      if (!row) return null;
+      const v = row.meta_value;
+      return v == null ? null : String(v);
+    } catch {
+      return null;
+    }
+  }
+
+  async _setMetaValue(key, value) {
+    const k = String(key ?? '').trim();
+    if (!k) return;
+    const v = value == null ? '' : String(value);
+    await run(
+      this.db,
+      `INSERT INTO CkcMeta(meta_key, meta_value, updated_at)
+       VALUES(?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(meta_key) DO UPDATE SET
+         meta_value = excluded.meta_value,
+         updated_at = CURRENT_TIMESTAMP`,
+      [k, v]
+    );
+  }
+
+  async _ftsTablesExist() {
+    try {
+      const row = await get(this.db, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, ['character_fts']);
+      return !!row?.name;
+    } catch {
+      return false;
+    }
+  }
+
+  _extractNeedleFromFtsQuery(queryText) {
+    const q = String(queryText ?? '').trim();
+    if (!q) return '';
+
+    const quoted = q.match(/"([^"]+)"/);
+    if (quoted && String(quoted[1]).trim()) return String(quoted[1]).trim();
+
+    const tokens = q
+      .replaceAll(/[()]/g, ' ')
+      .split(/\s+/g)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => !['AND', 'OR', 'NOT'].includes(t.toUpperCase()));
+    return tokens[0] ?? '';
+  }
+
+  _extractStoryBoardCardText(boardJson) {
+    try {
+      const parsed = JSON.parse(String(boardJson ?? '{}'));
+      const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
+      const texts = cards.map((c) => String(c?.text ?? '')).filter((t) => t.trim().length > 0);
+      return texts.join('\n\n');
+    } catch {
+      return '';
+    }
+  }
+
+  _extractMoodboardTexts(boardJson) {
+    try {
+      const parsed = JSON.parse(String(boardJson ?? '{}'));
+      const texts = Array.isArray(parsed?.texts) ? parsed.texts : [];
+      return texts
+        .map((t) => (t && typeof t === 'object' ? t : {}))
+        .map((t) => ({
+          id: String(t.id ?? '').trim(),
+          text: String(t.text ?? ''),
+          name: String(t.name ?? '').trim(),
+          tags: Array.isArray(t.tags) ? t.tags.map((x) => String(x ?? '').trim()).filter(Boolean) : [],
+        }))
+        .filter((t) => t.id && t.text.trim().length > 0);
+    } catch {
+      return [];
+    }
+  }
+
+  async _refreshMoodboardFtsForDoc({ docId, title, boardJson }) {
+    const id = String(docId ?? '').trim();
+    if (!id) return;
+    if (!(await this._ftsTablesExist())) return;
+
+    await run(this.db, `DELETE FROM moodboard_fts WHERE doc_id = ?`, [id]);
+
+    const cleanedTitle = String(title ?? '').trim();
+    if (cleanedTitle) {
+      await run(this.db, `INSERT INTO moodboard_fts(doc_id, layer_id, content) VALUES(?, ?, ?)`, [id, '__TITLE__', cleanedTitle]);
+    }
+
+    for (const t of this._extractMoodboardTexts(boardJson)) {
+      const contentParts = [t.text];
+      if (t.name) contentParts.push(t.name);
+      if (t.tags.length) contentParts.push(t.tags.join(' '));
+      await run(this.db, `INSERT INTO moodboard_fts(doc_id, layer_id, content) VALUES(?, ?, ?)`, [id, t.id, contentParts.join('\n')]);
+    }
+  }
+
+  async _refreshStoryFtsForDoc({ docId, title, bodyText, tagsJson = null }) {
+    const id = String(docId ?? '').trim();
+    if (!id) return;
+    if (!(await this._ftsTablesExist())) return;
+
+    let tagsRaw = tagsJson;
+    if (tagsRaw == null) {
+      try {
+        const rowTags = await get(this.db, `SELECT tags_json FROM StoryDoc WHERE doc_id = ?`, [id]);
+        tagsRaw = rowTags?.tags_json ?? '';
+      } catch {
+        tagsRaw = '';
+      }
+    }
+
+    const row = await get(this.db, `SELECT board_json FROM StoryBoard WHERE doc_id = ?`, [id]);
+    const cardsText = this._extractStoryBoardCardText(row?.board_json ?? '');
+
+    const cleanedTitle = String(title ?? '').trim();
+    const base = String(bodyText ?? '');
+    const tagsPart = String(tagsRaw ?? '').trim();
+    const mergedBase = tagsPart ? `${base}\n\n${tagsPart}` : base;
+    const merged = cardsText ? `${mergedBase}\n\n${cardsText}` : mergedBase;
+
+    await run(this.db, `DELETE FROM story_fts WHERE doc_id = ?`, [id]);
+    await run(this.db, `INSERT INTO story_fts(doc_id, title, content) VALUES(?, ?, ?)`, [id, cleanedTitle, merged]);
+  }
+
+  async _rebuildGlobalSearchIndex() {
+    if (!(await this._ftsTablesExist())) return { ok: false, reason: 'FTS tables missing' };
+
+    await run(this.db, 'BEGIN');
+    try {
+      for (const t of ['character_fts', 'note_fts', 'story_fts', 'moodboard_fts', 'image_fts']) {
+        await run(this.db, `DELETE FROM ${t}`);
+      }
+
+      await run(
+        this.db,
+        `INSERT INTO character_fts(character_id, field_id, content)
+         SELECT character_id, '__NAME__', TRIM(COALESCE(display_name, '') || ' ' || COALESCE(public_id, ''))
+         FROM Character`
+      );
+
+      await run(
+        this.db,
+        `INSERT INTO character_fts(character_id, field_id, content)
+         SELECT character_id, field_id, COALESCE(value_text, '')
+         FROM FieldValue
+         WHERE value_text IS NOT NULL AND LENGTH(TRIM(value_text)) > 0`
+      );
+
+      await run(
+        this.db,
+        `INSERT INTO note_fts(doc_id, title, content)
+         SELECT doc_id, COALESCE(title, ''), COALESCE(body_text, '') || ' ' || COALESCE(tags_json, '')
+         FROM NoteDoc`
+      );
+
+      await run(
+        this.db,
+        `INSERT INTO story_fts(doc_id, title, content)
+         SELECT doc_id, COALESCE(title, ''), COALESCE(body_text, '') || ' ' || COALESCE(tags_json, '')
+         FROM StoryDoc`
+      );
+
+      await run(
+        this.db,
+        `INSERT INTO image_fts(image_id, character_id, content)
+         SELECT image_id, character_id, COALESCE(notes, '') || ' ' || COALESCE(source_note, '') || ' ' || COALESCE(tags_json, '')
+         FROM ImageAsset`
+      );
+
+      // Moodboards: index text layers (and title) rather than the raw JSON.
+      const moodRows = await all(this.db, `SELECT doc_id, title, board_json FROM MoodboardDoc`);
+      for (const r of moodRows) {
+        await this._refreshMoodboardFtsForDoc({ docId: r.doc_id, title: r.title, boardJson: r.board_json });
+      }
+
+      // Stories: enrich index with corkboard/outliner card text when present.
+      const storyRows = await all(this.db, `SELECT doc_id, title, body_text FROM StoryDoc`);
+      for (const r of storyRows) {
+        await this._refreshStoryFtsForDoc({ docId: r.doc_id, title: r.title, bodyText: r.body_text });
+      }
+
+      await run(this.db, 'COMMIT');
+    } catch (err) {
+      await run(this.db, 'ROLLBACK');
+      throw err;
+    }
+
+    await this._setMetaValue('fts_built_v1', new Date().toISOString());
+    return { ok: true };
+  }
+
+  async _ensureGlobalSearchIndex() {
+    if (this._ftsEnsurePromise) return this._ftsEnsurePromise;
+    this._ftsEnsurePromise = (async () => {
+      const hasFts = await this._ftsTablesExist();
+      this._ftsAvailable = hasFts;
+      if (!hasFts) return { ok: false, available: false };
+
+      const built = await this._getMetaValue('fts_built_v1');
+      if (String(built ?? '').trim()) return { ok: true, available: true, builtAt: built };
+
+      try {
+        const res = await this._rebuildGlobalSearchIndex();
+        return { ok: !!res?.ok, available: true };
+      } catch (err) {
+        await this._setMetaValue('fts_build_error_v1', String(err?.message || err || 'Unknown error'));
+        return { ok: false, available: true, error: String(err?.message || err || 'Unknown error') };
+      }
+    })();
+
+    try {
+      return await this._ftsEnsurePromise;
+    } finally {
+      // Keep the memoized promise so we don't thrash rebuilds. A future explicit "Rebuild index" action can reset it.
+    }
+  }
+
+  async globalSearch({ queryText = '', scope = 'library', characterId = null, limitPerType = 50 } = {}) {
+    const q = String(queryText ?? '').trim();
+    if (!q) {
+      return { ok: true, query: '', scope: scope === 'character' ? 'character' : 'library', results: { characters: [], notes: [], stories: [], moodboards: [], images: [] } };
+    }
+
+    await this._ensureGlobalSearchIndex();
+    if (!this._ftsAvailable) throw new Error('Global search is unavailable (FTS5 missing in this SQLite build).');
+
+    const lim = Math.max(1, Math.min(200, Number(limitPerType) || 50));
+    const wantScope = String(scope ?? '').toLowerCase() === 'character' ? 'character' : 'library';
+    const cid = String(characterId ?? '').trim();
+    const scopeChar = wantScope === 'character' && cid ? cid : null;
+
+    const SNIP_START = '[[[';
+    const SNIP_END = ']]]';
+    const SNIP_ELLIPSIS = '…';
+    const SNIP_TOKENS = 28;
+
+    const queryCharacters = async () => {
+      const whereScope = scopeChar ? 'AND character_fts.character_id = ?' : '';
+      const params = scopeChar ? [q, scopeChar, lim] : [q, lim];
+      const rows = await all(
+        this.db,
+        `
+        SELECT
+          character_fts.character_id AS character_id,
+          character_fts.field_id AS field_id,
+          c.display_name AS display_name,
+          c.public_id AS public_id,
+          snippet(character_fts, 2, '${SNIP_START}', '${SNIP_END}', '${SNIP_ELLIPSIS}', ${SNIP_TOKENS}) AS snippet
+        FROM character_fts
+        JOIN Character c ON c.character_id = character_fts.character_id
+        WHERE character_fts MATCH ?
+        ${whereScope}
+        ORDER BY bm25(character_fts)
+        LIMIT ?
+      `,
+        params
+      );
+      return rows.map((r) => ({
+        kind: 'character',
+        characterId: String(r.character_id ?? ''),
+        publicId: r.public_id != null ? String(r.public_id) : null,
+        displayName: String(r.display_name ?? ''),
+        fieldId: String(r.field_id ?? ''),
+        snippet: String(r.snippet ?? ''),
+      }));
+    };
+
+    const queryNotes = async () => {
+      const rows = await all(
+        this.db,
+        `
+        SELECT
+          n.doc_id AS doc_id,
+          n.title AS title,
+          n.updated_at AS updated_at,
+          snippet(note_fts, 2, '${SNIP_START}', '${SNIP_END}', '${SNIP_ELLIPSIS}', ${SNIP_TOKENS}) AS snippet
+        FROM note_fts
+        JOIN NoteDoc n ON n.doc_id = note_fts.doc_id
+        WHERE note_fts MATCH ?
+        ORDER BY bm25(note_fts)
+        LIMIT ?
+      `,
+        [q, lim]
+      );
+      return rows.map((r) => ({
+        kind: 'notes',
+        docId: String(r.doc_id ?? ''),
+        title: String(r.title ?? ''),
+        updatedAt: String(r.updated_at ?? ''),
+        snippet: String(r.snippet ?? ''),
+      }));
+    };
+
+    const queryStories = async () => {
+      const rows = await all(
+        this.db,
+        `
+        SELECT
+          s.doc_id AS doc_id,
+          s.title AS title,
+          s.updated_at AS updated_at,
+          snippet(story_fts, 2, '${SNIP_START}', '${SNIP_END}', '${SNIP_ELLIPSIS}', ${SNIP_TOKENS}) AS snippet
+        FROM story_fts
+        JOIN StoryDoc s ON s.doc_id = story_fts.doc_id
+        WHERE story_fts MATCH ?
+        ORDER BY bm25(story_fts)
+        LIMIT ?
+      `,
+        [q, lim]
+      );
+      return rows.map((r) => ({
+        kind: 'stories',
+        docId: String(r.doc_id ?? ''),
+        title: String(r.title ?? ''),
+        updatedAt: String(r.updated_at ?? ''),
+        snippet: String(r.snippet ?? ''),
+      }));
+    };
+
+    const queryMoodboards = async () => {
+      const rows = await all(
+        this.db,
+        `
+        SELECT
+          m.doc_id AS doc_id,
+          m.title AS title,
+          m.updated_at AS updated_at,
+          moodboard_fts.layer_id AS layer_id,
+          snippet(moodboard_fts, 2, '${SNIP_START}', '${SNIP_END}', '${SNIP_ELLIPSIS}', ${SNIP_TOKENS}) AS snippet
+        FROM moodboard_fts
+        JOIN MoodboardDoc m ON m.doc_id = moodboard_fts.doc_id
+        WHERE moodboard_fts MATCH ?
+        ORDER BY bm25(moodboard_fts)
+        LIMIT ?
+      `,
+        [q, lim]
+      );
+      return rows.map((r) => ({
+        kind: 'moodboard',
+        docId: String(r.doc_id ?? ''),
+        title: String(r.title ?? ''),
+        updatedAt: String(r.updated_at ?? ''),
+        layerId: String(r.layer_id ?? ''),
+        snippet: String(r.snippet ?? ''),
+      }));
+    };
+
+    const queryImages = async () => {
+      const whereScope = scopeChar ? 'AND image_fts.character_id = ?' : '';
+      const params = scopeChar ? [q, scopeChar, lim] : [q, lim];
+      const rows = await all(
+        this.db,
+        `
+        SELECT
+          image_fts.image_id AS image_id,
+          image_fts.character_id AS character_id,
+          c.display_name AS display_name,
+          snippet(image_fts, 2, '${SNIP_START}', '${SNIP_END}', '${SNIP_ELLIPSIS}', ${SNIP_TOKENS}) AS snippet
+        FROM image_fts
+        JOIN Character c ON c.character_id = image_fts.character_id
+        WHERE image_fts MATCH ?
+        ${whereScope}
+        ORDER BY bm25(image_fts)
+        LIMIT ?
+      `,
+        params
+      );
+      return rows.map((r) => ({
+        kind: 'image',
+        imageId: String(r.image_id ?? ''),
+        characterId: String(r.character_id ?? ''),
+        characterName: String(r.display_name ?? ''),
+        snippet: String(r.snippet ?? ''),
+      }));
+    };
+
+    const [characters, notes, stories, moodboards, images] = await Promise.all([
+      queryCharacters(),
+      scopeChar ? Promise.resolve([]) : queryNotes(),
+      scopeChar ? Promise.resolve([]) : queryStories(),
+      scopeChar ? Promise.resolve([]) : queryMoodboards(),
+      queryImages(),
+    ]);
+
+    const needle = this._extractNeedleFromFtsQuery(q);
+    return {
+      ok: true,
+      query: q,
+      needle,
+      scope: wantScope,
+      scopeCharacterId: scopeChar,
+      results: { characters, notes, stories, moodboards, images },
+    };
   }
 
   async _allocateNextPublicCharacterId() {
@@ -1837,6 +2241,27 @@ class CKCLibrary {
         message: String(err?.message || err || 'Unknown error'),
       });
     }
+
+    // Best-effort: keep FTS tables in sync for doc types that need enrichment beyond triggers.
+    try {
+      if (type === 'moodboard') {
+        await this._refreshMoodboardFtsForDoc({ docId: id, title: cleanedTitle, boardJson: String(content ?? '') });
+      } else if (type === 'stories') {
+        await this._refreshStoryFtsForDoc({
+          docId: id,
+          title: cleanedTitle,
+          bodyText: String(content ?? ''),
+          tagsJson: JSON.stringify(cleanedTags),
+        });
+      }
+    } catch (err) {
+      await this._audit('fts.refreshFailed', null, {
+        docType: type,
+        docId: id,
+        message: String(err?.message || err || 'Unknown error'),
+      });
+    }
+
     return { ok: true, docId: id, docType: type };
   }
 
@@ -1850,6 +2275,14 @@ class CKCLibrary {
       await run(this.db, `DELETE FROM LinkIndex WHERE target_type = ? AND target_id = ?`, [docTargetType(type), docId]);
     } catch {
       // Best-effort cleanup; user text remains untouched.
+    }
+
+    if (type === 'moodboard') {
+      try {
+        await run(this.db, `DELETE FROM moodboard_fts WHERE doc_id = ?`, [docId]);
+      } catch {
+        // ignore
+      }
     }
     return { ok: true };
   }
@@ -1930,6 +2363,23 @@ class CKCLibrary {
       await this._audit('linkIndex.reindexFailed', null, {
         sourceType: 'stories',
         sourceId: id,
+        message: String(err?.message || err || 'Unknown error'),
+      });
+    }
+
+    // Best-effort: ensure story FTS includes board card text.
+    try {
+      const storyRow = await get(this.db, `SELECT title, body_text, tags_json FROM StoryDoc WHERE doc_id = ?`, [id]);
+      await this._refreshStoryFtsForDoc({
+        docId: id,
+        title: storyRow?.title ?? '',
+        bodyText: storyRow?.body_text ?? '',
+        tagsJson: storyRow?.tags_json ?? '',
+      });
+    } catch (err) {
+      await this._audit('fts.refreshFailed', null, {
+        docType: 'stories',
+        docId: id,
         message: String(err?.message || err || 'Unknown error'),
       });
     }

@@ -36,6 +36,57 @@ type CKCInboxImage = {
   addedAt: string;
 };
 
+type CKCGlobalSearchScope = 'library' | 'character';
+
+type CKCGlobalSearchCharacterHit = {
+  kind: 'character';
+  characterId: string;
+  publicId: string | null;
+  displayName: string;
+  fieldId: string;
+  snippet: string;
+};
+
+type CKCGlobalSearchDocHit = {
+  kind: 'notes' | 'stories';
+  docId: string;
+  title: string;
+  updatedAt: string;
+  snippet: string;
+};
+
+type CKCGlobalSearchMoodboardHit = {
+  kind: 'moodboard';
+  docId: string;
+  title: string;
+  updatedAt: string;
+  layerId: string;
+  snippet: string;
+};
+
+type CKCGlobalSearchImageHit = {
+  kind: 'image';
+  imageId: string;
+  characterId: string;
+  characterName: string;
+  snippet: string;
+};
+
+type CKCGlobalSearchResult = {
+  ok: true;
+  query: string;
+  needle: string;
+  scope: CKCGlobalSearchScope;
+  scopeCharacterId: string | null;
+  results: {
+    characters: CKCGlobalSearchCharacterHit[];
+    notes: CKCGlobalSearchDocHit[];
+    stories: CKCGlobalSearchDocHit[];
+    moodboards: CKCGlobalSearchMoodboardHit[];
+    images: CKCGlobalSearchImageHit[];
+  };
+};
+
 type CKCLinkCandidate = {
   targetType: string;
   targetId: string;
@@ -577,6 +628,7 @@ interface Window {
     getCharacter: (characterId: string) => Promise<CKCCharacter | null>;
     listGlobalCarouselImages: (params?: unknown) => Promise<CKCGlobalImage[]>;
     listInboxImages: () => Promise<CKCInboxImage[]>;
+    globalSearch: (params: { queryText: string; scope?: CKCGlobalSearchScope; characterId?: string | null; limitPerType?: number }) => Promise<CKCGlobalSearchResult>;
     listDocs: (params?: unknown) => Promise<CKCDocListItem[]>;
     getDoc: (params?: unknown) => Promise<CKCDocDetail | null>;
     upsertDoc: (params?: unknown) => Promise<{ ok: true; docId: string; docType: CKCDocType }>;

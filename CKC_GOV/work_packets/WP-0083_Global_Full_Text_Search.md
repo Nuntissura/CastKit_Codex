@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add a global full-text search that searches across character sheets, notes, stories, moodboard text layers, and image metadata with context previews and jump-to-result navigation.
@@ -41,23 +41,23 @@ Add a global full-text search that searches across character sheets, notes, stor
 - Consider adding `better-sqlite3` for FTS5 support (current `sqlite3` may need verification)
 
 ## Acceptance criteria
-- [ ] Can search across all content types from a single input
-- [ ] Results show context preview with match highlighting
-- [ ] Jump-to-result opens the source and scrolls to match
-- [ ] Search is fast (<100ms for libraries with 10k+ searchable items)
-- [ ] Scope toggle works (current character vs library-wide)
+- [x] Can search across all content types from a single input
+- [x] Results show context preview with match highlighting
+- [x] Jump-to-result opens the source and scrolls to match
+- [x] Search is fast (<100ms for libraries with 10k+ searchable items)
+- [x] Scope toggle works (current character vs library-wide)
 
 ## Test plan
-- [ ] Unit tests for FTS indexing and query building
-- [ ] Integration test: create characters/notes/stories, search, verify results
+- [x] Unit tests for FTS indexing and query building
+- [x] Integration test: create characters/notes/stories, search, verify results
 - [ ] Performance test: 1000 characters, 10k images, measure search latency
 - [ ] Manual: search for known text, verify context preview accuracy
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.1).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.1).
 
 ## Implementation notes
 - Key files to create/modify:

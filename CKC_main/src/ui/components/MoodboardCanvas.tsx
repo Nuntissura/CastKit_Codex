@@ -1320,12 +1320,14 @@ export function MoodboardCanvas({
   onRequestAddImage,
   canvasRefOverride,
   onSelectionChange,
+  requestedSelection,
 }: {
   value: MoodboardState;
   onChange: (next: MoodboardState) => void;
   onRequestAddImage?: () => void;
   canvasRefOverride?: React.RefObject<HTMLCanvasElement | null>;
   onSelectionChange?: (selection: MoodboardSelectionItem[]) => void;
+  requestedSelection?: MoodboardSelectionItem[] | null;
 }) {
   const internalCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const canvasRef = canvasRefOverride ?? internalCanvasRef;
@@ -1465,6 +1467,16 @@ export function MoodboardCanvas({
     if (!onSelectionChange) return;
     onSelectionChange(Array.isArray(selection) ? selection : []);
   }, [onSelectionChange, selection]);
+
+  React.useEffect(() => {
+    const req = Array.isArray(requestedSelection) ? requestedSelection : [];
+    const normalized = req
+      .map((s) => ({ kind: s?.kind, id: String(s?.id ?? '').trim() }))
+      .filter((s) => !!s.id && (s.kind === 'image' || s.kind === 'text' || s.kind === 'shape' || s.kind === 'connector')) as Selection;
+    if (normalized.length === 0) return;
+    selectionRef.current = normalized;
+    setSelection(normalized);
+  }, [requestedSelection]);
 
   const pushHistory = React.useCallback((prev: MoodboardState) => {
     historyPastRef.current.push(prev);

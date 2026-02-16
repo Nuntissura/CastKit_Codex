@@ -98,7 +98,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0080 | Moodboard: layer folders + search/tags | DONE | Codex | Nested folders + board-local tags + search (`npm test`, `npx tsc --noEmit`). |
 | WP-0081 | Moodboard: styling (opacity/blend/shadow) | DONE | Codex | Per-layer styling (non-destructive). |
 | WP-0082 | Moodboard: export powerhouse | DONE | Codex | Hi-res + selection export + PDF. |
-| WP-0083 | Global full-text search | IN_PROGRESS | Codex | Search across character sheets, notes, stories, moodboards, image metadata with context previews. |
+| WP-0083 | Global full-text search | DONE | Codex | Ctrl+Shift+F global search across sheets/docs/moodboards/images with snippets + jump-to (`npm test`, `npx tsc --noEmit`). |
 | WP-0084 | AI-assisted image tagging | BACKLOG | TBD | Auto-tag images on import using CLIP/BLIP; bulk tag existing images; local + cloud options. |
 | WP-0085 | Character templates & cloning | BACKLOG | TBD | Save/load character templates; clone characters; built-in template library; batch character creation. |
 | WP-0086 | macOS build support | BACKLOG | TBD | electron-builder macOS config; DMG + .app bundle; GitHub Actions workflow; portable defaults. |
@@ -108,6 +108,6 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus
-- Current: WP-0083.
-- Next: WP-0084.
-- High-ROI backlog: WP-0083 (global search), WP-0084 (AI tagging), WP-0085 (templates), WP-0086 (macOS), WP-0087 (web export).
+- Current: WP-0084.
+- Next: WP-0085.
+- High-ROI backlog: WP-0084 (AI tagging), WP-0085 (templates), WP-0086 (macOS), WP-0087 (web export), WP-0088 (performance).

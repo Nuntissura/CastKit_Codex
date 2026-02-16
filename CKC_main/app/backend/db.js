@@ -291,6 +291,139 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_relation_target ON CharacterRelation(target_character_id);
   `
   );
+
+  // Lightweight app meta store for one-off migration markers (FTS index built, etc).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS CkcMeta (
+      meta_key TEXT PRIMARY KEY,
+      meta_value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `
+  );
+
+  // Global full-text search (SQLite FTS5). This must be best-effort: some sqlite builds may lack FTS5.
+  // When unavailable, the app should still run without global search.
+  try {
+    await exec(
+      db,
+      `
+      CREATE VIRTUAL TABLE IF NOT EXISTS character_fts USING fts5(
+        character_id UNINDEXED,
+        field_id UNINDEXED,
+        content,
+        tokenize='porter unicode61'
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(
+        doc_id UNINDEXED,
+        title,
+        content,
+        tokenize='porter unicode61'
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS story_fts USING fts5(
+        doc_id UNINDEXED,
+        title,
+        content,
+        tokenize='porter unicode61'
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS moodboard_fts USING fts5(
+        doc_id UNINDEXED,
+        layer_id UNINDEXED,
+        content,
+        tokenize='porter unicode61'
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS image_fts USING fts5(
+        image_id UNINDEXED,
+        character_id UNINDEXED,
+        content,
+        tokenize='porter unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_field_insert AFTER INSERT ON FieldValue BEGIN
+        INSERT INTO character_fts(character_id, field_id, content)
+        VALUES (new.character_id, new.field_id, COALESCE(new.value_text, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_field_delete AFTER DELETE ON FieldValue BEGIN
+        DELETE FROM character_fts WHERE character_id = old.character_id AND field_id = old.field_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_field_update AFTER UPDATE ON FieldValue BEGIN
+        DELETE FROM character_fts WHERE character_id = old.character_id AND field_id = old.field_id;
+        INSERT INTO character_fts(character_id, field_id, content)
+        VALUES (new.character_id, new.field_id, COALESCE(new.value_text, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_character_insert AFTER INSERT ON Character BEGIN
+        INSERT INTO character_fts(character_id, field_id, content)
+        VALUES (new.character_id, '__NAME__', TRIM(COALESCE(new.display_name, '') || ' ' || COALESCE(new.public_id, '')));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_character_delete AFTER DELETE ON Character BEGIN
+        DELETE FROM character_fts WHERE character_id = old.character_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS character_fts_character_update AFTER UPDATE ON Character BEGIN
+        DELETE FROM character_fts WHERE character_id = old.character_id AND field_id = '__NAME__';
+        INSERT INTO character_fts(character_id, field_id, content)
+        VALUES (new.character_id, '__NAME__', TRIM(COALESCE(new.display_name, '') || ' ' || COALESCE(new.public_id, '')));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS note_fts_insert AFTER INSERT ON NoteDoc BEGIN
+        INSERT INTO note_fts(doc_id, title, content)
+        VALUES (new.doc_id, COALESCE(new.title, ''), COALESCE(new.body_text, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS note_fts_delete AFTER DELETE ON NoteDoc BEGIN
+        DELETE FROM note_fts WHERE doc_id = old.doc_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS note_fts_update AFTER UPDATE ON NoteDoc BEGIN
+        DELETE FROM note_fts WHERE doc_id = old.doc_id;
+        INSERT INTO note_fts(doc_id, title, content)
+        VALUES (new.doc_id, COALESCE(new.title, ''), COALESCE(new.body_text, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS story_fts_insert AFTER INSERT ON StoryDoc BEGIN
+        INSERT INTO story_fts(doc_id, title, content)
+        VALUES (new.doc_id, COALESCE(new.title, ''), COALESCE(new.body_text, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS story_fts_delete AFTER DELETE ON StoryDoc BEGIN
+        DELETE FROM story_fts WHERE doc_id = old.doc_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS story_fts_update AFTER UPDATE ON StoryDoc BEGIN
+        DELETE FROM story_fts WHERE doc_id = old.doc_id;
+        INSERT INTO story_fts(doc_id, title, content)
+        VALUES (new.doc_id, COALESCE(new.title, ''), COALESCE(new.body_text, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS image_fts_insert AFTER INSERT ON ImageAsset BEGIN
+        INSERT INTO image_fts(image_id, character_id, content)
+        VALUES (new.image_id, new.character_id, COALESCE(new.notes, '') || ' ' || COALESCE(new.source_note, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS image_fts_delete AFTER DELETE ON ImageAsset BEGIN
+        DELETE FROM image_fts WHERE image_id = old.image_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS image_fts_update AFTER UPDATE ON ImageAsset BEGIN
+        DELETE FROM image_fts WHERE image_id = old.image_id;
+        INSERT INTO image_fts(image_id, character_id, content)
+        VALUES (new.image_id, new.character_id, COALESCE(new.notes, '') || ' ' || COALESCE(new.source_note, '') || ' ' || COALESCE(new.tags_json, ''));
+      END;
+    `
+    );
+  } catch {
+    // FTS5 not available (or other creation error). Keep the app running; search will be disabled.
+  }
 }
 
 async function initSchema(db) {

@@ -7,6 +7,7 @@ export type CommandPaletteRun =
   | { kind: 'filterTag'; tag: string }
   | { kind: 'openExports' }
   | { kind: 'openLibrary' }
+  | { kind: 'openGlobalSearch' }
   | { kind: 'toggleMenu' };
 
 type PaletteItem = {
@@ -134,6 +135,14 @@ export function CommandPalette({
         hint: 'Go to Library view',
         searchText: 'open library home',
         run: { kind: 'openLibrary' },
+      },
+      {
+        id: 'action:global-search',
+        group: 'Action',
+        label: 'Global Search',
+        hint: 'Search content (Ctrl+Shift+F)',
+        searchText: 'global search full text find',
+        run: { kind: 'openGlobalSearch' },
       },
       {
         id: 'action:open-exports',
@@ -307,4 +316,3 @@ export function CommandPalette({
     </div>
   );
 }
-

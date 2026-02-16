@@ -30,10 +30,14 @@ export function SheetEditor({
   templateSections,
   valuesById,
   onChange,
+  focusFieldId,
+  onFocusFieldHandled,
 }: {
   templateSections: Section[];
   valuesById: Record<string, string>;
   onChange: (fieldId: string, value: string) => void;
+  focusFieldId?: string | null;
+  onFocusFieldHandled?: () => void;
 }) {
   const [suggestionsByFieldId, setSuggestionsByFieldId] = React.useState<Record<string, string[]>>({});
   const loadedSuggestionsRef = React.useRef<Set<string>>(new Set());
@@ -79,6 +83,38 @@ export function SheetEditor({
     });
   }, [templateSections]);
 
+  React.useEffect(() => {
+    const fid = String(focusFieldId ?? '').trim();
+    if (!fid) return;
+
+    const sectionTitle = templateSections.find((s) => s.fields.some((f) => f.id === fid))?.title ?? null;
+    if (sectionTitle) {
+      setCollapsed((prev) => ({ ...prev, [sectionTitle]: false }));
+    }
+
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`ckc-field-${fid}`);
+      if (!el) return;
+      try {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch {
+        // ignore
+      }
+      const input = el.querySelector('input, textarea') as HTMLInputElement | HTMLTextAreaElement | null;
+      if (input) {
+        input.focus();
+        try {
+          input.select();
+        } catch {
+          // ignore
+        }
+      }
+      onFocusFieldHandled?.();
+    }, 0);
+
+    return () => window.clearTimeout(t);
+  }, [focusFieldId, onFocusFieldHandled, templateSections]);
+
   return (
     <div className={styles.root}>
       {templateSections.map((section) => {
@@ -121,7 +157,7 @@ export function SheetEditor({
                   })();
 
                   return (
-                    <div key={field.id} className={styles.field}>
+                    <div key={field.id} id={`ckc-field-${field.id}`} className={styles.field}>
                       <div className={styles.fieldHeader}>
                         <div className={styles.fieldLabel}>
                           <span className={styles.labelText}>{field.label}</span>

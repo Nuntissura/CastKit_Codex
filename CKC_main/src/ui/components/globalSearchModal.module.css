@@ -1,0 +1,162 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 55;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 90px 20px;
+}
+
+.panel {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 180px);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-wrap: wrap;
+}
+
+.input {
+  flex: 1 1 340px;
+  min-width: 260px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+}
+
+.scope {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.scopeBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.scopeBtn[data-active='1'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.scopeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.closeBtn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  background: var(--bg-accent);
+}
+
+.error {
+  margin: 10px;
+  border: 1px solid rgba(255, 0, 0, 0.35);
+  background: rgba(255, 0, 0, 0.06);
+  padding: 8px 10px;
+}
+
+.list {
+  padding: 10px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.muted {
+  color: var(--text-secondary);
+  padding: 12px 10px;
+}
+
+.groupHeader {
+  font-weight: 900;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 2px;
+}
+
+.groupBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hit {
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hit:hover {
+  background: var(--bg-accent);
+}
+
+.hitTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.hitLabel {
+  font-weight: 900;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hitHint {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.snippet {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.25;
+  max-height: 2.5em;
+  overflow: hidden;
+}
+
+.snippetHit {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 1px;
+}
+

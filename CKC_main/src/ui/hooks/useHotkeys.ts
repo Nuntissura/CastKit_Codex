@@ -12,10 +12,12 @@ function isEditableActiveElement(): boolean {
 export function useHotkeys({
   onToggleMenu,
   onToggleCommandPalette,
+  onToggleGlobalSearch,
   onCloseOverlays,
 }: {
   onToggleMenu: () => void;
   onToggleCommandPalette?: () => void;
+  onToggleGlobalSearch?: () => void;
   onCloseOverlays: () => void;
 }) {
   React.useEffect(() => {
@@ -37,9 +39,15 @@ export function useHotkeys({
         evt.preventDefault();
         onToggleMenu();
       }
+
+      if (evt.ctrlKey && evt.shiftKey && (evt.key === 'f' || evt.key === 'F')) {
+        if (isEditableActiveElement()) return;
+        evt.preventDefault();
+        onToggleGlobalSearch?.();
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onToggleMenu, onToggleCommandPalette, onCloseOverlays]);
+  }, [onToggleMenu, onToggleCommandPalette, onToggleGlobalSearch, onCloseOverlays]);
 }

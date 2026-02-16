@@ -1145,6 +1145,11 @@ function registerIpcHandlers() {
         return lib.listInboxImages();
     });
 
+    ipcMain.handle('ckc:globalSearch', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.globalSearch(params || {});
+    });
+
     ipcMain.handle('ckc:listDocs', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.listDocs(params || {});

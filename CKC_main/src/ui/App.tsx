@@ -1,6 +1,7 @@
 import React from 'react';
 import { Drawer } from './components/Drawer';
 import { CommandPalette, type CommandPaletteRun } from './components/CommandPalette';
+import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { LibraryView } from './views/LibraryView';
 import { CharacterView } from './views/CharacterView';
 import { ReferenceWindowView } from './views/ReferenceWindowView';
@@ -35,7 +36,14 @@ function MainApp() {
   const [selectedImageId, setSelectedImageId] = React.useState<string | null>(null);
   const [drawerMode, setDrawerMode] = React.useState<DrawerMode>('none');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState<boolean>(false);
-  const [pendingOpenDoc, setPendingOpenDoc] = React.useState<{ docType: CKCDocType; docId: string } | null>(null);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = React.useState<boolean>(false);
+  const [pendingOpenDoc, setPendingOpenDoc] = React.useState<{
+    docType: CKCDocType;
+    docId: string;
+    focusNeedle?: string | null;
+    moodboardLayerId?: string | null;
+  } | null>(null);
+  const [pendingFocusField, setPendingFocusField] = React.useState<{ characterId: string; fieldId: string | null } | null>(null);
   const [pendingLibraryTagFilter, setPendingLibraryTagFilter] = React.useState<string | null>(null);
   const [exportsContext, setExportsContext] = React.useState<{ characterId: string | null; moodboardDocId: string | null }>({
     characterId: null,
@@ -46,11 +54,18 @@ function MainApp() {
     onToggleMenu: () => setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu')),
     onToggleCommandPalette: () => {
       setDrawerMode('none');
+      setIsGlobalSearchOpen(false);
       setIsCommandPaletteOpen((v) => !v);
+    },
+    onToggleGlobalSearch: () => {
+      setDrawerMode('none');
+      setIsCommandPaletteOpen(false);
+      setIsGlobalSearchOpen((v) => !v);
     },
     onCloseOverlays: () => {
       setDrawerMode('none');
       setIsCommandPaletteOpen(false);
+      setIsGlobalSearchOpen(false);
     },
   });
 
@@ -112,6 +127,11 @@ function MainApp() {
         return;
       }
 
+      if (cmd.kind === 'openGlobalSearch') {
+        setIsGlobalSearchOpen(true);
+        return;
+      }
+
       if (cmd.kind === 'filterTag') {
         setPendingLibraryTagFilter(cmd.tag);
         setPage('library');
@@ -126,7 +146,7 @@ function MainApp() {
       }
 
       if (cmd.kind === 'openDoc') {
-        const request = { docType: cmd.docType, docId: cmd.docId };
+        const request = { docType: cmd.docType, docId: cmd.docId, focusNeedle: null, moodboardLayerId: null };
         const openWithCharacter = (characterId: string) => {
           setSelectedCharacterId(characterId);
           setSelectedImageId(null);
@@ -155,6 +175,36 @@ function MainApp() {
       }
     },
     [page, selectedCharacterId]
+  );
+
+  const openDocInCharacter = React.useCallback(
+    (request: { docType: CKCDocType; docId: string; focusNeedle?: string | null; moodboardLayerId?: string | null }) => {
+      const openWithCharacter = (characterId: string) => {
+        setSelectedCharacterId(characterId);
+        setSelectedImageId(null);
+        setPendingOpenDoc(request);
+        setPage('character');
+      };
+
+      if (selectedCharacterId) {
+        openWithCharacter(selectedCharacterId);
+        return;
+      }
+
+      window.ckc
+        .listCharacters({ queryText: '', tagFilters: [] })
+        .then((chars) => {
+          const first = Array.isArray(chars) ? chars[0]?.id : null;
+          const id = String(first || '').trim();
+          if (!id) {
+            window.alert('No characters yet. Create a character first.');
+            return;
+          }
+          openWithCharacter(id);
+        })
+        .catch((err: unknown) => window.alert(err instanceof Error ? err.message : String(err)));
+    },
+    [selectedCharacterId]
   );
 
   return (
@@ -194,6 +244,7 @@ function MainApp() {
             onOpenCharacter={(characterId, selectImageId) => {
               setSelectedCharacterId(characterId);
               setSelectedImageId(selectImageId ? String(selectImageId) : null);
+              setPendingFocusField(null);
               setPage('character');
             }}
             onOpenExports={() => {
@@ -209,12 +260,15 @@ function MainApp() {
             onNavigateCharacter={(nextId) => {
               setSelectedCharacterId(nextId);
               setSelectedImageId(null);
+              setPendingFocusField(null);
               setPage('character');
             }}
             selectImageId={selectedImageId}
             onSelectImageHandled={() => setSelectedImageId(null)}
             openDocRequest={pendingOpenDoc}
             onOpenDocRequestHandled={() => setPendingOpenDoc(null)}
+            focusFieldId={pendingFocusField?.characterId === selectedCharacterId ? pendingFocusField.fieldId : null}
+            onFocusFieldHandled={() => setPendingFocusField(null)}
             onOpenLibraryDrawer={() => setDrawerMode('library')}
             isLibraryDrawerOpen={drawerMode === 'library'}
             onCloseLibraryDrawer={() => setDrawerMode('none')}
@@ -237,6 +291,40 @@ function MainApp() {
       </div>
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} onRun={runCommandPalette} />
+
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        currentCharacterId={page === 'character' ? selectedCharacterId : null}
+        onJump={(target) => {
+          if (target.kind === 'characterField') {
+            setSelectedCharacterId(target.characterId);
+            setSelectedImageId(null);
+            setPendingOpenDoc(null);
+            setPendingFocusField({ characterId: target.characterId, fieldId: target.fieldId });
+            setPage('character');
+            return;
+          }
+
+          if (target.kind === 'image') {
+            setSelectedCharacterId(target.characterId);
+            setSelectedImageId(target.imageId);
+            setPendingOpenDoc(null);
+            setPendingFocusField(null);
+            setPage('character');
+            return;
+          }
+
+          if (target.kind === 'doc') {
+            openDocInCharacter({ docType: target.docType, docId: target.docId, focusNeedle: target.needle });
+            return;
+          }
+
+          if (target.kind === 'moodboardText') {
+            openDocInCharacter({ docType: 'moodboard', docId: target.docId, focusNeedle: target.needle, moodboardLayerId: target.layerId });
+          }
+        }}
+      />
     </div>
   );
 }
