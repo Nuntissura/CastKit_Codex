@@ -1,8 +1,8 @@
 # Work Packet: WP-0086 — macOS build support
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add macOS build targets to electron-builder configuration and create packaging/release workflows for macOS (DMG + .app bundle).
@@ -11,7 +11,7 @@ Add macOS build targets to electron-builder configuration and create packaging/r
 - Target demographic (creative writers, game designers, worldbuilders) skews heavily macOS.
 - Electron is already cross-platform; adding macOS builds is low-effort, high-impact.
 - 2-3x potential user base expansion.
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.4 "Cross-Platform Support".
+- Spec: `CastKit_Codex_Spec_v00.054.md` §12.4 "Cross-Platform Support".
 
 ## Scope
 ### In
@@ -58,7 +58,7 @@ Add macOS build targets to electron-builder configuration and create packaging/r
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.4).
+- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.054.md` §12.4).
 
 ## Implementation notes
 - Key files to create/modify:
