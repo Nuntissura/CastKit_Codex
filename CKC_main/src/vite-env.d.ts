@@ -643,6 +643,14 @@ interface Window {
       pngBase64: string;
       outDir?: string | null;
     }) => Promise<{ ok: true; path: string }>;
+    exportMoodboardPdf: (params: {
+      docId?: string | null;
+      title?: string;
+      pngBase64: string;
+      outDir?: string | null;
+      widthPx?: number;
+      heightPx?: number;
+    }) => Promise<{ ok: true; path: string }>;
     exportFieldPack: (params?: unknown) => Promise<{ path: string; lineCount: number; spinoffId: string | null; name: string }>;
     openPath: (filePath: string) => Promise<{ ok: true }>;
     copyText: (text: string) => void;

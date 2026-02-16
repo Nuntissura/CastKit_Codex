@@ -92,6 +92,26 @@ function escapeHtml(text) {
         .replaceAll("'", '&#39;');
 }
 
+async function renderPdfFromHtml(html, printOpts = {}) {
+    const win = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
+
+    try {
+        await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+        const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4', ...printOpts });
+        return pdf;
+    } finally {
+        win.close();
+    }
+}
+
 async function writePdfFromText(text, outPath) {
     const html = `<!doctype html>
 <html>
@@ -107,23 +127,38 @@ async function writePdfFromText(text, outPath) {
   </body>
 </html>`;
 
-    const win = new BrowserWindow({
-        show: false,
-        width: 800,
-        height: 600,
-        webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-        },
-    });
 
-    try {
-        await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-        const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
-        fs.writeFileSync(outPath, pdf);
-    } finally {
-        win.close();
-    }
+    const pdf = await renderPdfFromHtml(html, { pageSize: 'A4' });
+    fs.writeFileSync(outPath, pdf);
+}
+
+async function renderPdfFromPngBase64(pngBase64, { widthPx = 0, heightPx = 0 } = {}) {
+    const base64 = String(pngBase64 ?? '').trim();
+    if (!base64) throw new Error('pngBase64 is required');
+    const prefix = 'data:image/png;base64,';
+    const src = base64.startsWith(prefix) ? base64 : `${prefix}${base64}`;
+
+    const w = Number(widthPx) || 0;
+    const h = Number(heightPx) || 0;
+    const landscape = w > 0 && h > 0 ? w > h : false;
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page { margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { display: flex; align-items: center; justify-content: center; background: white; }
+      img { width: 100vw; height: 100vh; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <img src="${src}" alt="moodboard" />
+  </body>
+</html>`;
+
+    return renderPdfFromHtml(html, { pageSize: 'A4', landscape });
 }
 
 let mainWindow = null;
@@ -1424,6 +1459,18 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:exportMoodboardPng', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.exportMoodboardPng(params || {});
+    });
+
+    ipcMain.handle('ckc:exportMoodboardPdf', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params && typeof params === 'object' ? params : {};
+        const pdf = await renderPdfFromPngBase64(p.pngBase64, { widthPx: p.widthPx, heightPx: p.heightPx });
+        return lib.exportMoodboardPdf({
+            docId: p.docId ?? null,
+            title: p.title ?? 'Moodboard',
+            pdfBytes: pdf,
+            outDir: p.outDir ?? null,
+        });
     });
 
     ipcMain.handle('ckc:listVersions', async (_evt, characterId) => {

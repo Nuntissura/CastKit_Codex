@@ -180,9 +180,10 @@ export type MoodboardState = {
 };
 
 type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
-type MoodboardItemKind = 'image' | 'text' | 'shape' | 'connector';
-type SelectedItem = { kind: MoodboardItemKind; id: string };
-type Selection = SelectedItem[];
+export type MoodboardItemKind = 'image' | 'text' | 'shape' | 'connector';
+export type MoodboardSelectionItem = { kind: MoodboardItemKind; id: string };
+type SelectedItem = MoodboardSelectionItem;
+type Selection = MoodboardSelectionItem[];
 
 type ClipboardItem =
   | { kind: 'shape'; item: MoodboardShape; z: number }
@@ -578,16 +579,753 @@ function normalizeMoodboardState(value: MoodboardState): MoodboardState {
   return next;
 }
 
+export type MoodboardExportRenderParams = {
+  baseWidth: number; // CSS px at scale=1
+  baseHeight: number; // CSS px at scale=1
+  scale?: number; // 1..
+  selection?: MoodboardSelectionItem[];
+  selectionOnly?: boolean;
+  paddingPx?: number; // applied for selection-only crop
+};
+
+export type MoodboardExportRenderResult = {
+  pngDataUrl: string;
+  width: number; // output pixels
+  height: number; // output pixels
+};
+
+export async function renderMoodboardExportPng(state: MoodboardState, params: MoodboardExportRenderParams): Promise<MoodboardExportRenderResult> {
+  const current = normalizeMoodboardState(state);
+  const baseWidth = Math.max(1, Math.floor(Number(params.baseWidth) || 0));
+  const baseHeight = Math.max(1, Math.floor(Number(params.baseHeight) || 0));
+  const scale = Math.max(0.1, Math.min(8, Number(params.scale) || 1));
+  const selectionOnly = !!params.selectionOnly;
+  const paddingPx = Math.max(0, Number(params.paddingPx) || 0);
+
+  const shapes = Array.isArray(current.shapes) ? current.shapes : [];
+  const connectors = Array.isArray(current.connectors) ? current.connectors : [];
+  const images = Array.isArray(current.images) ? current.images : [];
+  const texts = Array.isArray(current.texts) ? current.texts : [];
+  const strokes = Array.isArray(current.strokes) ? current.strokes : [];
+
+  const folderFlags = computeEffectiveFolderFlags(Array.isArray(current.folders) ? current.folders : []);
+  const isHidden = (item: any): boolean => isItemEffectivelyHidden(item, folderFlags);
+
+  const shapeById = new Map(shapes.map((s) => [s.id, s]));
+  const maskShapeIds = new Set<string>();
+  for (const img of images) {
+    const sid = (img as any)?.mask?.shapeId;
+    if (typeof sid === 'string' && sid.trim()) maskShapeIds.add(sid.trim());
+  }
+
+  const selection = Array.isArray(params.selection) ? params.selection : [];
+  const selectedKeySet = new Set<string>(selection.map((s) => `${s.kind}:${s.id}`));
+  if (selectionOnly && selectedKeySet.size === 0) throw new Error('Selection-only export requires a selection.');
+
+  const shouldDrawItem = (kind: MoodboardItemKind, id: string): boolean => {
+    if (!selectionOnly) return true;
+    return selectedKeySet.has(`${kind}:${id}`);
+  };
+
+  const imageCache = new Map<string, HTMLImageElement>();
+  const imageIdsToLoad = Array.from(
+    new Set(
+      images
+        .filter((img) => img && img.imageId && !isHidden(img) && shouldDrawItem('image', img.id))
+        .map((img) => String(img.imageId))
+        .filter(Boolean)
+    )
+  );
+
+  const loadImage = async (imageId: string): Promise<void> => {
+    if (imageCache.has(imageId)) return;
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    const src = `ckc://image/${encodeURIComponent(imageId)}`;
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      const timer = window.setTimeout(() => finish(), 15_000);
+      el.onload = () => {
+        window.clearTimeout(timer);
+        finish();
+      };
+      el.onerror = () => {
+        window.clearTimeout(timer);
+        finish();
+      };
+      el.src = src;
+    });
+    if (el.complete && el.naturalWidth && el.naturalHeight) imageCache.set(imageId, el);
+  };
+
+  await Promise.all(imageIdsToLoad.map((id) => loadImage(id)));
+
+  const boundsFromRotBox = (cx: number, cy: number, w: number, h: number, rotDeg: number) => {
+    const rot = normalizeAngleDeg(rotDeg);
+    const nw = fromLocalXY(-w / 2, -h / 2, cx, cy, rot);
+    const ne = fromLocalXY(w / 2, -h / 2, cx, cy, rot);
+    const se = fromLocalXY(w / 2, h / 2, cx, cy, rot);
+    const sw = fromLocalXY(-w / 2, h / 2, cx, cy, rot);
+    const xs = [nw.x, ne.x, se.x, sw.x];
+    const ys = [nw.y, ne.y, se.y, sw.y];
+    return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) };
+  };
+
+  let cropLeft = 0;
+  let cropTop = 0;
+  let cropRight = baseWidth;
+  let cropBottom = baseHeight;
+
+  if (selectionOnly) {
+    let bounds: null | { left: number; top: number; right: number; bottom: number } = null;
+
+    const expand = (b: { left: number; top: number; right: number; bottom: number }) => {
+      if (!bounds) {
+        bounds = { ...b };
+        return;
+      }
+      bounds.left = Math.min(bounds.left, b.left);
+      bounds.top = Math.min(bounds.top, b.top);
+      bounds.right = Math.max(bounds.right, b.right);
+      bounds.bottom = Math.max(bounds.bottom, b.bottom);
+    };
+
+    for (const sel of selection) {
+      if (!sel || !sel.id) continue;
+      if (sel.kind === 'shape') {
+        const s = shapes.find((x) => x && x.id === sel.id);
+        if (!s || isHidden(s)) continue;
+        const w = (Number(s.w) || 0) * baseWidth;
+        const h = (Number(s.h) || 0) * baseHeight;
+        if (w <= 0 || h <= 0) continue;
+        const cx = (Number(s.x) || 0) * baseWidth;
+        const cy = (Number(s.y) || 0) * baseHeight;
+        expand(boundsFromRotBox(cx, cy, w, h, Number(s.rot) || 0));
+      } else if (sel.kind === 'text') {
+        const t = texts.find((x) => x && x.id === sel.id);
+        if (!t || isHidden(t)) continue;
+        const w = (Number(t.w) || 0) * baseWidth;
+        const h = (Number(t.h) || 0) * baseHeight;
+        if (w <= 0 || h <= 0) continue;
+        const cx = (Number(t.x) || 0) * baseWidth;
+        const cy = (Number(t.y) || 0) * baseHeight;
+        expand(boundsFromRotBox(cx, cy, w, h, Number(t.rot) || 0));
+      } else if (sel.kind === 'connector') {
+        const c = connectors.find((x) => x && x.id === sel.id);
+        if (!c || isHidden(c)) continue;
+        const ax = (Number(c.ax) || 0) * baseWidth;
+        const ay = (Number(c.ay) || 0) * baseHeight;
+        const bx = (Number(c.bx) || 0) * baseWidth;
+        const by = (Number(c.by) || 0) * baseHeight;
+        const widthPx = Math.max(1, Number(c.width) || 3);
+        const pad = Math.max(10, widthPx * 4);
+        expand({
+          left: Math.min(ax, bx) - pad,
+          top: Math.min(ay, by) - pad,
+          right: Math.max(ax, bx) + pad,
+          bottom: Math.max(ay, by) + pad,
+        });
+      } else if (sel.kind === 'image') {
+        const img = images.find((x) => x && x.id === sel.id);
+        if (!img || isHidden(img)) continue;
+
+        const maskShapeId = (img as any)?.mask?.shapeId;
+        const maskShape =
+          typeof maskShapeId === 'string' && maskShapeId.trim()
+            ? (shapeById.get(maskShapeId.trim()) as MoodboardShape | undefined)
+            : undefined;
+
+        if (maskShape) {
+          const w = (Number(maskShape.w) || 0) * baseWidth;
+          const h = (Number(maskShape.h) || 0) * baseHeight;
+          if (w > 0 && h > 0) {
+            const cx = (Number(maskShape.x) || 0) * baseWidth;
+            const cy = (Number(maskShape.y) || 0) * baseHeight;
+            expand(boundsFromRotBox(cx, cy, w, h, Number(maskShape.rot) || 0));
+            continue;
+          }
+        }
+
+        const cx = (Number(img.x) || 0) * baseWidth;
+        const cy = (Number(img.y) || 0) * baseHeight;
+        const w = (Number(img.w) || 0) * baseWidth;
+        const h = (Number(img.h) || 0) * baseHeight;
+        if (w <= 0 || h <= 0) continue;
+
+        const el = img.imageId ? imageCache.get(img.imageId) : null;
+        if (el && el.naturalWidth && el.naturalHeight) {
+          const srcAspect = el.naturalWidth / el.naturalHeight;
+          const dstAspect = w / h;
+          let dw = w;
+          let dh = h;
+          if (srcAspect > dstAspect) dh = w / srcAspect;
+          else dw = h * srcAspect;
+          expand(boundsFromRotBox(cx, cy, dw, dh, Number(img.rot) || 0));
+        } else {
+          expand(boundsFromRotBox(cx, cy, w, h, Number(img.rot) || 0));
+        }
+      }
+    }
+
+    if (!bounds) throw new Error('Selection-only export could not compute a bounding box.');
+    const b = bounds as { left: number; top: number; right: number; bottom: number };
+    const pad = paddingPx;
+    cropLeft = Math.max(0, Math.floor(b.left - pad));
+    cropTop = Math.max(0, Math.floor(b.top - pad));
+    cropRight = Math.min(baseWidth, Math.ceil(b.right + pad));
+    cropBottom = Math.min(baseHeight, Math.ceil(b.bottom + pad));
+    if (cropRight <= cropLeft || cropBottom <= cropTop) throw new Error('Selection-only export bounding box is empty.');
+  }
+
+  const cropW = cropRight - cropLeft;
+  const cropH = cropBottom - cropTop;
+  const outW = Math.max(1, Math.floor(cropW * scale));
+  const outH = Math.max(1, Math.floor(cropH * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not available');
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale);
+  ctx.translate(-cropLeft, -cropTop);
+
+  const drawBackground = () => {
+    const bg = current.background;
+    if (!bg || bg.kind === 'paper') {
+      ctx.fillStyle = 'rgba(253, 245, 230, 0.96)';
+      ctx.fillRect(0, 0, baseWidth, baseHeight);
+      return;
+    }
+    if (bg.kind === 'solid') {
+      ctx.fillStyle = bg.color || 'rgba(253, 245, 230, 0.96)';
+      ctx.fillRect(0, 0, baseWidth, baseHeight);
+      return;
+    }
+    if (bg.kind === 'gradient') {
+      const mode = bg.mode || 'linear';
+      if (mode === 'radial') {
+        const cx = baseWidth / 2;
+        const cy = baseHeight / 2;
+        const radius = Math.sqrt(baseWidth * baseWidth + baseHeight * baseHeight) / 2;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        g.addColorStop(0, bg.from || '#000000');
+        g.addColorStop(1, bg.to || '#ffffff');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, baseWidth, baseHeight);
+        return;
+      }
+      const angle = Number(bg.angle) || 0;
+      const rad = (angle * Math.PI) / 180;
+      const cx = baseWidth / 2;
+      const cy = baseHeight / 2;
+      const len = Math.sqrt(baseWidth * baseWidth + baseHeight * baseHeight) / 2;
+      const dx = Math.cos(rad) * len;
+      const dy = Math.sin(rad) * len;
+      const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+      g.addColorStop(0, bg.from || '#000000');
+      g.addColorStop(1, bg.to || '#ffffff');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, baseWidth, baseHeight);
+    }
+  };
+
+  const applyLayerStyleToCtx = (item: any, opts?: { shadow?: boolean }) => {
+    const style = ((item as any)?.style || null) as MoodboardLayerStyle | null;
+    const opacity = style && style.opacity != null ? clampRange(Number(style.opacity) || 0, 0, 1) : 1;
+    ctx.globalAlpha = opacity;
+    ctx.globalCompositeOperation = canvasCompositeForBlend(normalizeBlendMode(style?.blend));
+
+    const sh = opts?.shadow === false ? null : (style?.shadow || null);
+    if (sh) {
+      const shOpacity = clampRange(Number(sh.opacity) || 0.35, 0, 1);
+      const shColor = typeof sh.color === 'string' && sh.color.trim() ? sh.color.trim() : '#000000';
+      ctx.shadowColor = rgbaFromHex(shColor, shOpacity);
+      ctx.shadowBlur = Math.max(0, Number(sh.blur) || 12);
+      ctx.shadowOffsetX = Number(sh.offsetX) || 0;
+      ctx.shadowOffsetY = Number(sh.offsetY) || 8;
+    } else {
+      ctx.shadowColor = 'rgba(0,0,0,0)';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
+
+    return style || undefined;
+  };
+
+  const clearShadow = () => {
+    ctx.shadowColor = 'rgba(0,0,0,0)';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  };
+
+  const drawShapeItem = (s: MoodboardShape) => {
+    if (!s) return;
+    if (isHidden(s)) return;
+    if (!shouldDrawItem('shape', s.id)) return;
+    const cx = (Number(s.x) || 0) * baseWidth;
+    const cy = (Number(s.y) || 0) * baseHeight;
+    const w = (Number(s.w) || 0) * baseWidth;
+    const h = (Number(s.h) || 0) * baseHeight;
+    if (w <= 0 || h <= 0) return;
+    const left = cx - w / 2;
+    const top = cy - h / 2;
+
+    ctx.save();
+    const style = applyLayerStyleToCtx(s);
+    const rotDeg = normalizeAngleDeg(Number(s.rot) || 0);
+    if (rotDeg) {
+      const rad = degToRad(rotDeg);
+      ctx.translate(cx, cy);
+      ctx.rotate(rad);
+      ctx.translate(-cx, -cy);
+    }
+    ctx.beginPath();
+    if (s.shape === 'ellipse') ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else ctx.rect(left, top, w, h);
+
+    const fill = maskShapeIds.has(String(s.id)) ? ({ kind: 'none' } as const) : s.fill;
+    if (fill && fill.kind !== 'none') {
+      if (fill.kind === 'solid') {
+        ctx.fillStyle = fill.color || 'rgba(0,0,0,0)';
+        ctx.fill();
+      } else if (fill.kind === 'gradient') {
+        const mode = fill.mode || 'linear';
+        if (mode === 'radial') {
+          const radius = Math.sqrt(w * w + h * h) / 2;
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+          g.addColorStop(0, fill.from || '#000000');
+          g.addColorStop(1, fill.to || '#ffffff');
+          ctx.fillStyle = g;
+          ctx.fill();
+        } else {
+          const angle = Number(fill.angle) || 0;
+          const rad = (angle * Math.PI) / 180;
+          const len = Math.sqrt(w * w + h * h) / 2;
+          const dx = Math.cos(rad) * len;
+          const dy = Math.sin(rad) * len;
+          const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+          g.addColorStop(0, fill.from || '#000000');
+          g.addColorStop(1, fill.to || '#ffffff');
+          ctx.fillStyle = g;
+          ctx.fill();
+        }
+      }
+    }
+
+    if (s.stroke && Number.isFinite(Number(s.stroke.width)) && Number(s.stroke.width) > 0) {
+      ctx.strokeStyle = s.stroke.color || '#111111';
+      ctx.lineWidth = Math.max(1, Number(s.stroke.width) || 1);
+      ctx.stroke();
+    }
+
+    const outline = style?.outline;
+    if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+      clearShadow();
+      ctx.strokeStyle = outline.color || '#111111';
+      ctx.lineWidth = Math.max(1, Number(outline.width) || 1);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  };
+
+  const drawConnectorItem = (c: MoodboardConnector) => {
+    if (!c) return;
+    if (isHidden(c)) return;
+    if (!shouldDrawItem('connector', c.id)) return;
+    const ax = (Number(c.ax) || 0) * baseWidth;
+    const ay = (Number(c.ay) || 0) * baseHeight;
+    const bx = (Number(c.bx) || 0) * baseWidth;
+    const by = (Number(c.by) || 0) * baseHeight;
+    const widthPx = Math.max(1, Number(c.width) || 3);
+
+    ctx.save();
+    applyLayerStyleToCtx(c);
+    ctx.strokeStyle = c.color || '#111111';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = widthPx;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+
+    if (c.kind === 'arrow') {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0.001) {
+        const angle = Math.atan2(dy, dx);
+        const headLen = Math.max(10, widthPx * 4);
+        const a1 = angle + Math.PI * 0.82;
+        const a2 = angle - Math.PI * 0.82;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + Math.cos(a1) * headLen, by + Math.sin(a1) * headLen);
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + Math.cos(a2) * headLen, by + Math.sin(a2) * headLen);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  };
+
+  const drawImageItem = (img: MoodboardImage) => {
+    if (!img?.imageId) return;
+    if (isHidden(img)) return;
+    if (!shouldDrawItem('image', img.id)) return;
+    const el = imageCache.get(img.imageId);
+    if (!el || !el.naturalWidth || !el.naturalHeight) return;
+
+    const cx = (Number(img.x) || 0) * baseWidth;
+    const cy = (Number(img.y) || 0) * baseHeight;
+    const w = (Number(img.w) || 0) * baseWidth;
+    const h = (Number(img.h) || 0) * baseHeight;
+    if (w <= 0 || h <= 0) return;
+
+    const srcAspect = el.naturalWidth / el.naturalHeight;
+    const dstAspect = w / h;
+    let dw = w;
+    let dh = h;
+    if (srcAspect > dstAspect) dh = w / srcAspect;
+    else dw = h * srcAspect;
+    const dx = cx - dw / 2;
+    const dy = cy - dh / 2;
+
+    const imgRotDeg = normalizeAngleDeg(Number(img.rot) || 0);
+    const imgRot = imgRotDeg ? degToRad(imgRotDeg) : 0;
+    const drawImage = () => {
+      if (!imgRot) {
+        ctx.drawImage(el, dx, dy, dw, dh);
+        return;
+      }
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(imgRot);
+      ctx.translate(-cx, -cy);
+      ctx.drawImage(el, dx, dy, dw, dh);
+      ctx.restore();
+    };
+
+    const maskShapeId = (img as any)?.mask?.shapeId;
+    const maskShape =
+      typeof maskShapeId === 'string' && maskShapeId.trim()
+        ? (shapeById.get(maskShapeId.trim()) as MoodboardShape | undefined)
+        : undefined;
+
+    ctx.save();
+    const style = applyLayerStyleToCtx(img);
+
+    let outlineMask: null | { cx: number; cy: number; w: number; h: number; rotDeg: number; shape: 'rect' | 'ellipse' } = null;
+    if (maskShape) {
+      const mcx = (Number(maskShape.x) || 0) * baseWidth;
+      const mcy = (Number(maskShape.y) || 0) * baseHeight;
+      const mw = (Number(maskShape.w) || 0) * baseWidth;
+      const mh = (Number(maskShape.h) || 0) * baseHeight;
+      if (mw > 0 && mh > 0) {
+        outlineMask = { cx: mcx, cy: mcy, w: mw, h: mh, rotDeg: normalizeAngleDeg(Number(maskShape.rot) || 0), shape: maskShape.shape };
+        const mleft = mcx - mw / 2;
+        const mtop = mcy - mh / 2;
+        ctx.save();
+        ctx.save();
+        const maskRotDeg = outlineMask.rotDeg;
+        if (maskRotDeg) {
+          const rad = degToRad(maskRotDeg);
+          ctx.translate(mcx, mcy);
+          ctx.rotate(rad);
+          ctx.translate(-mcx, -mcy);
+        }
+        ctx.beginPath();
+        if (outlineMask.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
+        else ctx.rect(mleft, mtop, mw, mh);
+        ctx.restore();
+        ctx.clip();
+        drawImage();
+        ctx.restore();
+      } else {
+        drawImage();
+      }
+    } else {
+      drawImage();
+    }
+
+    const outline = style?.outline;
+    if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+      clearShadow();
+      ctx.strokeStyle = outline.color || '#111111';
+      ctx.lineWidth = Math.max(1, Number(outline.width) || 1);
+      if (outlineMask) {
+        const mcx = outlineMask.cx;
+        const mcy = outlineMask.cy;
+        const mw = outlineMask.w;
+        const mh = outlineMask.h;
+        const mleft = mcx - mw / 2;
+        const mtop = mcy - mh / 2;
+        ctx.save();
+        if (outlineMask.rotDeg) {
+          const rad = degToRad(outlineMask.rotDeg);
+          ctx.translate(mcx, mcy);
+          ctx.rotate(rad);
+          ctx.translate(-mcx, -mcy);
+        }
+        ctx.beginPath();
+        if (outlineMask.shape === 'ellipse') ctx.ellipse(mcx, mcy, mw / 2, mh / 2, 0, 0, Math.PI * 2);
+        else ctx.rect(mleft, mtop, mw, mh);
+        ctx.restore();
+        ctx.stroke();
+      } else {
+        ctx.save();
+        if (imgRot) {
+          ctx.translate(cx, cy);
+          ctx.rotate(imgRot);
+          ctx.translate(-cx, -cy);
+        }
+        ctx.beginPath();
+        ctx.rect(dx, dy, dw, dh);
+        ctx.restore();
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  };
+
+  const drawTextItem = (t: MoodboardText) => {
+    if (!t) return;
+    if (isHidden(t)) return;
+    if (!shouldDrawItem('text', t.id)) return;
+    const cx = (Number(t.x) || 0) * baseWidth;
+    const cy = (Number(t.y) || 0) * baseHeight;
+    const w = (Number(t.w) || 0) * baseWidth;
+    const h = (Number(t.h) || 0) * baseHeight;
+    if (w <= 0 || h <= 0) return;
+    const left = cx - w / 2;
+    const top = cy - h / 2;
+
+    const padding = 8;
+    const fontSize = Math.max(10, Number(t.fontSize) || 18);
+    const lineHeight = fontSize * 1.25;
+    const maxWidth = Math.max(0, w - padding * 2);
+    const bottomLimit = top + h - padding;
+
+    ctx.save();
+    const style = applyLayerStyleToCtx(t);
+    const rotDeg = normalizeAngleDeg(Number(t.rot) || 0);
+    if (rotDeg) {
+      const rad = degToRad(rotDeg);
+      ctx.translate(cx, cy);
+      ctx.rotate(rad);
+      ctx.translate(-cx, -cy);
+    }
+    ctx.fillStyle = t.bg || 'rgba(253, 245, 230, 0.96)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(left, top, w, h);
+    ctx.strokeRect(left + 0.5, top + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+
+    const outline = style?.outline;
+    if (outline && Number.isFinite(Number(outline.width)) && Number(outline.width) > 0) {
+      clearShadow();
+      ctx.strokeStyle = outline.color || '#111111';
+      ctx.lineWidth = Math.max(1, Number(outline.width) || 1);
+      ctx.strokeRect(left + 0.5, top + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    }
+
+    clearShadow();
+    ctx.beginPath();
+    ctx.rect(left, top, w, h);
+    ctx.clip();
+
+    ctx.font = `${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+    ctx.fillStyle = t.color || '#111111';
+    ctx.textBaseline = 'top';
+
+    let y = top + padding;
+    const x = left + padding;
+    const paras = String(t.text || '').split(/\r?\n/);
+    for (const para of paras) {
+      if (y + lineHeight > bottomLimit) break;
+      if (!para.trim()) {
+        y += lineHeight;
+        continue;
+      }
+      const words = para.split(/\s+/).filter(Boolean);
+      let line = '';
+      for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        const m = ctx.measureText(test);
+        if (m.width > maxWidth && line) {
+          ctx.fillText(line, x, y);
+          y += lineHeight;
+          if (y + lineHeight > bottomLimit) break;
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (y + lineHeight > bottomLimit) break;
+      if (line) {
+        ctx.fillText(line, x, y);
+        y += lineHeight;
+      }
+    }
+
+    ctx.restore();
+  };
+
+  const drawStroke = (s: MoodboardStroke) => {
+    if (!s.points.length) return;
+    ctx.save();
+
+    const size = Math.max(1, s.size);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size;
+
+    if (s.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = s.color || '#111111';
+    }
+
+    const first = s.points[0];
+    const last = s.points[s.points.length - 1] ?? first;
+
+    if (s.tool === 'pen' || s.tool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(first.x * baseWidth, first.y * baseHeight);
+      for (const p of s.points.slice(1)) ctx.lineTo(p.x * baseWidth, p.y * baseHeight);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    if (s.points.length < 2) {
+      ctx.restore();
+      return;
+    }
+
+    const x0 = first.x * baseWidth;
+    const y0 = first.y * baseHeight;
+    const x1 = last.x * baseWidth;
+    const y1 = last.y * baseHeight;
+
+    if (s.tool === 'line' || s.tool === 'arrow') {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+
+      if (s.tool === 'arrow') {
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const angle = Math.atan2(dy, dx);
+        const headLen = Math.max(10, size * 4);
+        const a1 = angle + Math.PI * 0.82;
+        const a2 = angle - Math.PI * 0.82;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + Math.cos(a1) * headLen, y1 + Math.sin(a1) * headLen);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + Math.cos(a2) * headLen, y1 + Math.sin(a2) * headLen);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (s.tool === 'rect' || s.tool === 'ellipse') {
+      const left = Math.min(x0, x1);
+      const top = Math.min(y0, y1);
+      const w = Math.abs(x1 - x0);
+      const h = Math.abs(y1 - y0);
+      if (w <= 0 || h <= 0) {
+        ctx.restore();
+        return;
+      }
+      ctx.beginPath();
+      if (s.tool === 'ellipse') ctx.ellipse(left + w / 2, top + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      else ctx.rect(left, top, w, h);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  drawBackground();
+
+  const drawItems: Array<{
+    kind: MoodboardItemKind;
+    index: number;
+    z: number;
+    item: MoodboardShape | MoodboardConnector | MoodboardImage | MoodboardText;
+  }> = [];
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    if (!s || isHidden(s)) continue;
+    if (!shouldDrawItem('shape', s.id)) continue;
+    drawItems.push({ kind: 'shape', index: i, z: zFor('shape', i, (s as any).z), item: s });
+  }
+  for (let i = 0; i < connectors.length; i++) {
+    const c = connectors[i];
+    if (!c || isHidden(c)) continue;
+    if (!shouldDrawItem('connector', c.id)) continue;
+    drawItems.push({ kind: 'connector', index: i, z: zFor('connector', i, (c as any).z), item: c });
+  }
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    if (!img || isHidden(img)) continue;
+    if (!shouldDrawItem('image', img.id)) continue;
+    drawItems.push({ kind: 'image', index: i, z: zFor('image', i, (img as any).z), item: img });
+  }
+  for (let i = 0; i < texts.length; i++) {
+    const t = texts[i];
+    if (!t || isHidden(t)) continue;
+    if (!shouldDrawItem('text', t.id)) continue;
+    drawItems.push({ kind: 'text', index: i, z: zFor('text', i, (t as any).z), item: t });
+  }
+
+  drawItems.sort(compareZAsc);
+  for (const it of drawItems) {
+    if (it.kind === 'shape') drawShapeItem(it.item as MoodboardShape);
+    else if (it.kind === 'connector') drawConnectorItem(it.item as MoodboardConnector);
+    else if (it.kind === 'image') drawImageItem(it.item as MoodboardImage);
+    else drawTextItem(it.item as MoodboardText);
+  }
+
+  if (!selectionOnly && !current.strokesHidden) {
+    for (const s of strokes) drawStroke(s);
+  }
+
+  const pngDataUrl = canvas.toDataURL('image/png');
+  return { pngDataUrl, width: canvas.width, height: canvas.height };
+}
+
 export function MoodboardCanvas({
   value,
   onChange,
   onRequestAddImage,
   canvasRefOverride,
+  onSelectionChange,
 }: {
   value: MoodboardState;
   onChange: (next: MoodboardState) => void;
   onRequestAddImage?: () => void;
   canvasRefOverride?: React.RefObject<HTMLCanvasElement | null>;
+  onSelectionChange?: (selection: MoodboardSelectionItem[]) => void;
 }) {
   const internalCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const canvasRef = canvasRefOverride ?? internalCanvasRef;
@@ -722,6 +1460,11 @@ export function MoodboardCanvas({
 
   const canUndo = historyPastRef.current.length > 0;
   const canRedo = historyFutureRef.current.length > 0;
+
+  React.useEffect(() => {
+    if (!onSelectionChange) return;
+    onSelectionChange(Array.isArray(selection) ? selection : []);
+  }, [onSelectionChange, selection]);
 
   const pushHistory = React.useCallback((prev: MoodboardState) => {
     historyPastRef.current.push(prev);

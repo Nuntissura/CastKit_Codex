@@ -1,6 +1,6 @@
 import React from 'react';
 import { MediaPane } from '../components/MediaPane';
-import { MoodboardCanvas, type MoodboardState } from '../components/MoodboardCanvas';
+import { MoodboardCanvas, renderMoodboardExportPng, type MoodboardSelectionItem, type MoodboardState } from '../components/MoodboardCanvas';
 import styles from './exportHubView.module.css';
 
 function joinPath(a: string, b: string): string {
@@ -271,6 +271,11 @@ export function ExportHubView({
   const [selectedMoodboardDoc, setSelectedMoodboardDoc] = React.useState<CKCDocDetail | null>(null);
   const [moodboardState, setMoodboardState] = React.useState<MoodboardState>(() => emptyMoodboard());
   const moodboardCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const moodboardSelectionRef = React.useRef<MoodboardSelectionItem[]>([]);
+  const [moodboardSelectionCount, setMoodboardSelectionCount] = React.useState<number>(0);
+  const [moodboardExportScale, setMoodboardExportScale] = React.useState<number>(2);
+  const [moodboardExportSelectionOnly, setMoodboardExportSelectionOnly] = React.useState<boolean>(false);
+  const [moodboardExportPaddingPx, setMoodboardExportPaddingPx] = React.useState<number>(16);
 
   React.useEffect(() => {
     window.ckc
@@ -319,7 +324,25 @@ export function ExportHubView({
     setBusy(true);
     setError(null);
     try {
-      const pngBase64 = moodboardCanvasRef.current.toDataURL('image/png');
+      const rect = moodboardCanvasRef.current.getBoundingClientRect();
+      const baseWidth = rect.width > 0 ? rect.width : 1200;
+      const baseHeight = rect.height > 0 ? rect.height : 800;
+      const selection = moodboardSelectionRef.current;
+      if (moodboardExportSelectionOnly && (!selection || selection.length === 0)) {
+        setError('Selection-only export requires you to select at least one layer in the preview.');
+        return;
+      }
+
+      const rendered = await renderMoodboardExportPng(moodboardState, {
+        baseWidth,
+        baseHeight,
+        scale: moodboardExportScale,
+        selection,
+        selectionOnly: moodboardExportSelectionOnly,
+        paddingPx: moodboardExportPaddingPx,
+      });
+
+      const pngBase64 = rendered.pngDataUrl;
       const res = await window.ckc.exportMoodboardPng({
         docId: selectedMoodboardDoc?.id ?? selectedMoodboardId ?? null,
         title: selectedMoodboardDoc?.title ?? 'Moodboard',
@@ -332,7 +355,72 @@ export function ExportHubView({
     } finally {
       setBusy(false);
     }
-  }, [exportRoot, selectedMoodboardDoc?.id, selectedMoodboardDoc?.title, selectedMoodboardId]);
+  }, [
+    exportRoot,
+    moodboardExportPaddingPx,
+    moodboardExportScale,
+    moodboardExportSelectionOnly,
+    moodboardState,
+    selectedMoodboardDoc?.id,
+    selectedMoodboardDoc?.title,
+    selectedMoodboardId,
+  ]);
+
+  const exportMoodboardPdf = React.useCallback(async () => {
+    if (!exportRoot) {
+      setError('Export folder is not set yet.');
+      return;
+    }
+    if (!moodboardCanvasRef.current) {
+      setError('Moodboard canvas not ready.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const rect = moodboardCanvasRef.current.getBoundingClientRect();
+      const baseWidth = rect.width > 0 ? rect.width : 1200;
+      const baseHeight = rect.height > 0 ? rect.height : 800;
+      const selection = moodboardSelectionRef.current;
+      if (moodboardExportSelectionOnly && (!selection || selection.length === 0)) {
+        setError('Selection-only export requires you to select at least one layer in the preview.');
+        return;
+      }
+
+      const rendered = await renderMoodboardExportPng(moodboardState, {
+        baseWidth,
+        baseHeight,
+        scale: moodboardExportScale,
+        selection,
+        selectionOnly: moodboardExportSelectionOnly,
+        paddingPx: moodboardExportPaddingPx,
+      });
+
+      const res = await window.ckc.exportMoodboardPdf({
+        docId: selectedMoodboardDoc?.id ?? selectedMoodboardId ?? null,
+        title: selectedMoodboardDoc?.title ?? 'Moodboard',
+        pngBase64: rendered.pngDataUrl,
+        outDir: exportRoot,
+        widthPx: rendered.width,
+        heightPx: rendered.height,
+      });
+      setLastExportPath(res.path);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    exportRoot,
+    moodboardExportPaddingPx,
+    moodboardExportScale,
+    moodboardExportSelectionOnly,
+    moodboardState,
+    selectedMoodboardDoc?.id,
+    selectedMoodboardDoc?.title,
+    selectedMoodboardId,
+  ]);
 
   // --- Image set export + share packs ---
   const [characters, setCharacters] = React.useState<CKCCharacterListItem[] | null>(null);
@@ -736,12 +824,71 @@ export function ExportHubView({
           </div>
 
           <div className={styles.preview}>
-            <MoodboardCanvas value={moodboardState} onChange={() => {}} canvasRefOverride={moodboardCanvasRef} />
+            <MoodboardCanvas
+              value={moodboardState}
+              onChange={() => {}}
+              canvasRefOverride={moodboardCanvasRef}
+              onSelectionChange={(sel) => {
+                moodboardSelectionRef.current = sel;
+                setMoodboardSelectionCount(sel.length);
+              }}
+            />
           </div>
 
           <div className={styles.row}>
-            <button className={styles.btnSecondary} onClick={() => void exportMoodboardPng()} disabled={isUiBusy || !exportRoot || !selectedMoodboardId}>
+            <div className={styles.inlineLabel}>
+              Scale:{' '}
+              <select
+                className={styles.select}
+                value={String(moodboardExportScale)}
+                onChange={(e) => setMoodboardExportScale(Number(e.target.value) || 1)}
+                disabled={isUiBusy}
+              >
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="3">3×</option>
+                <option value="4">4×</option>
+              </select>
+            </div>
+
+            <label className={styles.inlineLabel}>
+              <input
+                type="checkbox"
+                checked={moodboardExportSelectionOnly}
+                onChange={(e) => setMoodboardExportSelectionOnly(e.target.checked)}
+                disabled={isUiBusy}
+              />{' '}
+              Selection only ({moodboardSelectionCount})
+            </label>
+
+            <div className={styles.inlineLabel}>
+              Padding px:{' '}
+              <input
+                className={styles.input}
+                type="number"
+                step="1"
+                min="0"
+                value={String(moodboardExportPaddingPx)}
+                onChange={(e) => setMoodboardExportPaddingPx(Number(e.target.value) || 0)}
+                disabled={isUiBusy || !moodboardExportSelectionOnly}
+              />
+            </div>
+          </div>
+
+          <div className={styles.row}>
+            <button
+              className={styles.btnSecondary}
+              onClick={() => void exportMoodboardPng()}
+              disabled={isUiBusy || !exportRoot || !selectedMoodboardId}
+            >
               Export PNG
+            </button>
+            <button
+              className={styles.btnSecondary}
+              onClick={() => void exportMoodboardPdf()}
+              disabled={isUiBusy || !exportRoot || !selectedMoodboardId}
+            >
+              Export PDF
             </button>
           </div>
         </div>

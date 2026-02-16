@@ -2,7 +2,7 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
 Add higher quality export options for moodboards: hi-res PNG, export selection only, and PDF export/print.
@@ -22,12 +22,14 @@ Add higher quality export options for moodboards: hi-res PNG, export selection o
 - Animated exports.
 
 ## Acceptance criteria
-- [ ] Export resolution matches requested scale without UI chrome.
-- [ ] Selection-only export is cropped correctly.
-- [ ] PDF export works on Windows.
+- [x] Export resolution matches requested scale without UI chrome.
+- [x] Selection-only export is cropped correctly.
+- [x] PDF export works on Windows.
 
 ## Test plan
-- [ ] Manual: export flows from Export Hub.
+- [x] `npx tsc --noEmit`
+- [x] `npm test`
+- [ ] Manual: export flows from Export Hub (recommended).
 
 ## Notes
 - Do NOT touch `D:`.

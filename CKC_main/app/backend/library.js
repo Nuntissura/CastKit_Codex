@@ -41,6 +41,24 @@ function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
 
+function getWindowsDriveLetter(p) {
+  const raw = String(p ?? '').trim();
+  if (!raw) return null;
+  const m1 = raw.match(/^\\\\\?\\([A-Za-z]):[\\/]/);
+  if (m1) return String(m1[1]).toUpperCase();
+  const m2 = raw.match(/^([A-Za-z]):[\\/]/);
+  if (m2) return String(m2[1]).toUpperCase();
+  const m3 = raw.match(/^([A-Za-z]):$/);
+  if (m3) return String(m3[1]).toUpperCase();
+  return null;
+}
+
+function assertNotForbiddenDrive(p, contextLabel = 'Path') {
+  const letter = getWindowsDriveLetter(p);
+  if (!letter) return;
+  if (letter === 'D') throw new Error(`${contextLabel} must not be on D:`);
+}
+
 function sanitizeFileName(name, fallback) {
   const raw = String(name ?? '').trim();
   const base = raw.length ? raw : String(fallback ?? 'export.txt');
@@ -3378,6 +3396,7 @@ class CKCLibrary {
     const exportDir = outDir
       ? path.join(String(outDir), 'characters', sanitizeFileName(null, `${character.displayName}__${shortStableIdForPath(characterId)}`))
       : paths.exportsDir;
+    assertNotForbiddenDrive(exportDir, 'Export destination');
     ensureDir(exportDir);
 
     // Canonical TXT is the sheet itself.
@@ -3409,6 +3428,7 @@ class CKCLibrary {
     if (cid) character = await this.getCharacter(cid);
 
     const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    assertNotForbiddenDrive(exportRoot, 'Export destination');
     const safeSetName =
       String(setName ?? '').trim() ||
       (character ? `${character.displayName}__${shortStableIdForPath(cid)}` : 'image_set');
@@ -3455,6 +3475,7 @@ class CKCLibrary {
     if (!character) throw new Error('Character not found');
 
     const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    assertNotForbiddenDrive(exportRoot, 'Export destination');
     const packDir = path.join(
       exportRoot,
       'share_packs',
@@ -3549,17 +3570,34 @@ class CKCLibrary {
     const bytes = Buffer.from(cleaned, 'base64');
     if (!bytes.length) throw new Error('pngBase64 is invalid');
 
-    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
-    const safeTitle = sanitizeFileName(String(title ?? '').trim() || 'moodboard', 'moodboard');
-    const idPart = docId ? shortStableIdForPath(docId) : 'mood';
-    const fileName = sanitizeFileName(null, `${safeTitle}__${idPart}__${toIsoSafeTimestamp()}.png`);
-
-    const exportDir = path.join(exportRoot, 'moodboards');
-    ensureDir(exportDir);
-    const outPath = uniquePath(exportDir, fileName);
+    const outPath = this.allocateMoodboardExportPath({ docId, title, outDir, ext: 'png' });
     fs.writeFileSync(outPath, bytes);
 
     await this._audit('moodboard.exportPng', null, { outPath, docId: docId ? String(docId) : null });
+    return { ok: true, path: outPath };
+  }
+
+  allocateMoodboardExportPath({ docId = null, title = 'Moodboard', outDir = null, ext = 'png' } = {}) {
+    const exportRoot = outDir ? String(outDir) : this.getPaths().exportsDir;
+    assertNotForbiddenDrive(exportRoot, 'Export destination');
+    const safeTitle = sanitizeFileName(String(title ?? '').trim() || 'moodboard', 'moodboard');
+    const idPart = docId ? shortStableIdForPath(docId) : 'mood';
+    const safeExt = String(ext ?? 'png').replace(/^\.+/, '').toLowerCase() || 'png';
+    const fileName = sanitizeFileName(null, `${safeTitle}__${idPart}__${toIsoSafeTimestamp()}.${safeExt}`);
+
+    const exportDir = path.join(exportRoot, 'moodboards');
+    ensureDir(exportDir);
+    return uniquePath(exportDir, fileName);
+  }
+
+  async exportMoodboardPdf({ docId = null, title = 'Moodboard', pdfBytes, outDir = null } = {}) {
+    const bytes = Buffer.isBuffer(pdfBytes) ? pdfBytes : Buffer.from(pdfBytes || '');
+    if (!bytes.length) throw new Error('pdfBytes is required');
+
+    const outPath = this.allocateMoodboardExportPath({ docId, title, outDir, ext: 'pdf' });
+    fs.writeFileSync(outPath, bytes);
+
+    await this._audit('moodboard.exportPdf', null, { outPath, docId: docId ? String(docId) : null });
     return { ok: true, path: outPath };
   }
 
