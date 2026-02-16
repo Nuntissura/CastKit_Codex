@@ -94,6 +94,8 @@ async function ensureSchemaUpgrades(db) {
   await run(db, 'DROP INDEX IF EXISTS idx_image_dedupe');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash)');
   await ensureColumn(db, 'ImageAsset', 'tags_json', "TEXT NOT NULL DEFAULT '[]'");
+  await ensureColumn(db, 'ImageAsset', 'suggested_tags_json', "TEXT NOT NULL DEFAULT '[]'");
+  await ensureColumn(db, 'ImageAsset', 'auto_tagged_at', 'DATETIME');
   await ensureColumn(db, 'ImageAsset', 'storage_mode', "TEXT NOT NULL DEFAULT 'copy'");
   await ensureColumn(db, 'ImageAsset', 'source_path', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'source_url', 'TEXT');

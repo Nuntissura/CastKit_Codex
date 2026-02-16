@@ -235,6 +235,14 @@ export function LibraryView({
   const [dupGroups, setDupGroups] = React.useState<CKCDuplicateGroup[] | null>(null);
   const [dupBusy, setDupBusy] = React.useState<boolean>(false);
   const [dupError, setDupError] = React.useState<string | null>(null);
+  const [aiTagJob, setAiTagJob] = React.useState<CKCAiTaggingJobStatus | null>(null);
+  const [aiTagBusy, setAiTagBusy] = React.useState<boolean>(false);
+  const [aiTagError, setAiTagError] = React.useState<string | null>(null);
+  const [aiTagMode, setAiTagMode] = React.useState<'untagged' | 'all'>('untagged');
+  const [aiTagLimit, setAiTagLimit] = React.useState<number>(250);
+  const [aiAutoTagOnImport, setAiAutoTagOnImport] = React.useState<boolean>(false);
+  const aiTaggingConfigRef = React.useRef<Record<string, unknown>>({});
+  const aiTagPollRef = React.useRef<number | null>(null);
   const [nearDupGroups, setNearDupGroups] = React.useState<CKCNearDuplicateGroup[] | null>(null);
   const [nearDupJob, setNearDupJob] = React.useState<CKCNearDuplicateScanJobStatus | null>(null);
   const [nearDupBusy, setNearDupBusy] = React.useState<boolean>(false);
@@ -271,6 +279,7 @@ export function LibraryView({
   React.useEffect(() => {
     return () => {
       if (nearDupPollRef.current != null) window.clearInterval(nearDupPollRef.current);
+      if (aiTagPollRef.current != null) window.clearInterval(aiTagPollRef.current);
     };
   }, []);
 
@@ -285,6 +294,8 @@ export function LibraryView({
         else setExportRootOverride(null);
         if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
         if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
+        aiTaggingConfigRef.current = cfg?.aiTagging && typeof cfg.aiTagging === 'object' ? (cfg.aiTagging as any) : {};
+        setAiAutoTagOnImport(!!(aiTaggingConfigRef.current as any)?.autoOnImport);
         const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
         if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
       })
@@ -297,6 +308,8 @@ export function LibraryView({
             else setExportRootOverride(null);
             if (typeof cfg?.inboxDir === 'string') setInboxDir(cfg.inboxDir);
             if (Array.isArray(cfg?.pinnedTags)) setPinnedTags(dedupeTagsCaseInsensitive(cfg.pinnedTags.map((t: any) => String(t))));
+            aiTaggingConfigRef.current = cfg?.aiTagging && typeof cfg.aiTagging === 'object' ? (cfg.aiTagging as any) : {};
+            setAiAutoTagOnImport(!!(aiTaggingConfigRef.current as any)?.autoOnImport);
             const lf = (cfg?.layoutLibrary2 && typeof cfg.layoutLibrary2 === 'object' ? cfg.layoutLibrary2 : null) as any;
             if (typeof lf?.leftFrac === 'number') setLibraryLeftFrac(clamp01(lf.leftFrac));
           })
@@ -583,6 +596,89 @@ export function LibraryView({
       setDupGroups([]);
     } finally {
       setDupBusy(false);
+    }
+  }, []);
+
+  const stopAiTagPolling = React.useCallback(() => {
+    if (aiTagPollRef.current == null) return;
+    window.clearInterval(aiTagPollRef.current);
+    aiTagPollRef.current = null;
+  }, []);
+
+  const pollAiTagStatus = React.useCallback(
+    async (jobId: string) => {
+      const id = String(jobId || '').trim();
+      if (!id) return;
+      try {
+        const st = await window.ckc.getAiTaggingJobStatus(id);
+        setAiTagJob(st);
+
+        if (st.status === 'done') {
+          setAiTagBusy(false);
+          stopAiTagPolling();
+          return;
+        }
+
+        if (st.status === 'cancelled') {
+          setAiTagError('AI tagging cancelled.');
+          setAiTagBusy(false);
+          stopAiTagPolling();
+          return;
+        }
+
+        if (st.status === 'error') {
+          setAiTagError(st.error || 'AI tagging failed.');
+          setAiTagBusy(false);
+          stopAiTagPolling();
+          return;
+        }
+      } catch (err: unknown) {
+        setAiTagError(err instanceof Error ? err.message : String(err));
+        setAiTagBusy(false);
+        stopAiTagPolling();
+      }
+    },
+    [stopAiTagPolling]
+  );
+
+  const startAiTagging = React.useCallback(async () => {
+    stopAiTagPolling();
+    setAiTagError(null);
+    setAiTagJob(null);
+    setAiTagBusy(true);
+
+    try {
+      const res = await window.ckc.startAiTaggingJob({ mode: aiTagMode, limit: aiTagLimit });
+      const jobId = String((res as any)?.jobId ?? '').trim();
+      if (!jobId) throw new Error('AI tagging did not return a jobId.');
+
+      await pollAiTagStatus(jobId);
+      aiTagPollRef.current = window.setInterval(() => void pollAiTagStatus(jobId), 900);
+    } catch (err: unknown) {
+      setAiTagError(err instanceof Error ? err.message : String(err));
+      setAiTagBusy(false);
+      stopAiTagPolling();
+    }
+  }, [aiTagMode, aiTagLimit, pollAiTagStatus, stopAiTagPolling]);
+
+  const cancelAiTagging = React.useCallback(async () => {
+    const jobId = String(aiTagJob?.jobId ?? '').trim();
+    if (!jobId) return;
+    try {
+      await window.ckc.cancelAiTaggingJob(jobId);
+    } catch (err: unknown) {
+      setAiTagError(err instanceof Error ? err.message : String(err));
+    }
+  }, [aiTagJob]);
+
+  const setAutoAiTagOnImport = React.useCallback(async (next: boolean) => {
+    setAiAutoTagOnImport(next);
+    const merged = { ...aiTaggingConfigRef.current, autoOnImport: !!next };
+    aiTaggingConfigRef.current = merged;
+    try {
+      await window.ckc.setConfig({ aiTagging: merged });
+    } catch (err: unknown) {
+      setAiTagError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -1574,6 +1670,73 @@ export function LibraryView({
             ) : (
               <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>Scan to find exact (byte-identical) duplicates by hash.</div>
             )}
+          </details>
+
+          <details style={{ marginTop: 12 }}>
+            <summary>AI tagging (experimental)</summary>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button disabled={aiTagBusy} onClick={() => void startAiTagging()}>
+                {aiTagBusy ? 'Workingâ€¦' : aiTagMode === 'all' ? 'Suggest tags (all)' : 'Suggest tags (untagged)'}
+              </button>
+              {aiTagJob?.status === 'running' ? (
+                <button disabled={!aiTagBusy} onClick={() => void cancelAiTagging()}>
+                  Cancel
+                </button>
+              ) : null}
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Mode
+                <select value={aiTagMode} onChange={(e) => setAiTagMode(e.target.value === 'all' ? 'all' : 'untagged')} disabled={aiTagBusy}>
+                  <option value="untagged">untagged</option>
+                  <option value="all">all</option>
+                </select>
+              </label>
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                Limit
+                <input
+                  type="number"
+                  min={10}
+                  max={50000}
+                  step={10}
+                  value={String(aiTagLimit)}
+                  onChange={(e) => setAiTagLimit(Number(e.target.value) || 0)}
+                  disabled={aiTagBusy}
+                  style={{ width: 110 }}
+                />
+              </label>
+
+              {aiTagJob?.status === 'running' && aiTagJob.progress ? (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {aiTagJob.progress.phase} <b>{aiTagJob.progress.done}</b> / <b>{aiTagJob.progress.total}</b>
+                </span>
+              ) : null}
+            </div>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={aiAutoTagOnImport}
+                  onChange={(e) => void setAutoAiTagOnImport(!!e.target.checked)}
+                  disabled={aiTagBusy}
+                />{' '}
+                Auto-suggest on import
+              </label>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                Uses Tools â†’ Local model settings. Suggestions appear in the photo metadata bar.
+              </div>
+            </div>
+
+            {aiTagError ? <div className={styles.error}>{aiTagError}</div> : null}
+
+            {aiTagJob?.status === 'done' && aiTagJob.result ? (
+              <div style={{ marginTop: 10, color: 'var(--text-secondary)' }}>
+                Processed <b>{aiTagJob.result.processed}</b> â€¢ Suggested <b>{aiTagJob.result.suggested}</b> â€¢ Failed{' '}
+                <b>{aiTagJob.result.failed}</b>
+              </div>
+            ) : null}
           </details>
 
           <details style={{ marginTop: 12 }}>

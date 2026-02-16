@@ -174,6 +174,8 @@ let libraryBackupJobs = new Map();
 let libraryBackupActiveJobId = null;
 let libraryRestoreJobs = new Map();
 let libraryRestoreActiveJobId = null;
+let aiTagJobs = new Map();
+let aiTagActiveJobId = null;
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -553,6 +555,273 @@ async function runLibraryRestoreJob(job, params) {
     }
 }
 
+function makeAiTagJobId() {
+    return `ai_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+}
+
+function getAiTagJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return null;
+    return aiTagJobs.get(id) || null;
+}
+
+function snapshotAiTagJob(job) {
+    if (!job) return null;
+    const status = String(job.status || 'running');
+    return {
+        ok: true,
+        jobId: String(job.jobId),
+        status,
+        startedAt: String(job.startedAt),
+        finishedAt: job.finishedAt ? String(job.finishedAt) : null,
+        progress: job.progress && typeof job.progress === 'object' ? job.progress : null,
+        error: job.error ? String(job.error) : null,
+        result: status === 'done' ? job.result : null,
+    };
+}
+
+function getAiTaggingConfig() {
+    const ai = appConfig?.aiTagging && typeof appConfig.aiTagging === 'object' ? appConfig.aiTagging : {};
+    const llm = appConfig?.llm && typeof appConfig.llm === 'object' ? appConfig.llm : {};
+
+    const baseUrl = typeof ai.baseUrl === 'string' ? ai.baseUrl : typeof llm.baseUrl === 'string' ? llm.baseUrl : '';
+    const model = typeof ai.model === 'string' ? ai.model : typeof llm.model === 'string' ? llm.model : '';
+    const apiKey = typeof ai.apiKey === 'string' ? ai.apiKey : typeof llm.apiKey === 'string' ? llm.apiKey : '';
+
+    const timeoutSecRaw =
+        typeof ai.timeoutSec === 'number'
+            ? ai.timeoutSec
+            : typeof llm.timeoutSec === 'number'
+              ? llm.timeoutSec
+              : NaN;
+    const timeoutSec = Number.isFinite(timeoutSecRaw) ? timeoutSecRaw : 900;
+    const clampedTimeoutSec = Math.max(5, Math.min(7200, timeoutSec));
+
+    const maxTagsRaw = typeof ai.maxTags === 'number' ? ai.maxTags : NaN;
+    const maxTags = Number.isFinite(maxTagsRaw) ? Math.max(1, Math.min(200, Math.round(maxTagsRaw))) : 24;
+
+    const maxImagePxRaw = typeof ai.maxImagePx === 'number' ? ai.maxImagePx : NaN;
+    const maxImagePx = Number.isFinite(maxImagePxRaw) ? Math.max(128, Math.min(2048, Math.round(maxImagePxRaw))) : 512;
+
+    return {
+        baseUrl,
+        model,
+        apiKey,
+        timeoutMs: Math.round(clampedTimeoutSec * 1000),
+        autoOnImport: !!ai.autoOnImport,
+        maxTags,
+        maxImagePx,
+    };
+}
+
+function imagePathToPngDataUrl(absPath, { maxImagePx = 512 } = {}) {
+    const img = nativeImage.createFromPath(String(absPath || ''));
+    if (!img || img.isEmpty()) throw new Error('Failed to load image for AI tagging.');
+
+    const size = img.getSize();
+    const w = Number(size?.width) || 0;
+    const h = Number(size?.height) || 0;
+
+    let resized = img;
+    const maxDim = Math.max(w, h);
+    if (maxDim > 0 && maxDim > maxImagePx) {
+        resized = w >= h ? img.resize({ width: maxImagePx }) : img.resize({ height: maxImagePx });
+    }
+
+    const png = resized.toPNG();
+    if (!png || png.length === 0) throw new Error('Failed to encode image for AI tagging.');
+    return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+function parseAiTagSuggestionsFromText(text) {
+    const raw = String(text ?? '').trim();
+    if (!raw) return [];
+
+    const tryParse = (s) => {
+        try {
+            return JSON.parse(s);
+        } catch {
+            return null;
+        }
+    };
+
+    const direct = tryParse(raw);
+    let parsed = direct;
+
+    if (parsed == null) {
+        const firstBrace = raw.indexOf('{');
+        const lastBrace = raw.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            parsed = tryParse(raw.slice(firstBrace, lastBrace + 1));
+        }
+    }
+
+    if (parsed == null) {
+        const firstBr = raw.indexOf('[');
+        const lastBr = raw.lastIndexOf(']');
+        if (firstBr !== -1 && lastBr !== -1 && lastBr > firstBr) {
+            parsed = tryParse(raw.slice(firstBr, lastBr + 1));
+        }
+    }
+
+    if (parsed == null) return [];
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') {
+        const tags = parsed.tags;
+        if (Array.isArray(tags)) return tags;
+        const suggestions = parsed.suggestions;
+        if (Array.isArray(suggestions)) return suggestions;
+    }
+    return [];
+}
+
+async function suggestImageTags({ imageId } = {}) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const cfg = getAiTaggingConfig();
+    if (!String(cfg.baseUrl || '').trim()) throw new Error('AI tagging base URL is not configured (Tools → Local model).');
+    if (!String(cfg.model || '').trim()) throw new Error('AI tagging model is not configured (Tools → Local model).');
+
+    const lib = await ensureLibrary();
+    const absPath = await lib.getImageAbsPath({ imageId: id, kind: 'original' });
+    if (!absPath || !fs.existsSync(absPath)) throw new Error('Image file not found on disk.');
+
+    const dataUrl = imagePathToPngDataUrl(absPath, { maxImagePx: cfg.maxImagePx });
+
+    const userText = [
+        `Suggest up to ${cfg.maxTags} tags for organizing this image in a reference library.`,
+        `Rules: lowercase; 1-3 words per tag; no punctuation; no duplicates; no markdown.`,
+        `Return ONLY JSON: {"tags":[{"tag":"...","confidence":0.0}]} where confidence is 0..1.`,
+    ].join('\n');
+
+    const messages = [
+        {
+            role: 'system',
+            content: 'You generate concise tags for images. You must return only valid JSON. No prose.',
+        },
+        {
+            role: 'user',
+            content: [
+                { type: 'text', text: userText },
+                { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+        },
+    ];
+
+    const res = await openAiChatCompletions({
+        baseUrl: cfg.baseUrl,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        messages,
+        temperature: 0.2,
+        maxTokens: 600,
+        timeoutMs: cfg.timeoutMs,
+    });
+
+    const rawSuggestions = parseAiTagSuggestionsFromText(res.text);
+    if (!Array.isArray(rawSuggestions) || rawSuggestions.length === 0) {
+        throw new Error('AI tagging returned no suggestions. Try a different vision-capable model.');
+    }
+
+    return await lib.setImageTagSuggestions({ imageId: id, suggestions: rawSuggestions });
+}
+
+async function runAiTaggingJob(job, params) {
+    const p = params && typeof params === 'object' ? params : {};
+    const mode = String(p.mode ?? 'untagged').trim().toLowerCase();
+    const limit = typeof p.limit === 'number' ? p.limit : Number(p.limit) || 250;
+    const explicitIds = Array.isArray(p.imageIds) ? p.imageIds : null;
+
+    try {
+        const lib = await ensureLibrary();
+        const ids = explicitIds
+            ? explicitIds.map((x) => String(x ?? '').trim()).filter(Boolean)
+            : await lib.listImageIdsForAiTagging({ mode, limit });
+
+        job.progress = { phase: 'tagging', done: 0, total: ids.length, imageId: null };
+
+        let processed = 0;
+        let suggested = 0;
+        let failed = 0;
+
+        for (const imageId of ids) {
+            if (job.cancelRequested) break;
+            job.progress = { ...job.progress, done: processed, imageId };
+            try {
+                const res = await suggestImageTags({ imageId });
+                const count = Array.isArray(res?.suggestions) ? res.suggestions.length : 0;
+                if (count > 0) suggested += 1;
+            } catch (err) {
+                failed += 1;
+                const msg = err instanceof Error ? err.message : String(err);
+                job.error = msg;
+            } finally {
+                processed += 1;
+                job.progress = { ...job.progress, done: processed, imageId };
+            }
+        }
+
+        if (job.cancelRequested) {
+            job.status = 'cancelled';
+            job.result = null;
+        } else {
+            job.status = 'done';
+            job.result = { ok: true, processed, suggested, failed, total: ids.length };
+        }
+    } catch (err) {
+        job.status = 'error';
+        job.error = err instanceof Error ? err.message : String(err);
+        job.result = null;
+    } finally {
+        job.finishedAt = new Date().toISOString();
+        if (aiTagActiveJobId === job.jobId) aiTagActiveJobId = null;
+    }
+}
+
+function startAiTaggingJobInternal(params, { throwIfRunning = true } = {}) {
+    if (aiTagActiveJobId) {
+        const existing = getAiTagJob(aiTagActiveJobId);
+        if (existing && String(existing.status) === 'running') {
+            if (throwIfRunning) throw new Error('AI tagging job already running.');
+            return null;
+        }
+        aiTagActiveJobId = null;
+    }
+
+    const jobId = makeAiTagJobId();
+    const job = {
+        jobId,
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        progress: { phase: 'starting', done: 0, total: 0, imageId: null },
+        cancelRequested: false,
+        error: null,
+        result: null,
+    };
+
+    aiTagJobs.set(jobId, job);
+    aiTagActiveJobId = jobId;
+    void runAiTaggingJob(job, params || {});
+    return jobId;
+}
+
+function maybeStartAutoAiTagging(imageIds) {
+    const ids = Array.isArray(imageIds) ? imageIds.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+    if (ids.length === 0) return null;
+
+    const cfg = getAiTaggingConfig();
+    if (!cfg.autoOnImport) return null;
+    if (!String(cfg.baseUrl || '').trim() || !String(cfg.model || '').trim()) return null;
+
+    try {
+        return startAiTaggingJobInternal({ imageIds: ids }, { throwIfRunning: false });
+    } catch {
+        return null;
+    }
+}
+
 function contentTypeFromPath(filePath) {
     const ext = path.extname(String(filePath || '')).toLowerCase();
     if (ext === '.png') return 'image/png';
@@ -842,6 +1111,42 @@ function registerIpcHandlers() {
             timeoutMs: Math.round(clampedTimeoutSec * 1000),
         });
         return { ok: true, text: res.text };
+    });
+
+    ipcMain.handle('ckc:getImageTagSuggestions', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getImageTagSuggestions(params || {});
+    });
+
+    ipcMain.handle('ckc:clearImageTagSuggestions', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.clearImageTagSuggestions(params || {});
+    });
+
+    ipcMain.handle('ckc:suggestImageTags', async (_evt, params) => {
+        const p = params && typeof params === 'object' ? params : {};
+        return suggestImageTags({ imageId: p.imageId });
+    });
+
+    ipcMain.handle('ckc:startAiTaggingJob', async (_evt, params) => {
+        const jobId = startAiTaggingJobInternal(params || {}, { throwIfRunning: true });
+        if (!jobId) throw new Error('Failed to start AI tagging job.');
+        return { ok: true, jobId };
+    });
+
+    ipcMain.handle('ckc:getAiTaggingJobStatus', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getAiTagJob(id);
+        if (!job) throw new Error(`AI tagging job not found: ${id || '(blank)'}`);
+        return snapshotAiTagJob(job);
+    });
+
+    ipcMain.handle('ckc:cancelAiTaggingJob', async (_evt, jobId) => {
+        const id = String(jobId || '').trim();
+        const job = getAiTagJob(id);
+        if (!job) throw new Error(`AI tagging job not found: ${id || '(blank)'}`);
+        job.cancelRequested = true;
+        return { ok: true };
     });
 
     ipcMain.handle('ckc:getLibraryDiagnostics', async (_evt, params) => {
@@ -1553,7 +1858,9 @@ function registerIpcHandlers() {
         await fs.promises.writeFile(tmpPath, png);
         try {
             const res = await lib.importImages({ characterId, filePaths: [tmpPath], duplicatePolicy: 'skip' });
-            return { ok: true, imported: res.imported || [], duplicates: res.duplicates || [] };
+            const imported = res.imported || [];
+            maybeStartAutoAiTagging(imported.map((x) => x?.id));
+            return { ok: true, imported, duplicates: res.duplicates || [] };
         } finally {
             try {
                 await fs.promises.unlink(tmpPath);
@@ -1582,7 +1889,9 @@ function registerIpcHandlers() {
             sourceNote: p.sourceNote !== undefined ? String(p.sourceNote ?? '') : undefined,
         });
 
-        return { ok: true, imported: res.imported || [], duplicates: res.duplicates || [] };
+        const imported = res.imported || [];
+        maybeStartAutoAiTagging(imported.map((x) => x?.id));
+        return { ok: true, imported, duplicates: res.duplicates || [] };
     });
 
     ipcMain.handle('ckc:importImages', async (_evt, params) => {
@@ -1625,6 +1934,7 @@ function registerIpcHandlers() {
             }
         }
 
+        maybeStartAutoAiTagging(imported.map((x) => x?.id));
         return { imported, duplicates };
     });
 

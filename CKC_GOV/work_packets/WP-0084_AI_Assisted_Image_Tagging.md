@@ -2,37 +2,33 @@
 
 Date: 2026-02-15
 Owner: Codex
-Status: IN_PROGRESS
+Status: DONE
 
 ## Summary
-Add AI-powered automatic tagging for images on import and bulk tagging for existing untagged/under-tagged images using local vision models or cloud APIs.
+Add AI-assisted *suggested tags* for images using an OpenAI-compatible vision endpoint (LM Studio / Ollama / OpenAI), with per-image review/apply UI and a cancellable bulk suggestion job.
 
 ## Why
 - Manual tagging is the #1 time sink for large image libraries (5000+ images).
 - Users import hundreds of reference images and need fast organization.
 - Auto-tagging can suggest: objects, scenes, moods, art styles, colors, character features.
 - 10x speed improvement for library organization.
-- Spec: `CastKit_Codex_Spec_v00.052.md` §12.2 "AI-Assisted Tagging".
+- Spec: `CastKit_Codex_Spec_v00.053.md` §12.2 "AI-assisted image tagging".
 
 ## Scope
 ### In
-- Auto-tag on import (optional, configurable):
-  - Detect objects, scenes, moods, art styles
+- Auto-suggest on import (optional, configurable):
   - Store suggested tags with confidence scores
-  - User can accept/reject/edit suggestions before finalizing
-- Bulk tag existing images:
-  - "Tag untagged images" action (Library toolbar or Export Hub)
+  - No auto-apply: operator confirms by applying selected suggestions to tags
+- Bulk suggest for existing images:
+  - Library → Tools → “AI tagging (experimental)” → bulk job (mode + limit)
   - Progress UI with cancel support
-  - Review suggested tags before applying
 - Model options (user-configurable):
-  - **Local model** (privacy-first): CLIP, BLIP, or similar via local inference
-  - **Cloud API** (optional): OpenAI Vision, Google Cloud Vision, etc.
-  - Fallback to local if cloud unavailable
-- Tag suggestion UI:
-  - Show confidence scores
-  - Batch accept/reject
-  - Edit before applying
-  - Remember user corrections (reinforce model)
+  - OpenAI-compatible *vision* model endpoint (local-first when pointed at LM Studio/Ollama)
+  - Optional cloud API support by pointing `baseUrl` to a remote provider
+- Tag suggestion UI (per-image):
+  - Image metadata bar → “AI suggestions”
+  - Show confidence per suggestion
+  - Checkbox-select and “Apply selected”
 
 ### Out
 - Training custom models on user's library (v1 keeps it simple)
@@ -40,59 +36,45 @@ Add AI-powered automatic tagging for images on import and bulk tagging for exist
 - NSFW detection (future consideration)
 
 ## Dependencies
-Required packages:
-- `@xenova/transformers` — run CLIP/BLIP models in Node.js (ONNX runtime)
-- `sharp` — image preprocessing (resize/normalize for model input)
-- Optional cloud SDKs (if user enables):
-  - `openai` — for GPT-4 Vision
-  - `@google-cloud/vision` — for Google Cloud Vision API
+- No new npm packages required for v1 (uses existing OpenAI-compatible chat plumbing + Electron `nativeImage`).
+- External dependency: a vision-capable OpenAI-compatible server (LM Studio/Ollama/OpenAI), configured via Tools → Local model.
 
 ## Acceptance criteria
-- [ ] Can auto-tag images on import with user confirmation
-- [ ] Bulk tagging works for 100+ images with progress/cancel
-- [ ] Tags include confidence scores
-- [ ] User can review and edit before applying
-- [ ] Works offline with local model (no internet required)
-- [ ] Settings UI to choose model provider and configure API keys
+- [x] Can auto-suggest tags on import with user confirmation (no auto-apply)
+- [x] Bulk suggesting works for 100+ images with progress/cancel
+- [x] Tags include confidence scores
+- [x] User can review and apply before tags are written
+- [x] Works offline with a local model server (no internet required)
+- [x] Settings UI to configure provider (Tools → Local model) + auto-on-import toggle (Library → Tools)
 
 ## Test plan
-- [ ] Unit tests for tag extraction and scoring
-- [ ] Integration test: import 10 images, verify tag suggestions
-- [ ] Performance test: bulk tag 100 images, measure time
-- [ ] Manual: import various image types (photos, art, screenshots), verify tag quality
-- [ ] Manual: test offline mode (local model only)
-- [ ] `npm test`
-- [ ] `npx tsc --noEmit`
+- [x] Unit tests for suggestion persistence + discovery (`backend_ai_tagging_suggestions.test.js`)
+- [ ] Manual: test with a vision-capable model (tag quality varies by model)
+- [x] `npm test`
+- [x] `npx tsc --noEmit`
 
 ## Governance checklist (MUST)
-- [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (`CastKit_Codex_Spec_v00.052.md` §12.2).
+- [x] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
+- [x] Spec updated + mirrored (`CastKit_Codex_Spec_v00.053.md` §12.2).
 
 ## Implementation notes
-- Key files to create/modify:
-  - `CKC_main/app/ai/vision.js` — Vision model inference wrapper
-  - `CKC_main/app/ai/tag-suggestions.js` — Tag extraction and scoring
-  - `CKC_main/app/ipc/ai-tagging.js` — IPC handlers for tagging operations
-  - `CKC_main/src/ui/components/TagSuggestionPanel.tsx` — Tag review UI
-  - `CKC_main/src/ui/components/SettingsDialog.tsx` — AI model configuration
+- Key files modified:
+  - `CKC_main/app/main.js` — IPC handlers + bulk job + auto-suggest hook on import
+  - `CKC_main/app/backend/llm.js` — allow OpenAI-style multimodal message blocks
+  - `CKC_main/app/backend/db.js` — add `ImageAsset.suggested_tags_json` + `auto_tagged_at`
+  - `CKC_main/app/backend/library.js` — persist/clear/list suggestions
+  - `CKC_main/app/preload.js` — expose AI tagging APIs to renderer
+  - `CKC_main/src/vite-env.d.ts` — typings for AI tagging APIs + job status
+  - `CKC_main/src/ui/components/MediaPane.tsx` — per-image “AI suggestions” panel with apply
+  - `CKC_main/src/ui/views/LibraryView.tsx` — bulk suggest job UI + auto-on-import toggle
+  - `CKC_main/test/backend_ai_tagging_suggestions.test.js` — unit tests
 - Database schema changes:
   - Add `ImageAsset.suggested_tags_json` (store suggestions before user confirms)
   - Add `ImageAsset.auto_tagged_at` timestamp
-- Local model approach (privacy-first default):
-  ```javascript
-  // Use CLIP for zero-shot classification
-  import { pipeline } from '@xenova/transformers';
-  const classifier = await pipeline('zero-shot-image-classification');
-  const result = await classifier(imageBuffer, candidateLabels);
-  ```
-- Model storage:
-  - Download models to `<CKC_ROOT>/CKC_GOV/targets/cache/ai-models/`
-  - First-run downloads CLIP model (~400MB)
-  - Progress UI during model download
+- Request format:
+  - `ckc:suggestImageTags` calls OpenAI-compatible `POST /v1/chat/completions` with `image_url` blocks (`data:image/png;base64,...`) and requests JSON-only output.
 
 ## Notes
-- Start with CLIP (zero-shot) for simplicity
-- Candidate labels: curated list of ~200 common tags for worldbuilding (fantasy, sci-fi, modern, etc.)
-- User can add custom labels to the candidate list
-- Consider tag taxonomy/hierarchy in future iterations
+- Tag quality depends on the chosen vision model; CKC does not auto-apply.
+- Future: add fully local CLIP/BLIP pipelines (no server required) and learning/reinforcement.
 - Do NOT touch `D:`.

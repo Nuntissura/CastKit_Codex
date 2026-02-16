@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('ckc', {
     },
 
     llmChat: (params) => ipcRenderer.invoke('ckc:llmChat', params),
+    getImageTagSuggestions: (params) => ipcRenderer.invoke('ckc:getImageTagSuggestions', params),
+    clearImageTagSuggestions: (params) => ipcRenderer.invoke('ckc:clearImageTagSuggestions', params),
+    suggestImageTags: (params) => ipcRenderer.invoke('ckc:suggestImageTags', params),
+    startAiTaggingJob: (params) => ipcRenderer.invoke('ckc:startAiTaggingJob', params),
+    getAiTaggingJobStatus: (jobId) => ipcRenderer.invoke('ckc:getAiTaggingJobStatus', jobId),
+    cancelAiTaggingJob: (jobId) => ipcRenderer.invoke('ckc:cancelAiTaggingJob', jobId),
     selectLibraryRoot: () => ipcRenderer.invoke('ckc:selectLibraryRoot'),
     getDefaultLibraryRootInfo: () => ipcRenderer.invoke('ckc:getDefaultLibraryRootInfo'),
     resetLibraryRootToDefault: () => ipcRenderer.invoke('ckc:resetLibraryRootToDefault'),

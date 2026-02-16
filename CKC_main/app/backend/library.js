@@ -4995,6 +4995,115 @@ class CKCLibrary {
     return { ok: true };
   }
 
+  _cleanSuggestedTags(suggestions, { maxTags = 24 } = {}) {
+    const raw = Array.isArray(suggestions) ? suggestions : [];
+    const cleaned = [];
+    const seen = new Set();
+
+    for (const s of raw) {
+      if (!s) continue;
+      const tagRaw = typeof s === 'string' ? s : s.tag;
+      const tag = String(tagRaw ?? '')
+        .trim()
+        .replaceAll(/\s+/g, ' ');
+      if (!tag) continue;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let confidence = 0.5;
+      const confRaw = typeof s === 'object' && s ? s.confidence : undefined;
+      if (confRaw !== undefined && confRaw !== null && confRaw !== '') {
+        const confNum = Number(confRaw);
+        if (Number.isFinite(confNum)) confidence = Math.max(0, Math.min(1, confNum));
+      }
+
+      cleaned.push({ tag, confidence: Math.round(confidence * 1000) / 1000 });
+      if (cleaned.length >= Math.max(1, Math.min(200, Number(maxTags) || 24))) break;
+    }
+
+    return cleaned;
+  }
+
+  async getImageTagSuggestions({ imageId }) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+    const row = await get(this.db, `SELECT image_id, suggested_tags_json, auto_tagged_at FROM ImageAsset WHERE image_id = ?`, [id]);
+    if (!row) throw new Error('Image not found');
+
+    let suggestions = [];
+    try {
+      const parsed = JSON.parse(String(row.suggested_tags_json ?? '[]'));
+      if (Array.isArray(parsed)) suggestions = parsed;
+    } catch {
+      suggestions = [];
+    }
+
+    return {
+      ok: true,
+      imageId: String(row.image_id ?? id),
+      suggestions: this._cleanSuggestedTags(suggestions, { maxTags: 200 }),
+      autoTaggedAt: row.auto_tagged_at ? String(row.auto_tagged_at) : null,
+    };
+  }
+
+  async setImageTagSuggestions({ imageId, suggestions }) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+
+    const cleaned = this._cleanSuggestedTags(suggestions, { maxTags: 200 });
+    await run(
+      this.db,
+      `UPDATE ImageAsset
+       SET suggested_tags_json = ?,
+           auto_tagged_at = CURRENT_TIMESTAMP
+       WHERE image_id = ?`,
+      [JSON.stringify(cleaned), id]
+    );
+
+    await this._audit('aiTagging.setSuggestions', null, { imageId: id, tagCount: cleaned.length });
+    return { ok: true, imageId: id, suggestions: cleaned };
+  }
+
+  async clearImageTagSuggestions({ imageId }) {
+    const id = String(imageId ?? '').trim();
+    if (!id) throw new Error('imageId is required');
+    await run(
+      this.db,
+      `UPDATE ImageAsset
+       SET suggested_tags_json = '[]',
+           auto_tagged_at = NULL
+       WHERE image_id = ?`,
+      [id]
+    );
+    await this._audit('aiTagging.clearSuggestions', null, { imageId: id });
+    return { ok: true, imageId: id };
+  }
+
+  async listImageIdsForAiTagging({ mode = 'untagged', limit = 2500 } = {}) {
+    const lim = Math.max(1, Math.min(50_000, Number(limit) || 2500));
+    const m = String(mode ?? '').toLowerCase();
+
+    if (m === 'all') {
+      const rows = await all(this.db, `SELECT image_id FROM ImageAsset ORDER BY added_at DESC LIMIT ?`, [lim]);
+      return rows.map((r) => String(r.image_id ?? '')).filter(Boolean);
+    }
+
+    const rows = await all(
+      this.db,
+      `
+      SELECT image_id
+      FROM ImageAsset
+      WHERE (tags_json IS NULL OR TRIM(tags_json) = '' OR TRIM(tags_json) = '[]')
+        AND (suggested_tags_json IS NULL OR TRIM(suggested_tags_json) = '' OR TRIM(suggested_tags_json) = '[]')
+      ORDER BY added_at DESC
+      LIMIT ?
+    `,
+      [lim]
+    );
+    return rows.map((r) => String(r.image_id ?? '')).filter(Boolean);
+  }
+
   async getImagePalette({ imageId, colorCount = 6 } = {}) {
     const id = String(imageId ?? '').trim();
     if (!id) throw new Error('imageId is required');

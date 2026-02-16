@@ -112,6 +112,12 @@ function tagsTextToArray(text: string): string[] {
   return out;
 }
 
+function toTagKey(tag: string): string {
+  return String(tag ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 export function MediaPane({
   images,
   defaultShowThumbnails = false,
@@ -176,6 +182,12 @@ export function MediaPane({
   const [draftNotes, setDraftNotes] = React.useState<string>('');
   const [draftSourceNote, setDraftSourceNote] = React.useState<string>('');
   const [tagDraft, setTagDraft] = React.useState<string>('');
+  const [aiSuggestions, setAiSuggestions] = React.useState<CKCAiTagSuggestion[]>([]);
+  const [aiAutoTaggedAt, setAiAutoTaggedAt] = React.useState<string | null>(null);
+  const [aiSuggestBusy, setAiSuggestBusy] = React.useState<boolean>(false);
+  const [aiSuggestError, setAiSuggestError] = React.useState<string | null>(null);
+  const [aiSelectedKeys, setAiSelectedKeys] = React.useState<Set<string>>(new Set());
+  const [aiExpanded, setAiExpanded] = React.useState<boolean>(false);
   const [viewerError, setViewerError] = React.useState<boolean>(false);
   const [reloadToken, setReloadToken] = React.useState<number>(0);
   const altLeftDownRef = React.useRef<boolean>(false);
@@ -353,6 +365,50 @@ export function MediaPane({
       cancelled = true;
     };
   }, [selectionCount, primarySelectedId, paletteById]);
+
+  React.useEffect(() => {
+    if (selectionCount !== 1 || !primarySelectedId) {
+      if (aiSuggestions.length !== 0) setAiSuggestions([]);
+      if (aiAutoTaggedAt !== null) setAiAutoTaggedAt(null);
+      if (aiSuggestError !== null) setAiSuggestError(null);
+      if (aiSelectedKeys.size !== 0) setAiSelectedKeys(new Set());
+      if (aiExpanded) setAiExpanded(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAiSuggestError(null);
+    window.ckc
+      .getImageTagSuggestions({ imageId: primarySelectedId })
+      .then((res: any) => {
+        if (cancelled) return;
+        const suggestions = Array.isArray(res?.suggestions) ? (res.suggestions as CKCAiTagSuggestion[]) : [];
+        setAiSuggestions(suggestions);
+        setAiAutoTaggedAt(typeof res?.autoTaggedAt === 'string' ? res.autoTaggedAt : null);
+
+        const existing = new Set<string>((primarySelected?.tags || []).map((t) => toTagKey(t)).filter(Boolean));
+        const nextSel = new Set<string>();
+        for (const s of suggestions) {
+          const k = toTagKey(String(s?.tag ?? ''));
+          if (!k) continue;
+          if (existing.has(k)) continue;
+          nextSel.add(k);
+        }
+        setAiSelectedKeys(nextSel);
+        setAiExpanded(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setAiSuggestions([]);
+        setAiAutoTaggedAt(null);
+        setAiSelectedKeys(new Set());
+        setAiSuggestError(err instanceof Error ? err.message : String(err));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectionCount, primarySelectedId]);
 
   React.useEffect(() => {
     void window.ckc.setReferenceSelection({ imageId: primarySelectedId });
@@ -582,6 +638,82 @@ export function MediaPane({
     },
     [images, onPatchImageMeta]
   );
+
+  const applySelectedAiTags = React.useCallback(() => {
+    if (selectionCount !== 1 || !primarySelected) return;
+    if (!aiSuggestions.length || aiSelectedKeys.size === 0) return;
+
+    const base = Array.isArray(primarySelected.tags) ? primarySelected.tags : [];
+    const seen = new Set(base.map((t) => toTagKey(t)).filter(Boolean));
+    const next = [...base];
+    const applied = new Set<string>();
+
+    for (const s of aiSuggestions) {
+      const tag = String(s?.tag ?? '').trim();
+      const k = toTagKey(tag);
+      if (!k) continue;
+      if (!aiSelectedKeys.has(k)) continue;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      next.push(tag);
+      applied.add(k);
+    }
+
+    if (next.length === base.length) return;
+    void patchMetaSingle(primarySelected.id, { tags: next });
+
+    if (applied.size > 0) {
+      setAiSelectedKeys((prev) => {
+        const out = new Set(prev);
+        for (const k of Array.from(applied)) out.delete(k);
+        return out;
+      });
+    }
+  }, [selectionCount, primarySelected, aiSuggestions, aiSelectedKeys, patchMetaSingle]);
+
+  const runAiSuggest = React.useCallback(async () => {
+    if (selectionCount !== 1 || !primarySelectedId) return;
+    setAiSuggestBusy(true);
+    setAiSuggestError(null);
+    try {
+      await window.ckc.suggestImageTags({ imageId: primarySelectedId });
+      const res: any = await window.ckc.getImageTagSuggestions({ imageId: primarySelectedId });
+      const suggestions = Array.isArray(res?.suggestions) ? (res.suggestions as CKCAiTagSuggestion[]) : [];
+      setAiSuggestions(suggestions);
+      setAiAutoTaggedAt(typeof res?.autoTaggedAt === 'string' ? res.autoTaggedAt : null);
+      const existing = new Set<string>((primarySelected?.tags || []).map((t) => toTagKey(t)).filter(Boolean));
+      const nextSel = new Set<string>();
+      for (const s of suggestions) {
+        const k = toTagKey(String(s?.tag ?? ''));
+        if (!k) continue;
+        if (existing.has(k)) continue;
+        nextSel.add(k);
+      }
+      setAiSelectedKeys(nextSel);
+      setAiExpanded(false);
+    } catch (err: unknown) {
+      setAiSuggestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiSuggestBusy(false);
+    }
+  }, [selectionCount, primarySelectedId, primarySelected?.tags]);
+
+  const clearAiSuggestions = React.useCallback(async () => {
+    if (selectionCount !== 1 || !primarySelectedId) return;
+    setAiSuggestBusy(true);
+    setAiSuggestError(null);
+    try {
+      await window.ckc.clearImageTagSuggestions({ imageId: primarySelectedId });
+      setAiSuggestions([]);
+      setAiAutoTaggedAt(null);
+      setAiSelectedKeys(new Set());
+      setAiExpanded(false);
+    } catch (err: unknown) {
+      setAiSuggestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiSuggestBusy(false);
+    }
+  }, [selectionCount, primarySelectedId]);
 
   React.useEffect(() => {
     const onKeyDown = (evt: KeyboardEvent) => {
@@ -1308,6 +1440,78 @@ export function MediaPane({
                 </datalist>
               </div>
             </div>
+
+            {selectionCount === 1 && primarySelected ? (
+              <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10, marginTop: 10 }} aria-label="AI suggestions">
+                <div className={styles.aiSuggestTop}>
+                  <div style={{ fontWeight: 800 }}>AI suggestions</div>
+                  <div className={styles.aiSuggestActions}>
+                    <button className={styles.tagBtn} disabled={isBusy || aiSuggestBusy} onClick={() => void runAiSuggest()} title="Generate tag suggestions using a local/remote vision model">
+                      {aiSuggestBusy ? 'AIâ€¦' : 'Suggest tags'}
+                    </button>
+                    <button className={styles.tagBtn} disabled={isBusy || aiSuggestBusy || aiSuggestions.length === 0} onClick={() => void clearAiSuggestions()} title="Clear stored suggestions for this image">
+                      Clear
+                    </button>
+                    <button className={styles.tagBtn} disabled={isBusy || aiSuggestBusy || aiSelectedKeys.size === 0} onClick={applySelectedAiTags} title="Apply selected suggestions to tags">
+                      Apply selected
+                    </button>
+                  </div>
+                </div>
+
+                {aiAutoTaggedAt ? (
+                  <div className={styles.aiSuggestMeta}>Last run: {new Date(aiAutoTaggedAt).toLocaleString()}</div>
+                ) : (
+                  <div className={styles.aiSuggestMeta}>Uses Tools â†’ Local model settings (vision-capable model required).</div>
+                )}
+
+                {aiSuggestError ? <div className={styles.aiSuggestError}>{aiSuggestError}</div> : null}
+
+                {aiSuggestions.length === 0 ? (
+                  <div className={styles.tagsEmpty} style={{ marginTop: 6 }}>
+                    (none)
+                  </div>
+                ) : (
+                  <div className={styles.aiSuggestChipRow} aria-label="Suggested tags" style={{ marginTop: 6 }}>
+                    {(aiExpanded ? aiSuggestions : aiSuggestions.slice(0, 12)).map((s) => {
+                      const tag = String(s?.tag ?? '').trim();
+                      const k = toTagKey(tag);
+                      const confNum = Number(s?.confidence);
+                      const conf = Number.isFinite(confNum) ? Math.max(0, Math.min(1, confNum)) : 0.5;
+                      const checked = !!(k && aiSelectedKeys.has(k));
+                      return (
+                        <label key={tag || k} className={styles.aiSuggestChip} title={`${Math.round(conf * 100)}%`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={isBusy || aiSuggestBusy || !k}
+                            onChange={(e) => {
+                              const nextChecked = !!e.target.checked;
+                              if (!k) return;
+                              setAiSelectedKeys((prev) => {
+                                const out = new Set(prev);
+                                if (nextChecked) out.add(k);
+                                else out.delete(k);
+                                return out;
+                              });
+                            }}
+                          />
+                          <span>{tag}</span>
+                          <span className={styles.aiSuggestConf}>{Math.round(conf * 100)}%</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {aiSuggestions.length > 12 ? (
+                  <div style={{ marginTop: 8 }}>
+                    <button className={styles.tagBtn} disabled={isBusy || aiSuggestBusy} onClick={() => setAiExpanded((v) => !v)}>
+                      {aiExpanded ? 'Show less' : `Show all (${aiSuggestions.length})`}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {selectionCount === 1 && primarySelected ? (
               <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 10, marginTop: 10 }} aria-label="Palette">

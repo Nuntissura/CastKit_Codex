@@ -99,7 +99,7 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0081 | Moodboard: styling (opacity/blend/shadow) | DONE | Codex | Per-layer styling (non-destructive). |
 | WP-0082 | Moodboard: export powerhouse | DONE | Codex | Hi-res + selection export + PDF. |
 | WP-0083 | Global full-text search | DONE | Codex | Ctrl+Shift+F global search across sheets/docs/moodboards/images with snippets + jump-to (`npm test`, `npx tsc --noEmit`). |
-| WP-0084 | AI-assisted image tagging | IN_PROGRESS | Codex | Tag suggestions (confidence) via local OpenAI-compatible vision + review/apply UI; bulk job + cancel. |
+| WP-0084 | AI-assisted image tagging | DONE | Codex | OpenAI-compatible vision endpoint (LM Studio/Ollama/OpenAI) for suggested tags + confidence; per-image review/apply; cancellable bulk job; auto-suggest on import toggle (`npm test`, `npx tsc --noEmit`). |
 | WP-0085 | Character templates & cloning | BACKLOG | TBD | Save/load character templates; clone characters; built-in template library; batch character creation. |
 | WP-0086 | macOS build support | BACKLOG | TBD | electron-builder macOS config; DMG + .app bundle; GitHub Actions workflow; portable defaults. |
 | WP-0087 | Web portfolio export | BACKLOG | TBD | Export library as static HTML website (portfolio/codex formats); GitHub Pages ready. |
@@ -108,6 +108,6 @@ This file is mirrored into `CKC_main/docs/` for convenience:
 | WP-0090 | Batch character operations | BACKLOG | TBD | Multi-select characters; bulk field edits; batch export; batch delete with undo. |
 
 ## Current focus
-- Current: WP-0084.
-- Next: WP-0085.
+- Current: WP-0085.
+- Next: WP-0086.
 - High-ROI backlog: WP-0084 (AI tagging), WP-0085 (templates), WP-0086 (macOS), WP-0087 (web export), WP-0088 (performance).

@@ -554,6 +554,29 @@ type CKCSheetVersionDiffResult = {
   changes: CKCSheetVersionDiffChange[];
 };
 
+type CKCAiTagSuggestion = {
+  tag: string;
+  confidence: number;
+};
+
+type CKCImageTagSuggestionsResult = {
+  ok: true;
+  imageId: string;
+  suggestions: CKCAiTagSuggestion[];
+  autoTaggedAt: string | null;
+};
+
+type CKCAiTaggingJobStatus = {
+  ok: true;
+  jobId: string;
+  status: 'running' | 'cancelled' | 'done' | 'error';
+  startedAt: string;
+  finishedAt: string | null;
+  progress: { phase: string; done: number; total: number; imageId?: string | null } | null;
+  error: string | null;
+  result: null | { ok: true; processed: number; suggested: number; failed: number; total: number };
+};
+
 interface Window {
   ckc: {
     initialize: () => Promise<{ ok: true }>;
@@ -581,6 +604,12 @@ interface Window {
       temperature?: number;
       maxTokens?: number;
       }) => Promise<{ ok: true; text: string }>;
+      getImageTagSuggestions: (params: { imageId: string }) => Promise<CKCImageTagSuggestionsResult>;
+      clearImageTagSuggestions: (params: { imageId: string }) => Promise<{ ok: true; imageId: string }>;
+      suggestImageTags: (params: { imageId: string }) => Promise<{ ok: true; imageId: string; suggestions: CKCAiTagSuggestion[] }>;
+      startAiTaggingJob: (params?: { mode?: 'untagged' | 'all'; limit?: number; imageIds?: string[] } | null) => Promise<{ ok: true; jobId: string }>;
+      getAiTaggingJobStatus: (jobId: string) => Promise<CKCAiTaggingJobStatus>;
+      cancelAiTaggingJob: (jobId: string) => Promise<{ ok: true }>;
       selectLibraryRoot: () => Promise<string | null>;
       getDefaultLibraryRootInfo: () => Promise<{ isPortable: boolean; portableDir: string | null; defaultLibraryRoot: string }>;
       resetLibraryRootToDefault: () => Promise<string>;

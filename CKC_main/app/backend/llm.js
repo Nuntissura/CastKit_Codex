@@ -27,10 +27,38 @@ function sanitizeChatMessages(messages) {
     .map((m) => {
       if (!m || typeof m !== 'object') return null;
       const role = String(m.role || '').trim();
-      const content = String(m.content ?? '');
       if (role !== 'system' && role !== 'user' && role !== 'assistant') return null;
-      if (!content.length) return null;
-      return { role, content };
+      const raw = m.content;
+
+      if (typeof raw === 'string') {
+        if (!raw.length) return null;
+        return { role, content: raw };
+      }
+
+      // OpenAI-style rich content (multimodal): [{ type:'text', text }, { type:'image_url', image_url:{ url } }]
+      if (Array.isArray(raw)) {
+        const blocks = raw
+          .map((b) => {
+            if (!b || typeof b !== 'object') return null;
+            const type = String(b.type ?? '').trim();
+            if (type === 'text') {
+              const text = String(b.text ?? '');
+              if (!text.length) return null;
+              return { type: 'text', text };
+            }
+            if (type === 'image_url') {
+              const url = String(b.image_url?.url ?? '').trim();
+              if (!url) return null;
+              return { type: 'image_url', image_url: { url } };
+            }
+            return null;
+          })
+          .filter(Boolean);
+        if (blocks.length === 0) return null;
+        return { role, content: blocks };
+      }
+
+      return null;
     })
     .filter(Boolean);
 }
@@ -95,4 +123,3 @@ module.exports = {
   normalizeOpenAiChatCompletionsUrl,
   openAiChatCompletions,
 };
-
