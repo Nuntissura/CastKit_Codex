@@ -1,8 +1,8 @@
 # Work Packet: WP-0083 — Global full-text search across all content
 
 Date: 2026-02-15
-Owner: TBD
-Status: BACKLOG
+Owner: Codex
+Status: IN_PROGRESS
 
 ## Summary
 Add a global full-text search that searches across character sheets, notes, stories, moodboard text layers, and image metadata with context previews and jump-to-result navigation.
