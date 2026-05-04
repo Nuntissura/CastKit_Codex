@@ -44,7 +44,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.060.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.061.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -85,7 +85,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.060.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.061.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -98,6 +98,9 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
   - `unregister_backup_task.ps1` — disable/enable/remove the scheduled backup task
+  - `sqlite_to_postgres.ps1` — one-way import from an existing SQLite `db/codex.db` into PostgreSQL
+  - `postgres_dump.ps1` — create a PostgreSQL custom-format dump under `CKC_GOV/targets/CKC/postgres_dumps/`
+  - `postgres_restore.ps1` — restore a PostgreSQL dump with optional clean restore
 - `targets/`
   - `CKC/artifacts/` — build outputs (**not** stored in git)
     - `CKC/artifacts/dev/` — local/debug builds (folder `buildId` includes timestamp+git SHA)
@@ -125,6 +128,37 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts` (use `dev/` or `releases/` subfolders)
 - Build logs MUST go to:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
+
+### Database provider
+- Default provider remains SQLite:
+  - `<libraryRoot>\\db\\codex.db`
+- PostgreSQL is available for development/parallel-worker use behind the database provider boundary:
+  - `ckc-config.json`:
+    ```json
+    {
+      "database": {
+        "provider": "postgres",
+        "connectionString": "postgres://user:password@127.0.0.1:5432/castkit_codex"
+      }
+    }
+    ```
+  - Environment override:
+    ```powershell
+    $env:CKC_DB_PROVIDER="postgres"
+    $env:CKC_POSTGRES_URL="postgres://user:password@127.0.0.1:5432/castkit_codex"
+    ```
+- SQLite-to-PostgreSQL import:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\sqlite_to_postgres.ps1" -LibraryRoot "<libraryRoot>" -ConnectionString $env:CKC_POSTGRES_URL
+  ```
+- PostgreSQL dump:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_dump.ps1" -ConnectionString $env:CKC_POSTGRES_URL
+  ```
+- PostgreSQL restore:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_restore.ps1" -DumpPath "<dump-file>" -ConnectionString $env:CKC_POSTGRES_URL
+  ```
 
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
@@ -217,6 +251,8 @@ Scripts live in `CKC_GOV/scripts/`:
 - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
 - `unregister_backup_task.ps1` — easy toggle for the scheduled task (disable/enable/remove)
 Note: the backup script reads the active CKC `libraryRoot` from `%APPDATA%\\castkit-codex\\ckc-config.json` and mirrors it to a separate destination folder (default: `<CKC_BACKUP_DEST>__libraryRoot`, override via `CKC_BACKUP_DEST_LIBRARY`). If `libraryRoot` is configured but missing on disk, the backup exits non-zero to make the risk explicit.
+
+PostgreSQL note: the ROBOCOPY mirror protects the filesystem side (`libraryRoot`, images, exports, templates), but it is not a PostgreSQL database backup. When `database.provider` is `postgres`, run `CKC_GOV/scripts/postgres_dump.ps1` and store the resulting dump with the mirrored backup set.
 
 Run a backup now:
 ```powershell

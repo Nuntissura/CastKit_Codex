@@ -74,8 +74,22 @@ function loadConfig() {
             defaultTemplateId: 'v2.00',
             validationMode: 'strict',
             allowSaveWithErrors: false,
+            database: {
+                provider: 'sqlite',
+            },
         },
     };
+}
+
+function normalizeConfig(config) {
+    const cfg = config && typeof config === 'object' ? config : {};
+    if (!cfg.database || typeof cfg.database !== 'object') {
+        cfg.database = { provider: 'sqlite' };
+    }
+    if (!String(cfg.database.provider || '').trim()) {
+        cfg.database.provider = 'sqlite';
+    }
+    return cfg;
 }
 
 function saveConfig(configPath, config) {
@@ -343,6 +357,7 @@ async function ensureLibrary() {
             builtInTemplatePath,
             defaultTemplateId: appConfig.defaultTemplateId,
             electronNativeImage: nativeImage,
+            database: appConfig.database,
         });
         await ckcLibrary.initialize();
         return ckcLibrary;
@@ -2052,7 +2067,7 @@ function registerIpcHandlers() {
 app.whenReady().then(async () => {
     const loaded = loadConfig();
     appConfigPath = loaded.configPath;
-    appConfig = loaded.config;
+    appConfig = normalizeConfig(loaded.config);
     saveConfig(appConfigPath, appConfig);
 
     registerIpcHandlers();

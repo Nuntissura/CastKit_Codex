@@ -2,6 +2,34 @@ const sqlite3 = require('sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+const POSTGRES_TABLE_ORDER = [
+  'Character',
+  'Template',
+  'FieldValue',
+  'Tag',
+  'CharacterTag',
+  'SheetFile',
+  'SheetVersion',
+  'ProtectedField',
+  'ImageAsset',
+  'TemplateSpinOff',
+  'TagRule',
+  'SavedSearch',
+  'TagTemplate',
+  'AuditLog',
+  'NoteDoc',
+  'StoryDoc',
+  'MoodboardDoc',
+  'StoryBoard',
+  'LinkIndex',
+  'ImageAnnotation',
+  'Collection',
+  'CollectionItem',
+  'CharacterRelation',
+  'CkcMeta',
+  'CkcDbMigration',
+];
+
 function dbNotReady(methodName) {
   const err = new Error(
     `SQLite DB not initialized (missing db.${methodName}). Did you forget to call/await library.initialize()?`
@@ -10,7 +38,161 @@ function dbNotReady(methodName) {
   return err;
 }
 
-function openDb(dbPath) {
+function normalizeProvider(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'pg' || raw === 'postgres' || raw === 'postgresql') return 'postgres';
+  return 'sqlite';
+}
+
+function resolveDbConfig(options = {}) {
+  const raw =
+    options && typeof options === 'object'
+      ? options.database && typeof options.database === 'object'
+        ? options.database
+        : options.dbConfig && typeof options.dbConfig === 'object'
+          ? options.dbConfig
+          : options
+      : {};
+
+  const provider = normalizeProvider(process.env.CKC_DB_PROVIDER || process.env.CKC_DATABASE_PROVIDER || raw.provider);
+  return {
+    provider,
+    connectionString:
+      process.env.CKC_POSTGRES_URL ||
+      process.env.CKC_POSTGRES_CONNECTION_STRING ||
+      process.env.DATABASE_URL ||
+      raw.connectionString ||
+      raw.url ||
+      '',
+    host: process.env.CKC_POSTGRES_HOST || raw.host || undefined,
+    port: process.env.CKC_POSTGRES_PORT || raw.port || undefined,
+    database: process.env.CKC_POSTGRES_DATABASE || raw.database || raw.dbName || undefined,
+    user: process.env.CKC_POSTGRES_USER || raw.user || undefined,
+    password: process.env.CKC_POSTGRES_PASSWORD || raw.password || undefined,
+    ssl: process.env.CKC_POSTGRES_SSL || raw.ssl || false,
+    max: Number(process.env.CKC_POSTGRES_POOL_MAX || raw.max || 10) || 10,
+  };
+}
+
+function isPostgresDb(db) {
+  return !!db && (db.dialect === 'postgres' || db.provider === 'postgres');
+}
+
+function translateQuestionParams(sql) {
+  const raw = String(sql ?? '');
+  let out = '';
+  let paramIndex = 1;
+  let quote = null;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (quote) {
+      out += ch;
+      if (ch === quote) {
+        if (raw[i + 1] === quote) {
+          out += raw[i + 1];
+          i++;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch;
+      out += ch;
+      continue;
+    }
+
+    if (ch === '?') {
+      out += `$${paramIndex++}`;
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
+function appendOnConflictDoNothing(sql) {
+  const raw = String(sql ?? '').trim();
+  if (!raw) return raw;
+  const body = raw.replace(/;+\s*$/g, '');
+  return `${body} ON CONFLICT DO NOTHING`;
+}
+
+function translatePostgresSql(sql) {
+  const raw = String(sql ?? '');
+  const hadInsertOrIgnore = /\bINSERT\s+OR\s+IGNORE\s+INTO\b/i.test(raw);
+  const hadInsertOrReplace = /\bINSERT\s+OR\s+REPLACE\s+INTO\b/i.test(raw);
+  let out = raw
+    .replace(/^\s*PRAGMA\s+foreign_keys\s*=\s*ON\s*;?\s*/gim, '')
+    .replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/gi, 'INSERT INTO')
+    .replace(/\bINSERT\s+OR\s+REPLACE\s+INTO\b/gi, 'INSERT INTO')
+    .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
+    .replace(/\bREAL\b/gi, 'DOUBLE PRECISION');
+
+  out = translateQuestionParams(out);
+  if ((hadInsertOrIgnore || hadInsertOrReplace) && !/\bON\s+CONFLICT\b/i.test(out)) out = appendOnConflictDoNothing(out);
+  return out;
+}
+
+function getPostgresConnectionOptions(config) {
+  const sslRaw = config.ssl;
+  const ssl =
+    sslRaw === true || String(sslRaw).toLowerCase() === 'true'
+      ? { rejectUnauthorized: false }
+      : sslRaw || undefined;
+
+  if (config.connectionString) {
+    return { connectionString: String(config.connectionString), ssl, max: config.max };
+  }
+
+  return {
+    host: config.host,
+    port: config.port ? Number(config.port) : undefined,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    ssl,
+    max: config.max,
+  };
+}
+
+async function openPostgresDb(config) {
+  let Pool = null;
+  try {
+    ({ Pool } = require('pg'));
+  } catch (err) {
+    const missing = new Error('PostgreSQL provider requires the `pg` package. Run npm install in CKC_main.');
+    missing.code = 'CKC_POSTGRES_DRIVER_MISSING';
+    missing.cause = err;
+    throw missing;
+  }
+
+  const pool = new Pool(getPostgresConnectionOptions(config));
+  const adapter = {
+    provider: 'postgres',
+    dialect: 'postgres',
+    config,
+    query(sql, params = []) {
+      return pool.query(sql, params);
+    },
+    close(callback) {
+      const done = pool.end();
+      if (typeof callback === 'function') done.then(() => callback(null), callback);
+      return done;
+    },
+  };
+
+  await adapter.query('SELECT 1');
+  return adapter;
+}
+
+function openSqliteDb(dbPath) {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
@@ -22,7 +204,17 @@ function openDb(dbPath) {
   });
 }
 
-function run(db, sql, params = []) {
+async function openDb(dbPath, options = {}) {
+  const config = resolveDbConfig(options);
+  if (config.provider === 'postgres') return openPostgresDb(config);
+  return openSqliteDb(dbPath);
+}
+
+async function run(db, sql, params = []) {
+  if (isPostgresDb(db)) {
+    const res = await db.query(translatePostgresSql(sql), params);
+    return { changes: res.rowCount, rowCount: res.rowCount, rows: res.rows };
+  }
   if (!db || typeof db.run !== 'function') throw dbNotReady('run');
   return new Promise((resolve, reject) => {
     db.run(sql, params, function onRun(err) {
@@ -32,7 +224,11 @@ function run(db, sql, params = []) {
   });
 }
 
-function get(db, sql, params = []) {
+async function get(db, sql, params = []) {
+  if (isPostgresDb(db)) {
+    const res = await db.query(translatePostgresSql(sql), params);
+    return res.rows[0];
+  }
   if (!db || typeof db.get !== 'function') throw dbNotReady('get');
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
@@ -42,7 +238,11 @@ function get(db, sql, params = []) {
   });
 }
 
-function all(db, sql, params = []) {
+async function all(db, sql, params = []) {
+  if (isPostgresDb(db)) {
+    const res = await db.query(translatePostgresSql(sql), params);
+    return res.rows;
+  }
   if (!db || typeof db.all !== 'function') throw dbNotReady('all');
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
@@ -53,6 +253,12 @@ function all(db, sql, params = []) {
 }
 
 async function exec(db, sql) {
+  if (isPostgresDb(db)) {
+    const translated = translatePostgresSql(sql).trim();
+    if (!translated) return;
+    await db.query(translated);
+    return;
+  }
   if (!db || typeof db.exec !== 'function') throw dbNotReady('exec');
   return new Promise((resolve, reject) => {
     db.exec(sql, (err) => {
@@ -62,7 +268,26 @@ async function exec(db, sql) {
   });
 }
 
+function postgresColumnDef(columnDefSql) {
+  return String(columnDefSql ?? '')
+    .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
+    .replace(/\bREAL\b/gi, 'DOUBLE PRECISION');
+}
+
 async function ensureColumn(db, tableName, columnName, columnDefSql) {
+  if (isPostgresDb(db)) {
+    const row = await get(
+      db,
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = ? AND column_name = ?`,
+      [String(tableName).toLowerCase(), String(columnName).toLowerCase()]
+    );
+    if (row) return false;
+    await run(db, `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${postgresColumnDef(columnDefSql)}`);
+    return true;
+  }
+
   const rows = await all(db, `PRAGMA table_info(${tableName})`);
   const has = rows.some((r) => r.name === columnName);
   if (has) return false;
@@ -440,7 +665,327 @@ async function ensureSchemaUpgrades(db) {
   }
 }
 
+async function initPostgresSchema(db) {
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS Character (
+      character_id TEXT PRIMARY KEY,
+      public_id TEXT UNIQUE,
+      display_name TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      template_version TEXT NOT NULL,
+      template_hash TEXT NOT NULL,
+      search_blob TEXT NOT NULL DEFAULT '',
+      search_blob_ids TEXT NOT NULL DEFAULT '',
+      search_blob_labels TEXT NOT NULL DEFAULT '',
+      search_blob_values TEXT NOT NULL DEFAULT '',
+      search_blob_tags TEXT NOT NULL DEFAULT '',
+      search_blob_name TEXT NOT NULL DEFAULT '',
+      icon_image_id TEXT,
+      icon_focus_x DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+      icon_focus_y DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+      is_system INTEGER NOT NULL DEFAULT 0,
+      deleted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_character_public_id ON Character(public_id);
+    CREATE INDEX IF NOT EXISTS idx_character_created_at ON Character(created_at);
+    CREATE INDEX IF NOT EXISTS idx_character_updated_at ON Character(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_character_deleted_at ON Character(deleted_at);
+
+    CREATE TABLE IF NOT EXISTS Template (
+      template_id TEXT PRIMARY KEY,
+      version_label TEXT,
+      source_path TEXT,
+      template_hash TEXT,
+      ast_json TEXT,
+      raw_text TEXT,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS FieldValue (
+      character_id TEXT NOT NULL,
+      field_id TEXT NOT NULL,
+      value_text TEXT,
+      value_type TEXT,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(character_id, field_id),
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_field_value_field_id ON FieldValue(field_id);
+
+    CREATE TABLE IF NOT EXISTS Tag (
+      tag_id TEXT PRIMARY KEY,
+      tag_text TEXT UNIQUE NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS CharacterTag (
+      character_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      tag_type TEXT CHECK(tag_type IN ('manual', 'derived')) NOT NULL,
+      PRIMARY KEY(character_id, tag_id),
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE,
+      FOREIGN KEY(tag_id) REFERENCES Tag(tag_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS SheetFile (
+      character_id TEXT NOT NULL,
+      path TEXT PRIMARY KEY,
+      format TEXT CHECK(format IN ('txt', 'md')) NOT NULL,
+      raw_text TEXT,
+      last_export_hash TEXT,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS SheetVersion (
+      version_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      source TEXT CHECK(source IN ('ui_edit', 'ingest', 'paste_patch', 'import')) NOT NULL,
+      parent_version_id TEXT,
+      export_format TEXT,
+      export_relative_path TEXT,
+      sheet_bytes_hash TEXT,
+      notes TEXT,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS ProtectedField (
+      protected_id TEXT PRIMARY KEY,
+      scope TEXT CHECK(scope IN ('global', 'character')) NOT NULL,
+      character_id TEXT,
+      field_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS ImageAsset (
+      image_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      file_hash TEXT NOT NULL,
+      width INTEGER,
+      height INTEGER,
+      added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      favorite INTEGER NOT NULL DEFAULT 0,
+      rating INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      suggested_tags_json TEXT NOT NULL DEFAULT '[]',
+      auto_tagged_at TIMESTAMPTZ,
+      storage_mode TEXT NOT NULL DEFAULT 'copy',
+      source_path TEXT,
+      source_url TEXT,
+      source_note TEXT,
+      palette_json TEXT,
+      dhash_hex TEXT,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash);
+    CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id);
+    CREATE INDEX IF NOT EXISTS idx_image_added_at ON ImageAsset(added_at);
+    CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json);
+
+    CREATE TABLE IF NOT EXISTS TemplateSpinOff (
+      spinoff_id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL,
+      template_hash_at_create TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      field_id_list TEXT NOT NULL,
+      format TEXT CHECK(format IN ('llm_pack_strict', 'fieldpack_with_values')) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      is_builtin INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(template_id, name),
+      FOREIGN KEY(template_id) REFERENCES Template(template_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS TagRule (
+      rule_id TEXT PRIMARY KEY,
+      source_field_id TEXT NOT NULL,
+      match_type TEXT CHECK(match_type IN ('equals', 'contains', 'regex')) NOT NULL,
+      pattern TEXT NOT NULL,
+      emit_tag TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      template_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS SavedSearch (
+      search_id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      query_text TEXT NOT NULL DEFAULT '',
+      scope_flags_json TEXT NOT NULL DEFAULT '{}',
+      tag_filters_json TEXT NOT NULL DEFAULT '[]',
+      gallery_filters_json TEXT NOT NULL DEFAULT '{}',
+      tag_mode TEXT NOT NULL DEFAULT 'all',
+      tag_exclude_json TEXT NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      is_builtin INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS TagTemplate (
+      template_name TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      description TEXT,
+      tags_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(template_name, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS AuditLog (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      character_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      details_json TEXT NOT NULL DEFAULT '{}',
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_character_time ON AuditLog(character_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS NoteDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body_text TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_note_updated ON NoteDoc(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS StoryDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      body_text TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_story_updated ON StoryDoc(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS MoodboardDoc (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      board_json TEXT NOT NULL DEFAULT '{}',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_moodboard_updated ON MoodboardDoc(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS StoryBoard (
+      doc_id TEXT PRIMARY KEY,
+      board_json TEXT NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(doc_id) REFERENCES StoryDoc(doc_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_storyboard_updated ON StoryBoard(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS LinkIndex (
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      raw_text TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(source_type, source_id, target_type, target_id, raw_text)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_link_target ON LinkIndex(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS idx_link_source ON LinkIndex(source_type, source_id);
+
+    CREATE TABLE IF NOT EXISTS ImageAnnotation (
+      image_id TEXT PRIMARY KEY,
+      annotations_json TEXT NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_image_annotation_updated ON ImageAnnotation(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS Collection (
+      collection_id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS CollectionItem (
+      collection_id TEXT NOT NULL,
+      image_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(collection_id, image_id),
+      FOREIGN KEY(collection_id) REFERENCES Collection(collection_id) ON DELETE CASCADE,
+      FOREIGN KEY(image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_collection_item_order ON CollectionItem(collection_id, sort_order, added_at);
+
+    CREATE TABLE IF NOT EXISTS CharacterRelation (
+      relation_id TEXT PRIMARY KEY,
+      source_character_id TEXT NOT NULL,
+      target_character_id TEXT NOT NULL,
+      rel_type TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(source_character_id) REFERENCES Character(character_id) ON DELETE CASCADE,
+      FOREIGN KEY(target_character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_relation_source ON CharacterRelation(source_character_id);
+    CREATE INDEX IF NOT EXISTS idx_relation_target ON CharacterRelation(target_character_id);
+
+    CREATE TABLE IF NOT EXISTS CkcMeta (
+      meta_key TEXT PRIMARY KEY,
+      meta_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS CkcDbMigration (
+      migration_key TEXT PRIMARY KEY,
+      migration_value TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+  `
+  );
+
+  await run(
+    db,
+    `INSERT INTO CkcDbMigration(migration_key, migration_value, updated_at)
+     VALUES(?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(migration_key) DO UPDATE SET
+       migration_value = excluded.migration_value,
+       updated_at = CURRENT_TIMESTAMP`,
+    ['postgres_schema', 'v1']
+  );
+}
+
 async function initSchema(db) {
+  if (isPostgresDb(db)) {
+    await initPostgresSchema(db);
+    return;
+  }
+
   const schema = `
     PRAGMA foreign_keys = ON;
 
@@ -577,4 +1122,10 @@ module.exports = {
   run,
   get,
   all,
+  exec,
+  ensureColumn,
+  resolveDbConfig,
+  isPostgresDb,
+  translatePostgresSql,
+  POSTGRES_TABLE_ORDER,
 };

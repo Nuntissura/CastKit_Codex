@@ -205,11 +205,12 @@ function clamp01(n, fallback = 0.5) {
 }
 
 class CKCLibrary {
-  constructor({ libraryRoot, builtInTemplatePath, defaultTemplateId = 'v2.00', electronNativeImage = null }) {
+  constructor({ libraryRoot, builtInTemplatePath, defaultTemplateId = 'v2.00', electronNativeImage = null, database = null }) {
     this.libraryRoot = libraryRoot;
     this.builtInTemplatePath = builtInTemplatePath;
     this.defaultTemplateId = defaultTemplateId || 'v2.00';
     this.electronNativeImage = electronNativeImage;
+    this.database = database;
 
     this.db = null;
     this.template = null; // active default template AST
@@ -313,7 +314,7 @@ class CKCLibrary {
     ensureDir(charactersDir);
     ensureDir(exportsDir);
 
-    this.db = await openDb(dbPath);
+    this.db = await openDb(dbPath, { database: this.database, libraryRoot: this.libraryRoot });
     await initSchema(this.db);
 
     await this.ensureTemplateLoaded();

@@ -2,7 +2,7 @@
 
 Date: 2026-05-04
 Owner: Codex
-Status: IN_PROGRESS
+Status: IN_PROGRESS - implementation slice complete, validation pending
 
 ## Summary
 Move CKC persistence from local SQLite assumptions toward PostgreSQL-backed storage suitable for parallel model/operator work.
@@ -50,6 +50,13 @@ SQLite is deeply integrated and works for a single local app, but future paralle
   - `CKC_GOV/spec/`
 - Data model changes: PostgreSQL schema and migration metadata.
 - IPC/API changes: avoid changing renderer contracts unless required.
+- 2026-05-04 slice:
+  - Added database provider config with SQLite default and PostgreSQL opt-in.
+  - Added PostgreSQL adapter/schema initializer in the DB boundary.
+  - Added SQLite-to-PostgreSQL import tooling for current CKC tables.
+  - Added PostgreSQL dump/restore scripts and governance docs.
+  - Added conditional PostgreSQL integration test gated by `CKC_TEST_POSTGRES_URL`.
+  - Validation was not run in this pass.
 
 ## Execution plan
 - Phase 1: introduce an explicit database provider boundary while keeping SQLite as the default path.

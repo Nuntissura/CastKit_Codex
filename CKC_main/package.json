@@ -11,6 +11,7 @@
     "build": "vite build --emptyOutDir --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "preview": "vite preview --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "test": "node --test",
+    "migrate:sqlite-to-postgres": "node scripts/sqlite_to_postgres.js",
     "package:win:raw": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
     "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
     "release:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
@@ -20,6 +21,7 @@
     "electron:build": "npm run package:win"
   },
   "dependencies": {
+    "pg": "^8.20.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sqlite3": "^5.1.7"
@@ -72,8 +74,16 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   }
