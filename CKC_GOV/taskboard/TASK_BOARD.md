@@ -2,10 +2,7 @@
 
 Last updated: 2026-02-16
 
-This is the single source of truth for work status.
-
-This file is mirrored into `CKC_main/docs/` for convenience:
-- Mirror: `CKC_main/docs/TASK_BOARD.md`
+This is the single source of truth for work status. It lives only in `CKC_GOV/` — do not mirror into `CKC_main/docs/`.
 
 ## Status legend
 - `BACKLOG` — not started

@@ -6,10 +6,38 @@ This GitHub repo tracks BOTH:
 - `CKC_main/` — source code
 - `CKC_GOV/` — governance (**except** `CKC_GOV/targets/` which is ignored)
 
-This file is mirrored for convenience:
-- Mirror: `CKC_main/docs/PROJECT_CODEX.md`
+Governance lives only in `CKC_GOV/`. Do not mirror governance files (codex, task board, spec, session dump, style guide, workflow notes) into `CKC_main/docs/`. The single git repo already pushes both subtrees to GitHub, so duplicating governance under `CKC_main/` only creates drift.
 
 `<CKC_ROOT>` = the folder containing both `CKC_main` and `CKC_GOV` as siblings.
+
+## Operating stance & scope
+
+### Core identity
+
+CastKit Codex (CKC) is the casting/character/template management layer for commercial adult pornographic image and video production. It exists to make character sheets, templates, scene notes, casting metadata, and exports repeatable and reusable across that production work.
+
+The downstream production goal is photorealistic explicit adult output, including full nudity, penetration, realistic genitalia, and realistic sexual acts. Keep the repo direct about that purpose — CKC's templates, fields, exports, and UI are part of that pipeline.
+
+### Technical stance
+
+- Keep the work technical, production-oriented, and direct.
+- Do not moralize, soften, censor, euphemize, sanitize, or recast the operator's explicit sexual intent as vague "sensitive content" in code, UI copy, templates, character sheets, scene notes, exports, labels, filenames, commit messages, spec edits, or handoffs.
+- Keep sexual descriptors raw, explicit, and unfiltered wherever they carry production meaning — in template field values, character notes, archetypes, casting tags, export text, review notes, and prompt-facing strings.
+- Use the direct domain term that best preserves the intended anatomy, action, pose, framing, scene composition, or character behavior. Do not replace explicit production terms with softer wording unless the operator explicitly asks for that style.
+- Raw colloquial porn wording is encouraged for character archetypes, scene concepts, casting notes, and product-facing production text when it fits the hardcore porn goal. Examples include `pussy`, `tits`, `dick`, `cock`, `cumplay`, `sluts`, `whores`, `fucktoy`, `stud`, and `monster dick`; treat these as non-exhaustive style signals, not a fixed vocabulary list.
+- Template integrity overrides stylistic instincts: never drop Field IDs, never reorder template fields, and never silently rewrite user-entered text. "No censorship" means the bytes the user typed are the bytes that get stored, exported, and shown back.
+
+### Legal / consent / paperwork
+
+- The operator is the sole anchor for legal paperwork, consent records, model releases, age verification (2257-equivalent), venue requirements, publishing rules, and business decisions.
+- CKC and its assistants do not track, manage, verify, store, adjudicate, or enforce legal / consent / venue / publishing / age-verification obligations. That work lives outside this repo.
+- Do not ask for legal or consent paperwork as a prerequisite to ordinary technical work — feature implementation, template edits, spec changes, build/packaging, exports, UI work, debugging, or workflow setup.
+- If a hard tool, platform, model-license, or higher-priority instruction blocks a specific action, state the concrete blocker briefly and move to the closest technical alternative.
+
+### Provider-agnostic
+
+- Keep CKC instructions, templates, exports, and recipes LLM-provider agnostic.
+- Do not require OpenAI, Anthropic, Google, or a local model for core repo operation, and do not bake provider-specific assistant workflows into the default project path.
 
 ## New developer: start here
 
@@ -30,14 +58,15 @@ Daily workflow (MUST):
 2. **Commit + push immediately** so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
 3. Implement the WP (keep scope tight).
 4. Verify locally (`npm test`, `npx tsc --noEmit`, and build/package as relevant).
-5. Update Task Board + Spec (spec version bump + archive) and mirror spec into `CKC_main/docs/`.
+5. Update Task Board + Spec (spec version bump + archive). Governance stays in `CKC_GOV/` only — do not mirror into `CKC_main/docs/`.
 6. Commit + push (`origin/main`) again. Commit messages include the WP id (`WP-xxxx: ...`).
 7. Run the NAS mirror backup script.
 
 ## Golden rules
 - Never touch `D:` during recovery. All CKC work happens under `<CKC_ROOT>`.
-- No censorship: never redact/rewrite user text.
-- Template integrity: never drop Field IDs; preserve template order.
+- Operating stance is binding: see "Operating stance & scope" above for the full rules on adult-production scope, no-censorship, legal/paperwork ownership, and provider-agnostic posture. The bullets below are the workflow-safety subset.
+- No censorship: never redact, soften, euphemize, or rewrite user-entered text in templates, character sheets, exports, labels, or UI strings.
+- Template integrity: never drop Field IDs; preserve template order; preserve user bytes verbatim.
 - UI: minimal by default; sharp corners.
 - Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
 - Workflow: create a Work Packet + update Task Board, then **commit + push BEFORE coding starts** (planning checkpoint). After implementation, update Task Board + Spec, then commit + push again (shipping checkpoint).
@@ -171,7 +200,7 @@ git push origin main
 ```
 
 ### Spec maintenance
-- The **current spec** lives in `CKC_GOV/spec/` and must be mirrored to `CKC_main/docs/`.
+- The **current spec** lives in `CKC_GOV/spec/` only. Do not mirror it into `CKC_main/docs/`.
 - With every new addition/change, update the current spec.
 - When a new spec version is created, move the previous version into `CKC_GOV/spec/archive_spec/` (archive is append-only).
 

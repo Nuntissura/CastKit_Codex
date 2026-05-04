@@ -7,18 +7,18 @@ Governance / artifacts: `<CKC_ROOT>\\CKC_GOV`
 
 ## Start here (governance + workflow)
 
-Governance lives in `CKC_GOV/` (source of truth). Key files are mirrored into `CKC_main/docs/` for convenience:
-- `docs/PROJECT_CODEX.md` (workflow, build targets, backup)
-- `docs/WORKFLOW.md` (WP -> Spec -> Git)
-- `docs/TASK_BOARD.md` (status)
-- `docs/CastKit_Codex_Spec_v00.026.md` (current spec)
-- `docs/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
+Governance lives in `CKC_GOV/` (single source of truth — read it there, not here). Key files:
+- `../CKC_GOV/PROJECT_CODEX.md` (workflow, build targets, backup, operating stance)
+- `../CKC_GOV/taskboard/TASK_BOARD.md` (status)
+- `../CKC_GOV/spec/CastKit_Codex_Spec_v00.059.md` (current spec)
+- `../CKC_GOV/spec/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
+- `../CKC_GOV/references/style_guide/UI_STYLE_GUIDE.md` (UI style)
 
 Workflow (MUST):
 1. Create/choose a Work Packet (`CKC_GOV/work_packets/WP-xxxx_*.md`) and update `CKC_GOV/taskboard/TASK_BOARD.md`.
 2. **Commit + push immediately** (planning checkpoint) so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
 3. Keep changes scoped to the active WP.
-4. Update spec (version bump + archive) and mirror into `CKC_main/docs/`.
+4. Update spec (version bump + archive) in `CKC_GOV/spec/` only — do not mirror into `CKC_main/docs/`.
 5. Run tests, then commit (`WP-xxxx: ...`) and push `origin/main`.
 6. Run the NAS mirror backup script.
 
