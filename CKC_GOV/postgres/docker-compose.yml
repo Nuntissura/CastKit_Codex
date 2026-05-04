@@ -1,0 +1,18 @@
+services:
+  ckc-postgres:
+    image: postgres:16-alpine
+    container_name: castkit-codex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: castkit_codex
+      POSTGRES_USER: castkit_codex
+      POSTGRES_PASSWORD: castkit_codex
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../targets/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U castkit_codex -d castkit_codex"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

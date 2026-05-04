@@ -104,11 +104,11 @@ This is the single source of truth for work status. It lives only in `CKC_GOV/` 
 | WP-0089 | Visual similarity search | DONE | Codex | Added dHash-based "Similar…" modal with distance threshold + jump-to (IPC + unit test) (`npm test`, `npx tsc --noEmit`). |
 | WP-0090 | Batch character operations | DONE | Codex | Multi-select; bulk field edits; bulk tag add/remove; batch export; Trash (soft delete) + restore/purge. |
 | WP-0091 | Governance canonical docs cleanup | DONE | Codex | Removed stale `CKC_main/docs/` mirrors; kept `CKC_GOV/PROJECT_CODEX.md` authoritative; renamed canonical governance template folder to no-space path. |
-| WP-0092 | PostgreSQL storage migration | IN_PROGRESS | Codex | Provider boundary + PostgreSQL schema/import/dump tooling implemented; pending local test/PG smoke validation before DONE. |
-| WP-0093 | LLM automation and visual debugger | BACKLOG | Codex | Add JSON state inspection, command automation, and non-focus-stealing visual debug surfaces for agents. |
-| WP-0094 | Image intake sorter | BACKLOG | Codex | Pass/reject/pending sorter; folder-only mode has no notes/tags; linked CKC profile mode copies images and supports metadata/pending gallery. |
+| WP-0092 | PostgreSQL storage | DONE | Codex | PostgreSQL-first default, local Docker setup, schema/provider boundary, dump/restore docs; SQLite migration explicitly not required unless live data appears. Validation not run. |
+| WP-0093 | LLM automation and visual debugger | DONE | Codex | JSON state inspection, renderer/backend automation commands, and non-focus-stealing capture IPC/preload. Validation not run. |
+| WP-0094 | Image intake sorter | DONE | Codex | Drawer page + scan/classify IPC; folder-only moves to pass/reject/pending; linked mode copies accepted/pending to CKC and exposes pending images. Validation not run. |
 
 ## Current focus
-- Current: WP-0092 PostgreSQL storage migration (implementation slice complete; validation pending).
-- Next: WP-0093 LLM automation/debugger.
-- High-ROI backlog: WP-0094 image intake sorter.
+- Current: No open work packets.
+- Next: Validation pass for WP-0092/WP-0093/WP-0094 when operator permits tests/smoke checks.
+- High-ROI backlog: To be created after validation.

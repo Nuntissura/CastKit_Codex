@@ -11,7 +11,6 @@
     "build": "vite build --emptyOutDir --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "preview": "vite preview --outDir ../CKC_GOV/targets/scratch/renderer-dist",
     "test": "node --test",
-    "migrate:sqlite-to-postgres": "node scripts/sqlite_to_postgres.js",
     "package:win:raw": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_win.ps1",
     "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",
     "release:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump patch",

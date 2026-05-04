@@ -6,10 +6,11 @@ import { LibraryView } from './views/LibraryView';
 import { CharacterView } from './views/CharacterView';
 import { ReferenceWindowView } from './views/ReferenceWindowView';
 import { ExportHubView } from './views/ExportHubView';
+import { IntakeSorterView } from './views/IntakeSorterView';
 import { useHotkeys } from './hooks/useHotkeys';
 import styles from './styles/app.module.css';
 
-type Page = 'library' | 'character' | 'exports';
+type Page = 'library' | 'character' | 'exports' | 'intake';
 type NonExportPage = 'library' | 'character';
 type DrawerMode = 'none' | 'menu' | 'library';
 
@@ -80,6 +81,24 @@ function MainApp() {
   React.useEffect(() => {
     runInit();
   }, [runInit]);
+
+  React.useEffect(() => {
+    const ckc = (window as any).ckc;
+    if (!ckc?.automationSetRendererState) return;
+    void ckc.automationSetRendererState({
+      route: page,
+      selectedCharacterId,
+      selectedImageId,
+      drawerMode,
+      overlays: {
+        commandPalette: isCommandPaletteOpen,
+        globalSearch: isGlobalSearchOpen,
+      },
+      visibleControls: {
+        menuButton: true,
+      },
+    });
+  }, [page, selectedCharacterId, selectedImageId, drawerMode, isCommandPaletteOpen, isGlobalSearchOpen]);
 
   if (init.status !== 'ready') {
     return (
@@ -207,6 +226,73 @@ function MainApp() {
     [selectedCharacterId]
   );
 
+  React.useEffect(() => {
+    const ckc = (window as any).ckc;
+    if (!ckc?.onAutomationCommand || !ckc?.automationCommandResult) return;
+
+    const off = ckc.onAutomationCommand(async (payload: any) => {
+      const id = String(payload?.id || '');
+      const command = String(payload?.command || '');
+      const params = payload?.params && typeof payload.params === 'object' ? payload.params : {};
+
+      try {
+        let result: any = { ok: true };
+        if (command === 'openLibrary') {
+          setPage('library');
+        } else if (command === 'openCharacter') {
+          const characterId = String(params.characterId || '').trim();
+          if (!characterId) throw new Error('characterId is required');
+          setSelectedCharacterId(characterId);
+          setSelectedImageId(null);
+          setPendingOpenDoc(null);
+          setPendingFocusField(null);
+          setPage('character');
+        } else if (command === 'openExports') {
+          setExportsReturnPage(page === 'character' ? 'character' : 'library');
+          setExportsContext({ characterId: selectedCharacterId, moodboardDocId: null });
+          setPage('exports');
+        } else if (command === 'openIntake') {
+          setPage('intake');
+        } else if (command === 'selectImage') {
+          const imageId = String(params.imageId || '').trim();
+          if (!imageId) throw new Error('imageId is required');
+          setSelectedImageId(imageId);
+          if (params.characterId) setSelectedCharacterId(String(params.characterId));
+          setPage('character');
+        } else if (command === 'openGlobalSearch') {
+          setIsGlobalSearchOpen(true);
+        } else if (command === 'toggleMenu') {
+          setDrawerMode((m) => (m === 'menu' ? 'none' : 'menu'));
+        } else if (command === 'closeOverlays') {
+          setDrawerMode('none');
+          setIsCommandPaletteOpen(false);
+          setIsGlobalSearchOpen(false);
+        } else if (command === 'getRendererState') {
+          result = {
+            route: page,
+            selectedCharacterId,
+            selectedImageId,
+            drawerMode,
+            overlays: {
+              commandPalette: isCommandPaletteOpen,
+              globalSearch: isGlobalSearchOpen,
+            },
+          };
+        } else {
+          throw new Error(`Unsupported renderer automation command: ${command}`);
+        }
+
+        await ckc.automationCommandResult({ id, ok: true, result });
+      } catch (err) {
+        await ckc.automationCommandResult({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    return () => {
+      if (typeof off === 'function') off();
+    };
+  }, [page, selectedCharacterId, selectedImageId, drawerMode, isCommandPaletteOpen, isGlobalSearchOpen]);
+
   return (
     <div className={styles.root}>
       <Drawer
@@ -288,12 +374,14 @@ function MainApp() {
               setPage('exports');
             }}
           />
-        ) : (
+        ) : page === 'exports' ? (
           <ExportHubView
             onBack={() => setPage(exportsReturnPage)}
             initialCharacterId={exportsContext.characterId}
             initialMoodboardDocId={exportsContext.moodboardDocId}
           />
+        ) : (
+          <IntakeSorterView onBack={() => setPage('library')} />
         )}
       </div>
 

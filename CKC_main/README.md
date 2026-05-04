@@ -10,7 +10,7 @@ Governance / artifacts: `<CKC_ROOT>\\CKC_GOV`
 Governance lives in `CKC_GOV/` (single source of truth — read it there, not here). Key files:
 - `../CKC_GOV/PROJECT_CODEX.md` (workflow, build targets, backup, operating stance)
 - `../CKC_GOV/taskboard/TASK_BOARD.md` (status)
-- `../CKC_GOV/spec/CastKit_Codex_Spec_v00.060.md` (current spec)
+- `../CKC_GOV/spec/CastKit_Codex_Spec_v00.062.md` (current spec)
 - `../CKC_GOV/spec/SESSION_DUMP_2026-02-10.md` (verbatim recovered requirements)
 - `../CKC_GOV/references/style_guide/UI_STYLE_GUIDE.md` (UI style)
 

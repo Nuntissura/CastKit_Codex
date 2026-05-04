@@ -12,6 +12,9 @@ if (-not $ConnectionString.Trim()) {
   $ConnectionString = $env:DATABASE_URL
 }
 if (-not $ConnectionString.Trim()) {
+  $ConnectionString = "postgres://castkit_codex:castkit_codex@127.0.0.1:5432/castkit_codex"
+}
+if (-not $ConnectionString.Trim()) {
   throw "ConnectionString is required. Pass -ConnectionString or set CKC_POSTGRES_URL/DATABASE_URL."
 }
 

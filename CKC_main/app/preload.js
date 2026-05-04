@@ -6,6 +6,17 @@ contextBridge.exposeInMainWorld('ckc', {
     getConfigInfo: () => ipcRenderer.invoke('ckc:getConfigInfo'),
     setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
 
+    automationSetRendererState: (state) => ipcRenderer.invoke('ckc:automationSetRendererState', state),
+    automationGetState: () => ipcRenderer.invoke('ckc:automationGetState'),
+    automationRunCommand: (request) => ipcRenderer.invoke('ckc:automationRunCommand', request),
+    automationCapture: (params) => ipcRenderer.invoke('ckc:automationCapture', params),
+    automationCommandResult: (payload) => ipcRenderer.invoke('ckc:automationCommandResult', payload),
+    onAutomationCommand: (cb) => {
+        const handler = (_evt, payload) => cb(payload);
+        ipcRenderer.on('ckc:automationCommand', handler);
+        return () => ipcRenderer.removeListener('ckc:automationCommand', handler);
+    },
+
     openReferenceWindow: () => ipcRenderer.invoke('ckc:openReferenceWindow'),
     closeReferenceWindow: () => ipcRenderer.invoke('ckc:closeReferenceWindow'),
     getReferenceWindowState: () => ipcRenderer.invoke('ckc:getReferenceWindowState'),
@@ -170,6 +181,9 @@ contextBridge.exposeInMainWorld('ckc', {
     getImageAnnotations: (params) => ipcRenderer.invoke('ckc:getImageAnnotations', params),
     setImageAnnotations: (params) => ipcRenderer.invoke('ckc:setImageAnnotations', params),
     setImagesMetaBatch: (params) => ipcRenderer.invoke('ckc:setImagesMetaBatch', params),
+    scanIntakeFolder: (params) => ipcRenderer.invoke('ckc:scanIntakeFolder', params),
+    classifyIntakeImage: (params) => ipcRenderer.invoke('ckc:classifyIntakeImage', params),
+    listPendingImages: (params) => ipcRenderer.invoke('ckc:listPendingImages', params),
 
     openPath: (filePath) => ipcRenderer.invoke('ckc:openPath', filePath),
     copyText: (text) => clipboard.writeText(String(text ?? '')),

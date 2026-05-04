@@ -32,7 +32,7 @@ const POSTGRES_TABLE_ORDER = [
 
 function dbNotReady(methodName) {
   const err = new Error(
-    `SQLite DB not initialized (missing db.${methodName}). Did you forget to call/await library.initialize()?`
+    `CKC DB not initialized (missing db.${methodName}). Did you forget to call/await library.initialize()?`
   );
   err.code = 'CKC_DB_NOT_READY';
   return err;
@@ -174,15 +174,55 @@ async function openPostgresDb(config) {
   }
 
   const pool = new Pool(getPostgresConnectionOptions(config));
+  let activeClient = null;
   const adapter = {
     provider: 'postgres',
     dialect: 'postgres',
     config,
-    query(sql, params = []) {
+    async query(sql, params = []) {
+      const command = String(sql ?? '').trim().split(/\s+/)[0]?.toUpperCase() || '';
+
+      if (command === 'BEGIN') {
+        if (activeClient) throw new Error('PostgreSQL transaction already active on this CKC DB adapter.');
+        activeClient = await pool.connect();
+        try {
+          return await activeClient.query(sql, params);
+        } catch (err) {
+          activeClient.release();
+          activeClient = null;
+          throw err;
+        }
+      }
+
+      if (command === 'COMMIT' || command === 'ROLLBACK') {
+        if (!activeClient) return pool.query(sql, params);
+        const client = activeClient;
+        try {
+          return await client.query(sql, params);
+        } finally {
+          activeClient = null;
+          client.release();
+        }
+      }
+
+      if (activeClient) return activeClient.query(sql, params);
       return pool.query(sql, params);
     },
     close(callback) {
-      const done = pool.end();
+      const done = (async () => {
+        if (activeClient) {
+          const client = activeClient;
+          activeClient = null;
+          try {
+            await client.query('ROLLBACK');
+          } catch {
+            // ignore
+          } finally {
+            client.release();
+          }
+        }
+        await pool.end();
+      })();
       if (typeof callback === 'function') done.then(() => callback(null), callback);
       return done;
     },
@@ -335,7 +375,9 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', 'source_note', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'palette_json', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'dhash_hex', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', "review_status", "TEXT NOT NULL DEFAULT 'accepted'");
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_review_status ON ImageAsset(character_id, review_status)');
 
   // Field values: speed up cross-character lookups (value suggestions, exports, etc.).
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_field_value_field_id ON FieldValue(field_id)');
@@ -785,6 +827,7 @@ async function initPostgresSchema(db) {
       source_note TEXT,
       palette_json TEXT,
       dhash_hex TEXT,
+      review_status TEXT NOT NULL DEFAULT 'accepted',
       FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
     );
 
@@ -792,6 +835,7 @@ async function initPostgresSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id);
     CREATE INDEX IF NOT EXISTS idx_image_added_at ON ImageAsset(added_at);
     CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json);
+    CREATE INDEX IF NOT EXISTS idx_image_review_status ON ImageAsset(character_id, review_status);
 
     CREATE TABLE IF NOT EXISTS TemplateSpinOff (
       spinoff_id TEXT PRIMARY KEY,

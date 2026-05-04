@@ -75,7 +75,12 @@ function loadConfig() {
             validationMode: 'strict',
             allowSaveWithErrors: false,
             database: {
-                provider: 'sqlite',
+                provider: 'postgres',
+                host: '127.0.0.1',
+                port: 5432,
+                database: 'castkit_codex',
+                user: 'castkit_codex',
+                password: 'castkit_codex',
             },
         },
     };
@@ -84,10 +89,18 @@ function loadConfig() {
 function normalizeConfig(config) {
     const cfg = config && typeof config === 'object' ? config : {};
     if (!cfg.database || typeof cfg.database !== 'object') {
-        cfg.database = { provider: 'sqlite' };
+        cfg.database = {};
     }
-    if (!String(cfg.database.provider || '').trim()) {
-        cfg.database.provider = 'sqlite';
+    const rawProvider = String(cfg.database.provider || '').trim().toLowerCase();
+    if (!rawProvider || rawProvider === 'sqlite' || rawProvider === 'sqlite3') {
+        cfg.database.provider = 'postgres';
+    }
+    if (String(cfg.database.provider || '').trim().toLowerCase() === 'postgres') {
+        cfg.database.host = cfg.database.host || '127.0.0.1';
+        cfg.database.port = cfg.database.port || 5432;
+        cfg.database.database = cfg.database.database || 'castkit_codex';
+        cfg.database.user = cfg.database.user || 'castkit_codex';
+        cfg.database.password = cfg.database.password || 'castkit_codex';
     }
     return cfg;
 }
@@ -190,6 +203,16 @@ let libraryRestoreJobs = new Map();
 let libraryRestoreActiveJobId = null;
 let aiTagJobs = new Map();
 let aiTagActiveJobId = null;
+let automationRendererState = {
+    route: 'library',
+    selectedCharacterId: null,
+    selectedImageId: null,
+    drawerMode: 'none',
+    overlays: {},
+    updatedAt: null,
+};
+let automationCommandSeq = 1;
+const automationPendingCommands = new Map();
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -395,6 +418,90 @@ function snapshotNearDupJob(job) {
         error: job.error ? String(job.error) : null,
         result: status === 'done' ? job.result : null,
     };
+}
+
+function sanitizeAutomationState(state) {
+    const raw = state && typeof state === 'object' ? state : {};
+    return {
+        route: String(raw.route || raw.page || 'library'),
+        selectedCharacterId: raw.selectedCharacterId == null ? null : String(raw.selectedCharacterId),
+        selectedImageId: raw.selectedImageId == null ? null : String(raw.selectedImageId),
+        drawerMode: String(raw.drawerMode || 'none'),
+        overlays: raw.overlays && typeof raw.overlays === 'object' ? raw.overlays : {},
+        visibleControls: raw.visibleControls && typeof raw.visibleControls === 'object' ? raw.visibleControls : {},
+        errors: Array.isArray(raw.errors) ? raw.errors.map((x) => String(x)) : [],
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+function getAutomationCommandMap() {
+    return {
+        renderer: [
+            'openLibrary',
+            'openCharacter',
+            'openExports',
+            'openIntake',
+            'selectImage',
+            'openGlobalSearch',
+            'toggleMenu',
+            'closeOverlays',
+            'getRendererState',
+        ],
+        backend: [
+            'listCharacters',
+            'getCharacter',
+            'listGlobalCarouselImages',
+            'listPendingImages',
+            'importImages',
+            'setImageMeta',
+            'scanIntakeFolder',
+            'classifyIntakeImage',
+        ],
+    };
+}
+
+async function runBackendAutomationCommand(command, params) {
+    const lib = await ensureLibrary();
+    const name = String(command || '').trim();
+    const p = params && typeof params === 'object' ? params : {};
+
+    if (name === 'listCharacters') return lib.listCharacters(p);
+    if (name === 'getCharacter') return lib.getCharacter(p.characterId);
+    if (name === 'listGlobalCarouselImages') return lib.listGlobalCarouselImages(p);
+    if (name === 'listPendingImages') return lib.listPendingImages(p);
+    if (name === 'importImages') return lib.importImages(p);
+    if (name === 'setImageMeta') return lib.setImageMeta(p);
+    if (name === 'scanIntakeFolder') return lib.scanIntakeFolder(p);
+    if (name === 'classifyIntakeImage') return lib.classifyIntakeImage(p);
+
+    throw new Error(`Unsupported backend automation command: ${name}`);
+}
+
+function runRendererAutomationCommand(command, params = {}, timeoutMs = 15000) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
+    const id = `auto_${automationCommandSeq++}_${Date.now()}`;
+    const name = String(command || '').trim();
+    if (!name) throw new Error('command is required');
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            automationPendingCommands.delete(id);
+            reject(new Error(`Automation command timed out: ${name}`));
+        }, Math.max(1000, Math.min(120000, Number(timeoutMs) || 15000)));
+
+        automationPendingCommands.set(id, {
+            resolve: (payload) => {
+                clearTimeout(timer);
+                resolve(payload);
+            },
+            reject: (err) => {
+                clearTimeout(timer);
+                reject(err);
+            },
+        });
+
+        mainWindow.webContents.send('ckc:automationCommand', { id, command: name, params });
+    });
 }
 
 async function runNearDuplicateScanJob(job, params) {
@@ -998,6 +1105,74 @@ function registerReferenceWindowShortcuts() {
 }
 
 function registerIpcHandlers() {
+    ipcMain.handle('ckc:automationSetRendererState', async (_evt, state) => {
+        automationRendererState = sanitizeAutomationState(state);
+        return { ok: true, state: automationRendererState };
+    });
+
+    ipcMain.handle('ckc:automationCommandResult', async (_evt, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        const id = String(p.id || '').trim();
+        const pending = automationPendingCommands.get(id);
+        if (!pending) return { ok: false, reason: 'unknown_command' };
+        automationPendingCommands.delete(id);
+        if (p.ok === false) {
+            pending.reject(new Error(String(p.error || 'Automation command failed')));
+        } else {
+            pending.resolve(p.result ?? null);
+        }
+        return { ok: true };
+    });
+
+    ipcMain.handle('ckc:automationGetState', async () => {
+        let diagnostics = null;
+        try {
+            const lib = await ensureLibrary();
+            diagnostics = await lib.getDiagnostics({ quick: true });
+        } catch (err) {
+            diagnostics = { ok: false, error: String(err?.message || err || 'Unknown error') };
+        }
+
+        return {
+            ok: true,
+            app: {
+                configPath: appConfigPath,
+                libraryRoot: appConfig?.libraryRoot || null,
+                databaseProvider: appConfig?.database?.provider || 'postgres',
+            },
+            renderer: automationRendererState,
+            diagnostics,
+            commandMap: getAutomationCommandMap(),
+        };
+    });
+
+    ipcMain.handle('ckc:automationRunCommand', async (_evt, request) => {
+        const req = request && typeof request === 'object' ? request : {};
+        const target = String(req.target || 'renderer').trim().toLowerCase();
+        const command = String(req.command || '').trim();
+        const params = req.params && typeof req.params === 'object' ? req.params : {};
+        if (!command) throw new Error('command is required');
+
+        if (target === 'backend') {
+            const result = await runBackendAutomationCommand(command, params);
+            return { ok: true, target, command, result };
+        }
+
+        const result = await runRendererAutomationCommand(command, params, req.timeoutMs);
+        return { ok: true, target: 'renderer', command, result };
+    });
+
+    ipcMain.handle('ckc:automationCapture', async (_evt, params) => {
+        if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
+        const p = params && typeof params === 'object' ? params : {};
+        const image = await mainWindow.webContents.capturePage();
+        const size = image.getSize();
+        if (p.format === 'pngBytes') {
+            return { ok: true, width: size.width, height: size.height, pngBytes: image.toPNG() };
+        }
+        return { ok: true, width: size.width, height: size.height, dataUrl: image.toDataURL() };
+    });
+
     ipcMain.handle('ckc:getConfig', async () => appConfig);
 
     ipcMain.handle('ckc:getConfigInfo', async () => {
@@ -1007,7 +1182,7 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:setConfig', async (_evt, nextConfig) => {
         const patch = nextConfig && typeof nextConfig === 'object' ? nextConfig : {};
         const prevLibraryRoot = appConfig?.libraryRoot;
-        const merged = { ...appConfig, ...patch };
+        const merged = normalizeConfig({ ...appConfig, ...patch });
         const nextLibraryRoot = merged?.libraryRoot;
 
         appConfig = merged;
@@ -2056,6 +2231,21 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:setImagesMetaBatch', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.setImagesMetaBatch(params || {});
+    });
+
+    ipcMain.handle('ckc:scanIntakeFolder', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.scanIntakeFolder(params || {});
+    });
+
+    ipcMain.handle('ckc:classifyIntakeImage', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.classifyIntakeImage(params || {});
+    });
+
+    ipcMain.handle('ckc:listPendingImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listPendingImages(params || {});
     });
 
     ipcMain.handle('ckc:exportFieldPack', async (_evt, params) => {

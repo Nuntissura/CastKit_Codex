@@ -44,7 +44,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.061.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.062.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -85,7 +85,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.061.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.062.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -98,7 +98,8 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
   - `unregister_backup_task.ps1` — disable/enable/remove the scheduled backup task
-  - `sqlite_to_postgres.ps1` — one-way import from an existing SQLite `db/codex.db` into PostgreSQL
+  - `postgres_up.ps1` — start local PostgreSQL for CKC via Docker Compose
+  - `postgres_down.ps1` — stop the local PostgreSQL container without deleting data
   - `postgres_dump.ps1` — create a PostgreSQL custom-format dump under `CKC_GOV/targets/CKC/postgres_dumps/`
   - `postgres_restore.ps1` — restore a PostgreSQL dump with optional clean restore
 - `targets/`
@@ -130,26 +131,30 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\logs`
 
 ### Database provider
-- Default provider remains SQLite:
-  - `<libraryRoot>\\db\\codex.db`
-- PostgreSQL is available for development/parallel-worker use behind the database provider boundary:
+- Default provider is PostgreSQL:
+  - `postgres://castkit_codex:castkit_codex@127.0.0.1:5432/castkit_codex`
+- Local PostgreSQL can be started with:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_up.ps1"
+  ```
+- CKC config:
   - `ckc-config.json`:
     ```json
     {
       "database": {
         "provider": "postgres",
-        "connectionString": "postgres://user:password@127.0.0.1:5432/castkit_codex"
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "castkit_codex",
+        "user": "castkit_codex",
+        "password": "castkit_codex"
       }
     }
     ```
   - Environment override:
     ```powershell
     $env:CKC_DB_PROVIDER="postgres"
-    $env:CKC_POSTGRES_URL="postgres://user:password@127.0.0.1:5432/castkit_codex"
-    ```
-- SQLite-to-PostgreSQL import:
-  ```powershell
-  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\sqlite_to_postgres.ps1" -LibraryRoot "<libraryRoot>" -ConnectionString $env:CKC_POSTGRES_URL
+    $env:CKC_POSTGRES_URL="postgres://castkit_codex:castkit_codex@127.0.0.1:5432/castkit_codex"
   ```
 - PostgreSQL dump:
   ```powershell
@@ -159,6 +164,7 @@ Set these env vars before running npm/electron builds:
   ```powershell
   powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_restore.ps1" -DumpPath "<dump-file>" -ConnectionString $env:CKC_POSTGRES_URL
   ```
+- SQLite is legacy/test fallback only. Do not create migration work unless the operator explicitly says a live SQLite library must be preserved.
 
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.

@@ -5,7 +5,7 @@ const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 
 const { randomId, sha256Hex } = require('./crypto');
-const { openDb, initSchema, run, get, all } = require('./db');
+const { openDb, initSchema, run, get, all, isPostgresDb } = require('./db');
 const { parseTemplate } = require('./templateParser');
 const {
   parseSheetText,
@@ -68,6 +68,14 @@ function sanitizeFileName(name, fallback) {
     .replaceAll(/\s+/g, ' ')
     .trim();
   return cleaned.length ? cleaned.slice(0, 180) : 'export.txt';
+}
+
+function sanitizeNoSpaceFileName(name, fallback) {
+  const raw = sanitizeFileName(name, fallback);
+  const ext = path.extname(raw);
+  const stem = raw.slice(0, Math.max(0, raw.length - ext.length)) || 'file';
+  const safeStem = stem.replaceAll(/\s+/g, '_').replaceAll(/_+/g, '_').replaceAll(/^[._-]+|[._-]+$/g, '') || 'file';
+  return `${safeStem.slice(0, 150)}${ext}`;
 }
 
 function shortStableIdForPath(id, maxBodyChars = 12) {
@@ -352,6 +360,7 @@ class CKCLibrary {
   }
 
   async _ftsTablesExist() {
+    if (isPostgresDb(this.db)) return false;
     try {
       const row = await get(this.db, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, ['character_fts']);
       return !!row?.name;
@@ -546,10 +555,124 @@ class CKCLibrary {
     }
   }
 
+  _plainSearchSnippet(text, needle) {
+    const raw = String(text ?? '');
+    const n = String(needle ?? '').trim();
+    if (!n) return raw.slice(0, 220);
+    const lower = raw.toLowerCase();
+    const idx = lower.indexOf(n.toLowerCase());
+    if (idx < 0) return raw.slice(0, 220);
+    const start = Math.max(0, idx - 80);
+    const end = Math.min(raw.length, idx + n.length + 140);
+    return `${start > 0 ? '...' : ''}${raw.slice(start, idx)}[[[${raw.slice(idx, idx + n.length)}]]]${raw.slice(
+      idx + n.length,
+      end
+    )}${end < raw.length ? '...' : ''}`;
+  }
+
+  async _globalSearchPostgresFallback({ queryText = '', scope = 'library', characterId = null, limitPerType = 50 } = {}) {
+    const q = String(queryText ?? '').trim();
+    const lim = Math.max(1, Math.min(200, Number(limitPerType) || 50));
+    const wantScope = String(scope ?? '').toLowerCase() === 'character' ? 'character' : 'library';
+    const cid = String(characterId ?? '').trim();
+    const scopeChar = wantScope === 'character' && cid ? cid : null;
+    const like = `%${q}%`;
+
+    const charParams = scopeChar ? [like, scopeChar, lim] : [like, lim];
+    const charScope = scopeChar ? 'AND c.character_id = ?' : '';
+    const charRows = await all(
+      this.db,
+      `SELECT c.character_id, c.display_name, c.public_id, fv.field_id, fv.value_text
+       FROM Character c
+       LEFT JOIN FieldValue fv ON fv.character_id = c.character_id
+       WHERE (c.display_name ILIKE ? OR c.public_id ILIKE ? OR fv.value_text ILIKE ?)
+       ${charScope}
+       ORDER BY c.updated_at DESC
+       LIMIT ?`,
+      scopeChar ? [like, like, like, scopeChar, lim] : [like, like, like, lim]
+    );
+
+    const noteRows = await all(this.db, `SELECT doc_id, title, body_text, tags_json FROM NoteDoc WHERE title ILIKE ? OR body_text ILIKE ? OR tags_json ILIKE ? ORDER BY updated_at DESC LIMIT ?`, [
+      like,
+      like,
+      like,
+      lim,
+    ]);
+    const storyRows = await all(this.db, `SELECT doc_id, title, body_text, tags_json FROM StoryDoc WHERE title ILIKE ? OR body_text ILIKE ? OR tags_json ILIKE ? ORDER BY updated_at DESC LIMIT ?`, [
+      like,
+      like,
+      like,
+      lim,
+    ]);
+    const moodRows = await all(this.db, `SELECT doc_id, title, board_json, tags_json FROM MoodboardDoc WHERE title ILIKE ? OR board_json ILIKE ? OR tags_json ILIKE ? ORDER BY updated_at DESC LIMIT ?`, [
+      like,
+      like,
+      like,
+      lim,
+    ]);
+
+    const imageParams = scopeChar ? [like, like, like, scopeChar, lim] : [like, like, like, lim];
+    const imageScope = scopeChar ? 'AND ia.character_id = ?' : '';
+    const imageRows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, ia.notes, ia.source_note, ia.tags_json, c.display_name
+       FROM ImageAsset ia
+       JOIN Character c ON c.character_id = ia.character_id
+       WHERE (ia.notes ILIKE ? OR ia.source_note ILIKE ? OR ia.tags_json ILIKE ?)
+       ${imageScope}
+       ORDER BY ia.added_at DESC
+       LIMIT ?`,
+      imageParams
+    );
+
+    return {
+      ok: true,
+      provider: 'postgres',
+      query: q,
+      needle: q,
+      scope: scopeChar ? 'character' : 'library',
+      results: {
+        characters: charRows.map((r) => ({
+          characterId: String(r.character_id ?? ''),
+          displayName: String(r.display_name ?? ''),
+          publicId: r.public_id ?? null,
+          fieldId: r.field_id ? String(r.field_id) : '__NAME__',
+          snippet: this._plainSearchSnippet([r.display_name, r.public_id, r.value_text].filter(Boolean).join(' '), q),
+        })),
+        notes: noteRows.map((r) => ({
+          docId: String(r.doc_id ?? ''),
+          title: String(r.title ?? ''),
+          snippet: this._plainSearchSnippet(`${r.title ?? ''}\n${r.body_text ?? ''}\n${r.tags_json ?? ''}`, q),
+        })),
+        stories: storyRows.map((r) => ({
+          docId: String(r.doc_id ?? ''),
+          title: String(r.title ?? ''),
+          snippet: this._plainSearchSnippet(`${r.title ?? ''}\n${r.body_text ?? ''}\n${r.tags_json ?? ''}`, q),
+        })),
+        moodboards: moodRows.map((r) => ({
+          docId: String(r.doc_id ?? ''),
+          title: String(r.title ?? ''),
+          layerId: '__TITLE__',
+          snippet: this._plainSearchSnippet(`${r.title ?? ''}\n${r.board_json ?? ''}\n${r.tags_json ?? ''}`, q),
+        })),
+        images: imageRows.map((r) => ({
+          imageId: String(r.image_id ?? ''),
+          characterId: String(r.character_id ?? ''),
+          characterName: String(r.display_name ?? ''),
+          snippet: this._plainSearchSnippet(`${r.notes ?? ''}\n${r.source_note ?? ''}\n${r.tags_json ?? ''}`, q),
+        })),
+      },
+    };
+  }
+
   async globalSearch({ queryText = '', scope = 'library', characterId = null, limitPerType = 50 } = {}) {
     const q = String(queryText ?? '').trim();
     if (!q) {
       return { ok: true, query: '', scope: scope === 'character' ? 'character' : 'library', results: { characters: [], notes: [], stories: [], moodboards: [], images: [] } };
+    }
+
+    if (isPostgresDb(this.db)) {
+      return this._globalSearchPostgresFallback({ queryText: q, scope, characterId, limitPerType });
     }
 
     await this._ensureGlobalSearchIndex();
@@ -7159,6 +7282,199 @@ class CKCLibrary {
     });
 
     return { ok: true, updated: ids.length };
+  }
+
+  _isIntakeImagePath(filePath) {
+    const ext = path.extname(String(filePath ?? '')).toLowerCase();
+    return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'].includes(ext);
+  }
+
+  _normalizeIntakeStatus(status) {
+    const s = String(status ?? '').trim().toLowerCase();
+    if (s === 'pass' || s === 'accepted' || s === 'accept') return 'accepted';
+    if (s === 'reject' || s === 'rejected') return 'rejected';
+    if (s === 'pending') return 'pending';
+    throw new Error('status must be accepted, rejected, or pending');
+  }
+
+  _folderStatusName(status) {
+    const s = this._normalizeIntakeStatus(status);
+    if (s === 'accepted') return 'pass';
+    if (s === 'rejected') return 'reject';
+    return 'pending';
+  }
+
+  async scanIntakeFolder({ sourceDir } = {}) {
+    const rawDir = String(sourceDir ?? '').trim();
+    if (!rawDir) throw new Error('sourceDir is required');
+    const dir = path.resolve(rawDir);
+    if (!fs.existsSync(dir)) throw new Error('sourceDir does not exist');
+    const stat = fs.statSync(dir);
+    if (!stat.isDirectory()) throw new Error('sourceDir must be a folder');
+
+    const statusDirs = new Set(['pass', 'reject', 'pending']);
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const images = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!this._isIntakeImagePath(entry.name)) continue;
+      const absPath = path.join(dir, entry.name);
+      const s = fs.statSync(absPath);
+      images.push({
+        path: absPath,
+        fileName: entry.name,
+        bytes: s.size,
+        mtimeMs: s.mtimeMs,
+        statusTargets: {
+          accepted: path.join(dir, 'pass', sanitizeNoSpaceFileName(entry.name, entry.name)),
+          rejected: path.join(dir, 'reject', sanitizeNoSpaceFileName(entry.name, entry.name)),
+          pending: path.join(dir, 'pending', sanitizeNoSpaceFileName(entry.name, entry.name)),
+        },
+      });
+    }
+
+    return {
+      ok: true,
+      sourceDir: dir,
+      images,
+      statusDirs: Array.from(statusDirs).map((name) => path.join(dir, name)),
+      counts: { images: images.length },
+    };
+  }
+
+  async classifyIntakeImage({
+    sourcePath,
+    status,
+    mode = 'folder',
+    characterId = null,
+    notes = '',
+    tags = [],
+    duplicatePolicy = 'skip',
+  } = {}) {
+    const rawSrc = String(sourcePath ?? '').trim();
+    if (!rawSrc) throw new Error('sourcePath is required');
+    const src = path.resolve(rawSrc);
+    if (!fs.existsSync(src)) throw new Error('sourcePath does not exist');
+    if (!this._isIntakeImagePath(src)) throw new Error('sourcePath is not a supported image file');
+
+    const normalizedStatus = this._normalizeIntakeStatus(status);
+    const normalizedMode = String(mode ?? 'folder').trim().toLowerCase() === 'linked' ? 'linked' : 'folder';
+
+    if (normalizedMode === 'folder') {
+      const parent = path.dirname(src);
+      const folderName = this._folderStatusName(normalizedStatus);
+      const destDir = path.join(parent, folderName);
+      ensureDir(destDir);
+      const destPath = uniquePath(destDir, sanitizeNoSpaceFileName(path.basename(src), path.basename(src)));
+      fs.renameSync(src, destPath);
+      return { ok: true, mode: 'folder', status: normalizedStatus, movedTo: destPath };
+    }
+
+    const cid = String(characterId ?? '').trim();
+    if (!cid) throw new Error('characterId is required in linked mode');
+    if (normalizedStatus === 'rejected') {
+      return { ok: true, mode: 'linked', status: normalizedStatus, imported: [], preservedSourcePath: src };
+    }
+
+    const imported = await this.importImages({ characterId: cid, filePaths: [src], duplicatePolicy });
+    const rows = Array.isArray(imported?.imported) ? imported.imported : [];
+    const cleanedTags = this._cleanTags(tags).filter((t) => !this._isSystemTag(t));
+    const notesText = String(notes ?? '');
+    for (const row of rows) {
+      const imageId = String(row?.id || row?.imageId || '').trim();
+      if (!imageId) continue;
+      const existing = await get(this.db, `SELECT tags_json FROM ImageAsset WHERE image_id = ?`, [imageId]);
+      let mergedTags = [];
+      try {
+        const parsed = JSON.parse(existing?.tags_json || '[]');
+        mergedTags = Array.isArray(parsed) ? parsed.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+      } catch {
+        mergedTags = [];
+      }
+      const seen = new Set(mergedTags);
+      for (const t of cleanedTags) {
+        if (seen.has(t)) continue;
+        seen.add(t);
+        mergedTags.push(t);
+      }
+      if (normalizedStatus === 'pending' && !seen.has('pending')) {
+        mergedTags.push('pending');
+      }
+
+      await run(
+        this.db,
+        `UPDATE ImageAsset
+         SET review_status = ?,
+             notes = COALESCE(NULLIF(?, ''), notes),
+             tags_json = ?
+         WHERE image_id = ?`,
+        [normalizedStatus, notesText, JSON.stringify(mergedTags), imageId]
+      );
+    }
+
+    await this._audit('intake.classifyLinked', cid, {
+      sourcePath: src,
+      status: normalizedStatus,
+      imported: rows.length,
+      duplicateCount: Array.isArray(imported?.duplicates) ? imported.duplicates.length : 0,
+    });
+
+    return {
+      ok: true,
+      mode: 'linked',
+      status: normalizedStatus,
+      preservedSourcePath: src,
+      imported: rows,
+      duplicates: imported?.duplicates || [],
+    };
+  }
+
+  async listPendingImages({ characterId = null } = {}) {
+    const cid = String(characterId ?? '').trim();
+    const params = [];
+    let where = `WHERE ia.review_status = 'pending'`;
+    if (cid) {
+      where += ' AND ia.character_id = ?';
+      params.push(cid);
+    }
+
+    const rows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, ia.relative_path, ia.file_hash, ia.width, ia.height,
+              ia.added_at, ia.favorite, ia.rating, ia.notes, ia.tags_json, ia.source_path, ia.source_url, ia.source_note,
+              c.display_name
+       FROM ImageAsset ia
+       JOIN Character c ON c.character_id = ia.character_id
+       ${where}
+       ORDER BY ia.added_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    return rows.map((img) => ({
+      id: String(img.image_id ?? ''),
+      characterId: String(img.character_id ?? ''),
+      characterName: String(img.display_name ?? ''),
+      relativePath: String(img.relative_path ?? ''),
+      fileHash: String(img.file_hash ?? ''),
+      width: img.width ?? null,
+      height: img.height ?? null,
+      favorite: !!img.favorite,
+      rating: Number(img.rating) || 0,
+      notes: String(img.notes ?? ''),
+      sourcePath: img.source_path ?? null,
+      sourceUrl: img.source_url ?? null,
+      sourceNote: String(img.source_note ?? ''),
+      tags: (() => {
+        try {
+          const parsed = JSON.parse(img.tags_json ?? '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
+      addedAt: String(img.added_at ?? ''),
+    }));
   }
 
   async exportFieldPack(params) {

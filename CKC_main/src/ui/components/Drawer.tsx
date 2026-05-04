@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './drawer.module.css';
 
-type NavPage = 'library' | 'character' | 'exports';
+type NavPage = 'library' | 'character' | 'exports' | 'intake';
 
 export function Drawer({
   isOpen,
@@ -35,6 +35,9 @@ export function Drawer({
           </button>
           <button className={styles.navItem} onClick={() => onNavigate('exports')}>
             Exports
+          </button>
+          <button className={styles.navItem} onClick={() => onNavigate('intake')}>
+            Intake Sorter
           </button>
         </nav>
       </aside>
