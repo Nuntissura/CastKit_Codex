@@ -44,7 +44,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.062.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.063.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -85,7 +85,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.062.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.063.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -165,6 +165,24 @@ Set these env vars before running npm/electron builds:
   powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_restore.ps1" -DumpPath "<dump-file>" -ConnectionString $env:CKC_POSTGRES_URL
   ```
 - SQLite is legacy/test fallback only. Do not create migration work unless the operator explicitly says a live SQLite library must be preserved.
+
+### Background LLM automation
+- CKC exposes an internal manual and control plane through Electron IPC/preload, not a public network API.
+- LLM agents should use:
+  - `window.ckc.automationGetManual({ format: "json" })`
+  - `window.ckc.automationCreateSession(...)`
+  - `window.ckc.automationHeartbeat(...)`
+  - `window.ckc.automationAcquireLease(...)`
+  - `window.ckc.automationRunCommand(...)`
+  - `window.ckc.automationCaptureToFile(...)`
+- Start hidden/unfocusable automation mode with:
+  ```powershell
+  $env:CKC_AUTOMATION_BACKGROUND="1"
+  ```
+- Capture files are written under:
+  - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\automation_captures\\` in repo/dev mode
+  - `<libraryRoot>\\automation_captures\\` as packaged/fallback mode
+- Automation must not use OS-level keyboard injection, cursor movement, focus stealing, or foregrounding as its normal path.
 
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.

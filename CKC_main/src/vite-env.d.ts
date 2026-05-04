@@ -651,6 +651,21 @@ interface Window {
     getConfig: () => Promise<unknown>;
     getConfigInfo: () => Promise<CKCConfigInfo>;
     setConfig: (cfg: unknown) => Promise<unknown>;
+    automationSetRendererState: (state: unknown) => Promise<{ ok: boolean; state?: unknown }>;
+    automationGetManual: (params?: { format?: 'json' | 'markdown' | 'md' | 'index' } | null) => Promise<unknown>;
+    automationCreateSession: (params?: { agentName?: string; purpose?: string; metadata?: Record<string, unknown> } | null) => Promise<unknown>;
+    automationHeartbeat: (params: { sessionId: string; state?: Record<string, unknown> }) => Promise<unknown>;
+    automationEndSession: (params: { sessionId: string; reason?: string }) => Promise<unknown>;
+    automationListSessions: () => Promise<unknown>;
+    automationAcquireLease: (params: { sessionId: string; leaseName?: string; ttlMs?: number }) => Promise<unknown>;
+    automationReleaseLease: (params: { sessionId: string; leaseName?: string }) => Promise<unknown>;
+    automationListLog: (params?: { limit?: number } | null) => Promise<unknown>;
+    automationGetState: () => Promise<unknown>;
+    automationRunCommand: (request: { sessionId?: string | null; target?: 'renderer' | 'backend'; command: string; params?: Record<string, unknown>; timeoutMs?: number }) => Promise<unknown>;
+    automationCapture: (params?: { format?: 'pngBytes' | 'dataUrl' } | null) => Promise<unknown>;
+    automationCaptureToFile: (params?: { sessionId?: string | null; label?: string } | null) => Promise<unknown>;
+    automationCommandResult: (payload: unknown) => Promise<unknown>;
+    onAutomationCommand: (cb: (payload: unknown) => void) => () => void;
     openReferenceWindow: () => Promise<{ ok: true }>;
     closeReferenceWindow: () => Promise<{ ok: true }>;
     getReferenceWindowState: () => Promise<{
@@ -870,6 +885,9 @@ interface Window {
     getImageAnnotations: (params: { imageId: string }) => Promise<{ ok: true; imageId: string; annotations: CKCImageAnnotations }>;
     setImageAnnotations: (params: { imageId: string; annotations: CKCImageAnnotations }) => Promise<{ ok: true }>;
     setImagesMetaBatch: (params: unknown) => Promise<unknown>;
+    scanIntakeFolder: (params: { sourceDir: string }) => Promise<unknown>;
+    classifyIntakeImage: (params: unknown) => Promise<unknown>;
+    listPendingImages: (params?: { characterId?: string | null } | null) => Promise<unknown>;
     addManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     removeManualTag: (params: { characterId: string; tagText: string }) => Promise<unknown>;
     listVersions: (characterId: string) => Promise<CKCSheetVersionListItem[]>;

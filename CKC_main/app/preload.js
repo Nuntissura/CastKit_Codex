@@ -7,9 +7,18 @@ contextBridge.exposeInMainWorld('ckc', {
     setConfig: (cfg) => ipcRenderer.invoke('ckc:setConfig', cfg),
 
     automationSetRendererState: (state) => ipcRenderer.invoke('ckc:automationSetRendererState', state),
+    automationGetManual: (params) => ipcRenderer.invoke('ckc:automationGetManual', params),
+    automationCreateSession: (params) => ipcRenderer.invoke('ckc:automationCreateSession', params),
+    automationHeartbeat: (params) => ipcRenderer.invoke('ckc:automationHeartbeat', params),
+    automationEndSession: (params) => ipcRenderer.invoke('ckc:automationEndSession', params),
+    automationListSessions: () => ipcRenderer.invoke('ckc:automationListSessions'),
+    automationAcquireLease: (params) => ipcRenderer.invoke('ckc:automationAcquireLease', params),
+    automationReleaseLease: (params) => ipcRenderer.invoke('ckc:automationReleaseLease', params),
+    automationListLog: (params) => ipcRenderer.invoke('ckc:automationListLog', params),
     automationGetState: () => ipcRenderer.invoke('ckc:automationGetState'),
     automationRunCommand: (request) => ipcRenderer.invoke('ckc:automationRunCommand', request),
     automationCapture: (params) => ipcRenderer.invoke('ckc:automationCapture', params),
+    automationCaptureToFile: (params) => ipcRenderer.invoke('ckc:automationCaptureToFile', params),
     automationCommandResult: (payload) => ipcRenderer.invoke('ckc:automationCommandResult', payload),
     onAutomationCommand: (cb) => {
         const handler = (_evt, payload) => cb(payload);

@@ -6,6 +6,8 @@ const path = require('path');
 const { CKCLibrary } = require('./backend/library');
 const { openAiChatCompletions } = require('./backend/llm');
 const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup');
+const { getAutomationManual } = require('./backend/automationManual');
+const { AutomationControlPlane } = require('./backend/automationControl');
 
 const CONFIG_FILE = 'ckc-config.json';
 
@@ -74,6 +76,7 @@ function loadConfig() {
             defaultTemplateId: 'v2.00',
             validationMode: 'strict',
             allowSaveWithErrors: false,
+            automationBackground: false,
             database: {
                 provider: 'postgres',
                 host: '127.0.0.1',
@@ -88,6 +91,7 @@ function loadConfig() {
 
 function normalizeConfig(config) {
     const cfg = config && typeof config === 'object' ? config : {};
+    if (cfg.automationBackground === undefined) cfg.automationBackground = false;
     if (!cfg.database || typeof cfg.database !== 'object') {
         cfg.database = {};
     }
@@ -203,6 +207,7 @@ let libraryRestoreJobs = new Map();
 let libraryRestoreActiveJobId = null;
 let aiTagJobs = new Map();
 let aiTagActiveJobId = null;
+const automationControl = new AutomationControlPlane();
 let automationRendererState = {
     route: 'library',
     selectedCharacterId: null,
@@ -436,6 +441,17 @@ function sanitizeAutomationState(state) {
 
 function getAutomationCommandMap() {
     return {
+        control: [
+            'automationGetManual',
+            'automationCreateSession',
+            'automationHeartbeat',
+            'automationEndSession',
+            'automationListSessions',
+            'automationAcquireLease',
+            'automationReleaseLease',
+            'automationListLog',
+            'automationCaptureToFile',
+        ],
         renderer: [
             'openLibrary',
             'openCharacter',
@@ -458,6 +474,59 @@ function getAutomationCommandMap() {
             'classifyIntakeImage',
         ],
     };
+}
+
+function sanitizeCaptureLabel(label) {
+    const raw = String(label || 'capture').trim() || 'capture';
+    const safe = raw.replaceAll(/[^A-Za-z0-9_-]+/g, '_').replaceAll(/_+/g, '_').replaceAll(/^_+|_+$/g, '');
+    return (safe || 'capture').slice(0, 80);
+}
+
+function getCkcRootCandidate() {
+    const explicit = String(process.env.CKC_ROOT || '').trim();
+    if (explicit) return explicit;
+    return path.resolve(__dirname, '..', '..');
+}
+
+function getAutomationCaptureDir() {
+    const root = getCkcRootCandidate();
+    const govTargets = path.join(root, 'CKC_GOV', 'targets', 'CKC', 'automation_captures');
+    if (fs.existsSync(path.join(root, 'CKC_GOV'))) return govTargets;
+    const fallbackRoot = String(appConfig?.libraryRoot || app.getPath('userData'));
+    return path.join(fallbackRoot, 'automation_captures');
+}
+
+async function captureAutomationPng({ label = 'capture', sessionId = null } = {}) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
+    const image = await mainWindow.webContents.capturePage();
+    const size = image.getSize();
+    const outDir = getAutomationCaptureDir();
+    fs.mkdirSync(outDir, { recursive: true });
+    const stamp = new Date().toISOString().replaceAll(/[:.]/g, '').replace('T', '_').replace('Z', 'Z');
+    const prefix = sessionId ? sanitizeCaptureLabel(sessionId) : 'no_session';
+    const base = `${stamp}_${prefix}_${sanitizeCaptureLabel(label)}`;
+    const pngPath = path.join(outDir, `${base}.png`);
+    const jsonPath = path.join(outDir, `${base}.json`);
+    fs.writeFileSync(pngPath, image.toPNG());
+    fs.writeFileSync(
+        jsonPath,
+        JSON.stringify(
+            {
+                ok: true,
+                pngPath,
+                width: size.width,
+                height: size.height,
+                sessionId,
+                label,
+                capturedAt: new Date().toISOString(),
+                renderer: automationRendererState,
+            },
+            null,
+            2
+        ),
+        'utf8'
+    );
+    return { ok: true, pngPath, jsonPath, width: size.width, height: size.height };
 }
 
 async function runBackendAutomationCommand(command, params) {
@@ -986,15 +1055,24 @@ function registerProtocolHandlers() {
 }
 
 function createWindow() {
+    const automationBackground = process.env.CKC_AUTOMATION_BACKGROUND === '1' || !!appConfig?.automationBackground;
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 840,
+        show: !automationBackground,
+        paintWhenInitiallyHidden: true,
+        focusable: !automationBackground,
+        skipTaskbar: automationBackground,
         icon: path.join(__dirname, 'icon.ico'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
         },
     });
+
+    if (automationBackground) {
+        mainWindow.setMenuBarVisibility(false);
+    }
 
     const isDev = !app.isPackaged;
     if (isDev) mainWindow.loadURL('http://localhost:5173');
@@ -1110,6 +1188,38 @@ function registerIpcHandlers() {
         return { ok: true, state: automationRendererState };
     });
 
+    ipcMain.handle('ckc:automationGetManual', async (_evt, params) => {
+        return getAutomationManual(params || {});
+    });
+
+    ipcMain.handle('ckc:automationCreateSession', async (_evt, params) => {
+        return automationControl.createSession(params || {});
+    });
+
+    ipcMain.handle('ckc:automationHeartbeat', async (_evt, params) => {
+        return automationControl.heartbeat(params || {});
+    });
+
+    ipcMain.handle('ckc:automationEndSession', async (_evt, params) => {
+        return automationControl.endSession(params || {});
+    });
+
+    ipcMain.handle('ckc:automationListSessions', async () => {
+        return automationControl.listSessions();
+    });
+
+    ipcMain.handle('ckc:automationAcquireLease', async (_evt, params) => {
+        return automationControl.acquireLease(params || {});
+    });
+
+    ipcMain.handle('ckc:automationReleaseLease', async (_evt, params) => {
+        return automationControl.releaseLease(params || {});
+    });
+
+    ipcMain.handle('ckc:automationListLog', async (_evt, params) => {
+        return automationControl.listLog(params || {});
+    });
+
     ipcMain.handle('ckc:automationCommandResult', async (_evt, payload) => {
         const p = payload && typeof payload === 'object' ? payload : {};
         const id = String(p.id || '').trim();
@@ -1141,6 +1251,7 @@ function registerIpcHandlers() {
                 databaseProvider: appConfig?.database?.provider || 'postgres',
             },
             renderer: automationRendererState,
+            sessions: automationControl.listSessions(),
             diagnostics,
             commandMap: getAutomationCommandMap(),
         };
@@ -1155,10 +1266,20 @@ function registerIpcHandlers() {
 
         if (target === 'backend') {
             const result = await runBackendAutomationCommand(command, params);
+            automationControl.logEvent({
+                sessionId: req.sessionId || null,
+                type: 'command.backend',
+                details: { command, params, ok: true },
+            });
             return { ok: true, target, command, result };
         }
 
         const result = await runRendererAutomationCommand(command, params, req.timeoutMs);
+        automationControl.logEvent({
+            sessionId: req.sessionId || null,
+            type: 'command.renderer',
+            details: { command, params, ok: true },
+        });
         return { ok: true, target: 'renderer', command, result };
     });
 
@@ -1171,6 +1292,17 @@ function registerIpcHandlers() {
             return { ok: true, width: size.width, height: size.height, pngBytes: image.toPNG() };
         }
         return { ok: true, width: size.width, height: size.height, dataUrl: image.toDataURL() };
+    });
+
+    ipcMain.handle('ckc:automationCaptureToFile', async (_evt, params) => {
+        const p = params && typeof params === 'object' ? params : {};
+        const res = await captureAutomationPng({ label: p.label || 'capture', sessionId: p.sessionId || null });
+        automationControl.logEvent({
+            sessionId: p.sessionId || null,
+            type: 'capture.file',
+            details: { label: p.label || 'capture', pngPath: res.pngPath, jsonPath: res.jsonPath },
+        });
+        return res;
     });
 
     ipcMain.handle('ckc:getConfig', async () => appConfig);
