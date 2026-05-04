@@ -3,8 +3,7 @@
 Canonical source:
 - `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
-Mirror:
-- `<CKC_ROOT>\\CKC_main\\docs\\UI_STYLE_GUIDE.md`
+Do not mirror this file into `CKC_main/docs/`; governance lives only in `CKC_GOV/`.
 
 Purpose:
 - Make the UI consistent.
@@ -81,4 +80,3 @@ Put reference screenshots here:
 
 Name suggestion:
 - `YYYY-MM-DD__<area>__<short-note>.png`
-

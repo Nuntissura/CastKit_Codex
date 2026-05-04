@@ -26,9 +26,8 @@ What problem this solves; link to spec/session dump sections.
 
 ## Governance checklist (MUST)
 - [ ] Task Board updated (`CKC_GOV/taskboard/TASK_BOARD.md`) with this WP status.
-- [ ] Spec updated + mirrored (or explicitly “No spec impact” with rationale):
+- [ ] Spec updated (or explicitly “No spec impact” with rationale):
   - update `CKC_GOV/spec/CastKit_Codex_Spec_v*.md` (version bump + changelog entry)
-  - mirror into `CKC_main/docs/`
 - [ ] Session dump alignment: no conflicts; if representation differs, document the mapping in the spec (session dump remains verbatim).
 
 ## Implementation notes
@@ -47,5 +46,6 @@ How to revert safely.
 
 ## Notes
 - Do NOT write build artifacts inside `CKC_main`.
-- Do NOT touch `D:`.
+- Keep all work under `<CKC_ROOT>` unless explicitly requested.
+- Do not introduce spaces in file names, folder names, or generated artifact names.
 

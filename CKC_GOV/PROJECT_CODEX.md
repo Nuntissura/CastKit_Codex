@@ -44,7 +44,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.059.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.060.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -63,11 +63,12 @@ Daily workflow (MUST):
 7. Run the NAS mirror backup script.
 
 ## Golden rules
-- Never touch `D:` during recovery. All CKC work happens under `<CKC_ROOT>`.
+- Keep CKC work under `<CKC_ROOT>` unless the operator explicitly asks for an external path.
 - Operating stance is binding: see "Operating stance & scope" above for the full rules on adult-production scope, no-censorship, legal/paperwork ownership, and provider-agnostic posture. The bullets below are the workflow-safety subset.
 - No censorship: never redact, soften, euphemize, or rewrite user-entered text in templates, character sheets, exports, labels, or UI strings.
 - Template integrity: never drop Field IDs; preserve template order; preserve user bytes verbatim.
 - UI: minimal by default; sharp corners.
+- Naming: do not introduce spaces in file names, folder names, or generated artifact names. Use `_` or `-`.
 - Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
 - Workflow: create a Work Packet + update Task Board, then **commit + push BEFORE coding starts** (planning checkpoint). After implementation, update Task Board + Spec, then commit + push again (shipping checkpoint).
 
@@ -79,17 +80,16 @@ Expected structure:
 - `app/` — Electron main process + backend (SQLite, exports, IPC)
 - `src/` — React renderer (UI)
 - `scripts/` — build/packaging helpers
-- `docs/` — in-repo docs that must ship with code
 
 ### 2) Governance repo (this folder)
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.059.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.060.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
-  - `character sheet templates/CHARACTER_SHEET__v2.00.txt` — **canonical** template bytes
+  - `character_sheet_templates/CHARACTER_SHEET__v2.00.txt` — **canonical** template bytes
 - `taskboard/`
   - `TASK_BOARD.md` — the single source of truth for work status
 - `work_packets/`
@@ -190,9 +190,11 @@ Rules for `https://github.com/Nuntissura/CastKit_Codex`:
 
 Quick commands (typical):
 ```powershell
-cd "<CKC_ROOT>\\CKC_main"
+cd "<CKC_ROOT>"
+pushd CKC_main
 npm test
 npx tsc --noEmit
+popd
 git status
 git add -A
 git commit -m "WP-xxxx: short description"
@@ -248,4 +250,3 @@ Important: the backup uses ROBOCOPY `/MIR` (mirror). Deletions in source can del
   - using PowerShell `-LiteralPath`
   - using `-WhatIf` first where possible
 - Avoid `cmd` batch loops (`for /d ... rmdir`) for deletes. Prefer PowerShell with explicit, validated paths.
-

@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-02-16
+Last updated: 2026-05-04
 
 This is the single source of truth for work status. It lives only in `CKC_GOV/` — do not mirror into `CKC_main/docs/`.
 
@@ -103,8 +103,12 @@ This is the single source of truth for work status. It lives only in `CKC_GOV/` 
 | WP-0088 | Performance optimization (large libraries) | DONE | Codex | Added DB indexes + character list pagination + capped thumbnail rendering (Load more) (`npm test`, `npx tsc --noEmit`). |
 | WP-0089 | Visual similarity search | DONE | Codex | Added dHash-based "Similar…" modal with distance threshold + jump-to (IPC + unit test) (`npm test`, `npx tsc --noEmit`). |
 | WP-0090 | Batch character operations | DONE | Codex | Multi-select; bulk field edits; bulk tag add/remove; batch export; Trash (soft delete) + restore/purge. |
+| WP-0091 | Governance canonical docs cleanup | DONE | Codex | Removed stale `CKC_main/docs/` mirrors; kept `CKC_GOV/PROJECT_CODEX.md` authoritative; renamed canonical governance template folder to no-space path. |
+| WP-0092 | PostgreSQL storage migration | BACKLOG | Codex | Replace SQLite assumptions with PostgreSQL-backed persistence suitable for parallel model/operator work. |
+| WP-0093 | LLM automation and visual debugger | BACKLOG | Codex | Add JSON state inspection, command automation, and non-focus-stealing visual debug surfaces for agents. |
+| WP-0094 | Image intake sorter | BACKLOG | Codex | Pass/reject/pending sorter; folder-only mode has no notes/tags; linked CKC profile mode copies images and supports metadata/pending gallery. |
 
 ## Current focus
-- Current: TBD (pick next WP).
-- Next: TBD.
-- High-ROI backlog: None (WP-0090 shipped).
+- Current: WP-0092 PostgreSQL storage migration.
+- Next: WP-0093 LLM automation/debugger.
+- High-ROI backlog: WP-0094 image intake sorter.

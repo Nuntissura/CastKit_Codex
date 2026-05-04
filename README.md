@@ -11,7 +11,7 @@ Notes:
 ## Start here (order matters)
 1. `CKC_GOV/PROJECT_CODEX.md`
 2. `CKC_GOV/taskboard/TASK_BOARD.md`
-3. `CKC_GOV/spec/CastKit_Codex_Spec_v00.026.md`
+3. `CKC_GOV/spec/CastKit_Codex_Spec_v00.060.md`
 4. `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md`
 
 ## Dev (Windows)
