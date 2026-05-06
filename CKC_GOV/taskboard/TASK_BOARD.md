@@ -113,9 +113,10 @@ This is the single source of truth for work status. It lives only in `CKC_GOV/` 
 | WP-0096 | No-space folders and generated artifacts | DONE | Codex | Checkout renamed; default library/artifact/export/backup names no longer preserve blanks; path inventory is 0 files/dirs with blank names. `tsc` + touched tests pass; full `npm test` timed out. |
 | WP-0097 | Image sourcing init portability | DONE | Codex | Relative `--spec` prefers the script-adjacent spec, relative `--request` resolves beside the selected spec, and first-phase init created `CKC_GOV/references/external_app_data/task_request.json`. |
 | WP-0098 | Fix MainApp hook-order blank window | DONE | Codex | Fixed React hook-order crash, verified rendered UI with Electron/CDP visual debugger, and cleared PostgreSQL `COLLATE NOCASE` startup errors. |
-| WP-0099 | LLM automation surface expansion + in-app LLM manual | DONE | Codex | 9 new backend commands, getRendererUIState, 4 window-scoped synthetic-input commands (injectKey/injectMouse/clickElement/typeText) via webContents.sendInputEvent + DOM dispatch. assertBackgroundSafe stealth guard, single-instance lock, all dialogs/show/focus/globalShortcut routed through guards. In-app Help drawer renders the manual. 25 new tests pass (7 manual consistency + 5 input invariants + 13 stealth invariants). Spec bumped v00.064 -> v00.065. |
+| WP-0099 | LLM automation surface expansion + in-app LLM manual | DONE | Codex | 9 new backend commands, getRendererUIState, 4 window-scoped synthetic-input commands (injectKey/injectMouse/clickElement/typeText) via webContents.sendInputEvent + DOM dispatch. assertBackgroundSafe stealth guard, single-instance lock, all dialogs/show/focus/globalShortcut routed through guards. In-app Help drawer renders the manual. 25 new tests pass (7 manual consistency + 5 input invariants + 13 stealth invariants). Spec bumped v00.064 -> v00.065. **Released as v0.2.8** (NSIS + portable, ~88 MB each, under `CKC_GOV/targets/CKC/artifacts/releases/v0.2.8/`; tag pushed → release-win.yml). |
 
 ## Current focus
-- Current: WP-0099 complete; next is the packaged Windows build via `npm run package:win`.
-- Next: Validation pass for WP-0092/WP-0093/WP-0094/WP-0095 when operator permits tests/smoke checks.
-- High-ROI backlog: To be created after validation.
+- Current: v0.2.8 shipped (WP-0099 packaged build). NSIS installer + portable .exe local; tag v0.2.8 pushed to trigger the GitHub Release workflow.
+- Next: packaged-build smoke for WP-0099 automation surface (deferred; run when PC isn't under heavy load). NAS mirror backup also deferred.
+- Pending: validation pass for WP-0092/WP-0093/WP-0094/WP-0095 when operator permits.
+- High-ROI backlog: to be created after validation.
