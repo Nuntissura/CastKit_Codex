@@ -7,10 +7,12 @@ export function Drawer({
   isOpen,
   onClose,
   onNavigate,
+  onOpenHelp,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (page: NavPage) => void;
+  onOpenHelp?: () => void;
 }) {
   return (
     <>
@@ -39,6 +41,11 @@ export function Drawer({
           <button className={styles.navItem} onClick={() => onNavigate('intake')}>
             Intake Sorter
           </button>
+          {onOpenHelp ? (
+            <button className={styles.navItem} onClick={onOpenHelp}>
+              LLM / Operator Manual
+            </button>
+          ) : null}
         </nav>
       </aside>
     </>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer } from './components/Drawer';
 import { CommandPalette, type CommandPaletteRun } from './components/CommandPalette';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { HelpModal } from './components/HelpModal';
 import { LibraryView } from './views/LibraryView';
 import { CharacterView } from './views/CharacterView';
 import { ReferenceWindowView } from './views/ReferenceWindowView';
@@ -38,6 +39,7 @@ function MainApp() {
   const [drawerMode, setDrawerMode] = React.useState<DrawerMode>('none');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState<boolean>(false);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = React.useState<boolean>(false);
+  const [isHelpOpen, setIsHelpOpen] = React.useState<boolean>(false);
   const [pendingOpenDoc, setPendingOpenDoc] = React.useState<{
     docType: CKCDocType;
     docId: string;
@@ -372,7 +374,13 @@ function MainApp() {
           setPage(nextPage);
           setDrawerMode('none');
         }}
+        onOpenHelp={() => {
+          setDrawerMode('none');
+          setIsHelpOpen(true);
+        }}
       />
+
+      <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
 
       <div className={styles.topLeft}>
         <button
