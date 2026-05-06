@@ -100,26 +100,6 @@ function MainApp() {
     });
   }, [page, selectedCharacterId, selectedImageId, drawerMode, isCommandPaletteOpen, isGlobalSearchOpen]);
 
-  if (init.status !== 'ready') {
-    return (
-      <div className={styles.root}>
-        <div className={styles.loadingWrap}>
-          <div className={styles.loadingTitle}>Loading library...</div>
-          {init.status === 'error' ? (
-            <>
-              <div className={styles.loadingError}>{init.message}</div>
-              <button className={styles.loadingButton} onClick={runInit}>
-                Retry
-              </button>
-            </>
-          ) : (
-            <div className={styles.loadingHint}>If this takes long, the app may be waiting for a folder selection dialog.</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   const runCommandPalette = React.useCallback(
     (cmd: CommandPaletteRun) => {
       setIsCommandPaletteOpen(false);
@@ -292,6 +272,26 @@ function MainApp() {
       if (typeof off === 'function') off();
     };
   }, [page, selectedCharacterId, selectedImageId, drawerMode, isCommandPaletteOpen, isGlobalSearchOpen]);
+
+  if (init.status !== 'ready') {
+    return (
+      <div className={styles.root}>
+        <div className={styles.loadingWrap}>
+          <div className={styles.loadingTitle}>Loading library...</div>
+          {init.status === 'error' ? (
+            <>
+              <div className={styles.loadingError}>{init.message}</div>
+              <button className={styles.loadingButton} onClick={runInit}>
+                Retry
+              </button>
+            </>
+          ) : (
+            <div className={styles.loadingHint}>If this takes long, the app may be waiting for a folder selection dialog.</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.root}>

@@ -137,6 +137,15 @@ Set these env vars before running npm/electron builds:
   ```powershell
   powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_up.ps1"
   ```
+- If `postgres_up.ps1` reports that the Docker Linux engine pipe is missing, start Docker Desktop first:
+  - `C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe`
+  - Verify readiness with `docker info` before rerunning `postgres_up.ps1`.
+- If another local PostgreSQL service already owns port `5432`, run CKC's Docker PostgreSQL on a repo-specific host port:
+  ```powershell
+  $env:CKC_POSTGRES_HOST_PORT="55432"
+  $env:CKC_POSTGRES_URL="postgres://castkit_codex:castkit_codex@127.0.0.1:55432/castkit_codex"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_up.ps1"
+  ```
 - CKC config:
   - `ckc-config.json`:
     ```json
@@ -183,6 +192,12 @@ Set these env vars before running npm/electron builds:
   - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\automation_captures\\` in repo/dev mode
   - `<libraryRoot>\\automation_captures\\` as packaged/fallback mode
 - Automation must not use OS-level keyboard injection, cursor movement, focus stealing, or foregrounding as its normal path.
+
+### Visual debugging requirement
+- Visual debugging is available and required when working on the CKC app UI or diagnosing GUI failures.
+- Use the Browser Use in-app browser plugin for local browser targets such as `localhost`/`127.0.0.1` whenever that tool is available.
+- For Electron-only behavior, use CKC automation captures, Electron/Chrome DevTools Protocol inspection, or screenshots as the fallback visual evidence path.
+- Do not rely only on process status, successful builds, or logs for UI-facing work. Verify the rendered app visually and check renderer console/runtime errors before calling app/UI work done.
 
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.

@@ -117,6 +117,48 @@ function translateQuestionParams(sql) {
   return out;
 }
 
+function replaceOutsideSqlQuotes(sql, pattern, replacement) {
+  const raw = String(sql ?? '');
+  let out = '';
+  let segment = '';
+  let quote = null;
+
+  const flushSegment = () => {
+    if (!segment) return;
+    out += segment.replace(pattern, replacement);
+    segment = '';
+  };
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (quote) {
+      out += ch;
+      if (ch === quote) {
+        if (raw[i + 1] === quote) {
+          out += raw[i + 1];
+          i++;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === '`') {
+      flushSegment();
+      quote = ch;
+      out += ch;
+      continue;
+    }
+
+    segment += ch;
+  }
+
+  flushSegment();
+  return out;
+}
+
 function appendOnConflictDoNothing(sql) {
   const raw = String(sql ?? '').trim();
   if (!raw) return raw;
@@ -134,6 +176,14 @@ function translatePostgresSql(sql) {
     .replace(/\bINSERT\s+OR\s+REPLACE\s+INTO\b/gi, 'INSERT INTO')
     .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
     .replace(/\bREAL\b/gi, 'DOUBLE PRECISION');
+
+  out = replaceOutsideSqlQuotes(
+    out,
+    /\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*=\s*\?\s+COLLATE\s+NOCASE\b/gi,
+    (_match, column) => `LOWER(${column}) = LOWER(?)`
+  );
+  out = replaceOutsideSqlQuotes(out, /\bLIKE\b/gi, 'ILIKE');
+  out = replaceOutsideSqlQuotes(out, /\s+COLLATE\s+NOCASE\b/gi, '');
 
   out = translateQuestionParams(out);
   if ((hadInsertOrIgnore || hadInsertOrReplace) && !/\bON\s+CONFLICT\b/i.test(out)) out = appendOnConflictDoNothing(out);

@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-05-05
+Last updated: 2026-05-05 (WP-0098)
 
 This is the single source of truth for work status. It lives only in `CKC_GOV/` — do not mirror into `CKC_main/docs/`.
 
@@ -110,8 +110,9 @@ This is the single source of truth for work status. It lives only in `CKC_GOV/` 
 | WP-0095 | Background LLM control plane + internal manual | DONE | Codex | Internal indexed manual, multi-agent sessions/leases/logs, hidden background mode, non-focus-stealing screenshot-to-file, and explicit command/navigation API. Validation not run. |
 | WP-0096 | No-space folders and generated artifacts | DONE | Codex | Checkout renamed; default library/artifact/export/backup names no longer preserve blanks; path inventory is 0 files/dirs with blank names. `tsc` + touched tests pass; full `npm test` timed out. |
 | WP-0097 | Image sourcing init portability | DONE | Codex | Relative `--spec` prefers the script-adjacent spec, relative `--request` resolves beside the selected spec, and first-phase init created `CKC_GOV/references/external_app_data/task_request.json`. |
+| WP-0098 | Fix MainApp hook-order blank window | DONE | Codex | Fixed React hook-order crash, verified rendered UI with Electron/CDP visual debugger, and cleared PostgreSQL `COLLATE NOCASE` startup errors. |
 
 ## Current focus
-- Current: No open work packets.
+- Current: WP-0098 complete; CKC GUI startup is visually verified.
 - Next: Validation pass for WP-0092/WP-0093/WP-0094/WP-0095 when operator permits tests/smoke checks.
 - High-ROI backlog: To be created after validation.

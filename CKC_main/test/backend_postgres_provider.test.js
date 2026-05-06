@@ -10,6 +10,17 @@ test('postgres SQL translator preserves string literals while converting placeho
   );
 });
 
+test('postgres SQL translator handles SQLite case-insensitive clauses', () => {
+  assert.equal(
+    translatePostgresSql("SELECT * FROM Character WHERE display_name = ? COLLATE NOCASE AND notes = 'LIKE ? COLLATE NOCASE'"),
+    "SELECT * FROM Character WHERE LOWER(display_name) = LOWER($1) AND notes = 'LIKE ? COLLATE NOCASE'"
+  );
+  assert.equal(
+    translatePostgresSql("SELECT * FROM Character WHERE search_blob LIKE ? COLLATE NOCASE ORDER BY display_name COLLATE NOCASE"),
+    "SELECT * FROM Character WHERE search_blob ILIKE $1 ORDER BY display_name"
+  );
+});
+
 test(
   'postgres provider initializes schema and supports concurrent core writes',
   { skip: !process.env.CKC_TEST_POSTGRES_URL },
