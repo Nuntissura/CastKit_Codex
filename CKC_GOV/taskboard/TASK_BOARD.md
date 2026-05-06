@@ -1,6 +1,8 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-05-05 (WP-0098)
+Last updated: 2026-05-06
+
+> **Binding contract.** This file is part of the binding repo contract together with `AGENTS.md`, `CKC_GOV/PROJECT_CODEX.md`, and `README.md`. All four MUST be read and acknowledged before any work is done in this repo. `PROJECT_CODEX.md` wins on conflicts; this Task Board is the authoritative status of work and current focus.
 
 This is the single source of truth for work status. It lives only in `CKC_GOV/` — do not mirror into `CKC_main/docs/`.
 

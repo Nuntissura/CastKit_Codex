@@ -1,5 +1,7 @@
 ﻿# CastKit Codex (CKC) — Project Codex & Workflow
 
+> **Binding contract.** This file, together with `AGENTS.md`, `CKC_GOV/taskboard/TASK_BOARD.md`, and `README.md`, forms the binding contract for any human or LLM/agent working in this repository. All four MUST be read and acknowledged before any code, governance, spec, task, build, or backup action is taken. This file is the highest authority among them; if any of the four conflict, this Project Codex wins.
+
 This folder (`CKC_GOV`) is the **governance + tracking + build targets** home for CKC.
 
 This GitHub repo tracks BOTH:
