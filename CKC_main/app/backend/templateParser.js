@@ -48,29 +48,149 @@ function extractBlockSchemaName(rawDescriptor) {
   return undefined;
 }
 
+// Tokens that name a field's primary type. When one of these appears
+// as the first token of a union, the field IS that type — the rest of
+// the union are alternative-acceptable values, not enum members.
+const PRIMARY_TYPE_KEYWORDS = new Set([
+  'string',
+  'integer',
+  'number',
+  'paragraph',
+  'descriptor',
+  'score_10',
+  'list',
+  'rule',
+]);
+
+// Tokens that mean "this field can be left unset / unknown / etc.".
+// They are not enum values; they are metadata about optionality.
+const OPTIONALITY_TOKENS = new Set([
+  'optional',
+  'unset',
+  'unknown',
+  'none',
+]);
+
+// Split the inside of a top-level `<...>` on `|`, respecting nested
+// angle brackets so `other:<descriptor>` survives as one token.
+function splitUnionInner(inner) {
+  const tokens = [];
+  let depth = 0;
+  let cur = '';
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '<') depth++;
+    else if (ch === '>') depth--;
+    if (ch === '|' && depth === 0) {
+      const t = cur.trim();
+      if (t) tokens.push(t);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  const last = cur.trim();
+  if (last) tokens.push(last);
+  return tokens;
+}
+
 function inferFieldType(rawDescriptor) {
-  const lower = rawDescriptor.toLowerCase();
+  const trimmed = String(rawDescriptor || '').trim();
+  // Rule fields commonly include inline prose after `<rule>`, e.g.
+  //   `<rule> (If typed as <descriptor>, value MUST be ...)`
+  // Match the leading `<rule>` token specifically.
+  if (/^<\s*rule\s*>/i.test(trimmed)) return { type: 'rule' };
 
-  if (lower.includes('<rule>')) return { type: 'rule' };
-  if (lower.includes('<integer>')) return { type: 'integer' };
-  if (lower.includes('<number>')) return { type: 'number' };
-  if (lower.includes('<paragraph>')) return { type: 'paragraph' };
-  if (lower.includes('<descriptor>')) return { type: 'descriptor' };
-  if (lower.includes('<score_10>')) return { type: 'score_10' };
-
-  const blockInfo = extractBlockSchemaName(rawDescriptor);
-  if (blockInfo) return { type: blockInfo.kind, blockSchemaName: blockInfo.name };
-
-  if (/\<.*\|.*\>/.test(rawDescriptor)) {
-    const enumValues = extractEnumValues(rawDescriptor);
-    if (enumValues) return { type: 'enum', enumValues };
+  // Non-union literal: <integer>, <descriptor>, <list of Foo_Block>, etc.
+  // (No `|` inside the outermost angle brackets.)
+  const literal = trimmed.match(/^<\s*([A-Za-z0-9_]+(?:\s+of\s+[A-Za-z0-9_]+)?)\s*>$/);
+  if (literal) {
+    const lit = literal[1].toLowerCase();
+    if (PRIMARY_TYPE_KEYWORDS.has(lit)) return { type: lit };
+    // <SomeBlock> or <list of SomeBlock>
+    const block = extractBlockSchemaName(trimmed);
+    if (block) return { type: block.kind, blockSchemaName: block.name };
+    return { type: 'string' };
   }
 
-  if (lower.includes('<list of')) return { type: 'block_list' };
-  if (lower.includes('<list>')) return { type: 'list' };
-  if (lower.includes('<list')) return { type: 'list' };
+  // Union form: <a | b | c | ...>
+  const unionMatch = trimmed.match(/^<([\s\S]+)>$/);
+  if (!unionMatch) return { type: 'string' };
+  const tokens = splitUnionInner(unionMatch[1]);
+  if (tokens.length === 0) return { type: 'string' };
 
-  return { type: 'string' };
+  // Pull out structured tokens: block / list-of-block / other:<X>
+  let blockSchemaName = null;
+  let blockKind = null;
+  let allowOtherType = null; // 'descriptor' | 'string' | null
+  const literalValues = []; // genuine enum literals
+  const allowedSpecialValues = []; // optional/unset/unknown/none/etc. + sentinel literals like "adult"
+  let typeKeyword = null;
+
+  for (const tok of tokens) {
+    const lower = tok.toLowerCase();
+    // list of XYZ_Block
+    const listOfBlock = tok.match(/^list\s+of\s+([A-Za-z0-9_]+_Block)$/i);
+    if (listOfBlock) {
+      blockKind = 'block_list';
+      blockSchemaName = listOfBlock[1];
+      continue;
+    }
+    // Plain XYZ_Block (without "list of")
+    const blockSingle = tok.match(/^([A-Za-z0-9_]+_Block)$/);
+    if (blockSingle) {
+      blockKind = 'block';
+      blockSchemaName = blockSingle[1];
+      continue;
+    }
+    // other:<descriptor> or other:<string>
+    const otherType = tok.match(/^other:\s*<\s*([A-Za-z0-9_]+)\s*>$/i);
+    if (otherType) {
+      const ot = otherType[1].toLowerCase();
+      allowOtherType = PRIMARY_TYPE_KEYWORDS.has(ot) ? ot : 'descriptor';
+      continue;
+    }
+    // other:<string> with text after — like `other:<string>` is the canonical
+    // Bare "other" without <X> — treat as literal enum
+    if (PRIMARY_TYPE_KEYWORDS.has(lower)) {
+      typeKeyword = lower;
+      continue;
+    }
+    if (OPTIONALITY_TOKENS.has(lower)) {
+      allowedSpecialValues.push(tok);
+      continue;
+    }
+    // Anything else is a genuine enum literal value (e.g. "slim", "curvy", "adult",
+    // "fictional", "original", etc.).
+    literalValues.push(tok);
+  }
+
+  // Block list / single block first (they fully determine the type)
+  if (blockKind === 'block_list') return { type: 'block_list', blockSchemaName };
+  if (blockKind === 'block') return { type: 'block', blockSchemaName };
+
+  // If a primary type keyword appeared, the field IS that type.
+  // Literal values (e.g. "adult" inside <integer | adult>) are accepted
+  // as additional sentinels.
+  if (typeKeyword) {
+    const out = { type: typeKeyword };
+    if (allowedSpecialValues.length || literalValues.length) {
+      out.allowedSpecialValues = [...allowedSpecialValues, ...literalValues];
+    }
+    return out;
+  }
+
+  // Pure enum (only literal values, possibly + optional/unknown sentinels +
+  // optional descriptor/string fallback).
+  if (literalValues.length) {
+    const out = { type: 'enum', enumValues: literalValues };
+    if (allowOtherType) out.allowOtherType = allowOtherType;
+    if (allowedSpecialValues.length) out.allowedSpecialValues = allowedSpecialValues;
+    return out;
+  }
+
+  // Only special tokens (e.g. <unknown>) — fall back to string.
+  return { type: 'string', allowedSpecialValues };
 }
 
 function isOptionalDescriptor(rawDescriptor) {
@@ -121,6 +241,11 @@ function parseTemplate(content, templateId, sourcePath = null) {
         optional: isOptionalDescriptor(rawDescriptor),
         enumValues: inferred.enumValues,
         blockSchemaName: inferred.blockSchemaName,
+        // WP-0103: extension flags from union-aware inference. Validators
+        // honor these to skip noisy enum warnings on string fields and
+        // accept descriptor / string fallbacks for enum-with-other unions.
+        allowedSpecialValues: inferred.allowedSpecialValues,
+        allowOtherType: inferred.allowOtherType,
         section: currentBlock ? `BLOCK:${currentBlock.name}` : (currentSection?.title || 'General'),
         value: null,
         templateDescriptor: rawDescriptor,

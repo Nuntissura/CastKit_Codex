@@ -1744,12 +1744,20 @@ class CKCLibrary {
 
     this.templatesById.set(ast.id, ast);
 
-    // Activate default template (falls back to v2.00).
-    try {
-      this.template = await this.getTemplateAst(this.defaultTemplateId);
-    } catch {
-      this.defaultTemplateId = 'v2.00';
+    // Activate default template. Prefer the just-parsed AST when it
+    // matches the default template id — this avoids a stale DB cache
+    // (Template.ast_json) when the parser code changes but the
+    // template bytes do not. (Pre-WP-0103 we always read from DB,
+    // which left the validator using yesterday's parser output.)
+    if (this.defaultTemplateId === ast.id) {
       this.template = ast;
+    } else {
+      try {
+        this.template = await this.getTemplateAst(this.defaultTemplateId);
+      } catch {
+        this.defaultTemplateId = 'v2.00';
+        this.template = ast;
+      }
     }
   }
 

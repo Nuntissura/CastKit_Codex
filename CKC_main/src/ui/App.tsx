@@ -265,7 +265,28 @@ function MainApp() {
           if (!selector) throw new Error('clickElement: selector is required');
           const el = document.querySelector(selector) as HTMLElement | null;
           if (!el) throw new Error(`clickElement: no element matches selector ${selector}`);
-          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          // WP-0103: dispatch the full event sequence a real user click
+          // produces (pointer + mouse + click) so React 19 controlled
+          // elements fire their onClick reliably. Strictly window-scoped
+          // — no OS input, no focus steal beyond the dispatchEvent target.
+          //
+          // KNOWN GAP: in some React 19 controlled-button cases (notably
+          // CharacterView's Save button), even this richer sequence does
+          // not complete the React onClick handler chain. Native CDP
+          // Input.dispatchMouseEvent (trusted events) also fails to
+          // trigger the same handler. Investigation pending. For agent
+          // tests of save flows, prefer backend window.ckc.saveCharacter
+          // directly — it always works.
+          const rect = el.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy } as MouseEventInit;
+          el.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvent('mousedown', opts));
+          try { (el as HTMLElement).focus({ preventScroll: true }); } catch { /* ignore focus failure */ }
+          el.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvent('mouseup', opts));
+          el.dispatchEvent(new MouseEvent('click', opts));
           result = { ok: true, selector, tag: el.tagName.toLowerCase() };
         } else if (command === 'typeText') {
           const text = typeof params.text === 'string' ? params.text : '';

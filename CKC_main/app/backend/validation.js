@@ -26,6 +26,11 @@ function normalizeScore10(value) {
   return { ok: false, normalized: raw };
 }
 
+function isInAllowedSpecialValues(field, trimmed) {
+  if (!Array.isArray(field.allowedSpecialValues)) return false;
+  return field.allowedSpecialValues.some((v) => String(v).trim() === trimmed);
+}
+
 function validateValueForField(field, valueText, mode) {
   const issues = [];
   const raw = valueText ?? '';
@@ -36,29 +41,65 @@ function validateValueForField(field, valueText, mode) {
 
   if (!trimmed) return { issues, normalized: str };
 
+  // String fields accept any non-empty string. allowedSpecialValues
+  // are sentinel literals (e.g. "unset") that are also valid; either way
+  // we don't warn.
+  if (field.type === 'string') {
+    return { issues, normalized: str };
+  }
+
   if (field.type === 'enum' && Array.isArray(field.enumValues) && field.enumValues.length > 0) {
-    if (!field.enumValues.includes(trimmed)) {
-      push('warn', `Non-canonical enum value (allowed): "${trimmed}"`);
+    if (field.enumValues.includes(trimmed)) {
+      return { issues, normalized: str };
     }
+    if (isInAllowedSpecialValues(field, trimmed)) {
+      return { issues, normalized: str };
+    }
+    // Extension: allowOtherType permits a fallback type in place of any
+    // declared enum literal. e.g. Build: <slim | ... | other:<descriptor> | unknown>
+    // accepts any 2-12 word descriptor without warning.
+    if (field.allowOtherType === 'descriptor' && (mode === 'strict' || mode === 'hard-fail')) {
+      const words = splitDescriptorWords(trimmed);
+      if (words.length >= 2 && words.length <= 12) {
+        return { issues, normalized: str };
+      }
+    }
+    if (field.allowOtherType === 'string') {
+      // Any non-empty string is fine.
+      return { issues, normalized: str };
+    }
+    if (field.allowOtherType === 'descriptor') {
+      // advisory mode: don't enforce word count, accept the value.
+      return { issues, normalized: str };
+    }
+    push('warn', `Non-canonical enum value (allowed): "${trimmed}"`);
+    return { issues, normalized: str };
   }
 
   if (field.type === 'integer') {
+    if (isInAllowedSpecialValues(field, trimmed)) return { issues, normalized: str };
     if (!/^-?\d+$/.test(trimmed)) push('error', 'Expected integer');
   }
 
   if (field.type === 'number') {
+    if (isInAllowedSpecialValues(field, trimmed)) return { issues, normalized: str };
     if (!/^-?(?:\d+|\d*\.\d+)$/.test(trimmed)) push('error', 'Expected number');
   }
 
   if (field.type === 'score_10') {
+    if (isInAllowedSpecialValues(field, trimmed)) return { issues, normalized: str };
     const r = normalizeScore10(trimmed);
     if (!r.ok) push('error', 'Expected score_10 as 0..10 or x/10');
     return { issues, normalized: r.ok ? r.normalized : str };
   }
 
-  if (field.type === 'descriptor' && (mode === 'strict' || mode === 'hard-fail')) {
-    const words = splitDescriptorWords(trimmed);
-    if (words.length < 2 || words.length > 12) push('error', 'Descriptor must be 2–12 words');
+  if (field.type === 'descriptor') {
+    // Sentinels like "unknown" are always fine.
+    if (isInAllowedSpecialValues(field, trimmed)) return { issues, normalized: str };
+    if (mode === 'strict' || mode === 'hard-fail') {
+      const words = splitDescriptorWords(trimmed);
+      if (words.length < 2 || words.length > 12) push('error', 'Descriptor must be 2–12 words');
+    }
   }
 
   if (field.type === 'block' || field.type === 'block_list' || field.type === 'list') {

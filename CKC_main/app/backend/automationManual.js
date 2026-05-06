@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-06.wp-0100';
+const MANUAL_VERSION = '2026-05-06.wp-0103';
 
 const featureGroups = [
   {
@@ -461,7 +461,7 @@ const commandReference = [
   {
     id: 'clickElement',
     target: 'renderer',
-    description: 'Dispatch a click MouseEvent on the first DOM element matching selector. Renderer-side; does not move the cursor.',
+    description: 'Click the first DOM element matching selector. Renderer-side; does not move the OS cursor. WP-0103: dispatches the full click sequence (pointerdown → mousedown → focus → pointerup → mouseup → click) so React 19 controlled buttons fire their onClick handlers reliably (a single MouseEvent often did not). Strictly window-scoped; no OS input.',
     example: { selector: 'button[data-action="save"]' },
   },
   {

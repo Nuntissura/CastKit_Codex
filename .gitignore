@@ -29,3 +29,6 @@ Thumbs.db
 # Claude Code local state (per-repo settings/permissions; never commit)
 .claude/
 CKC_main/.claude/
+
+# Agent's local CDP helpers (.tmp/cdp_eval.js etc.) — described in CKC_TEST_SUITE.md
+.tmp/
