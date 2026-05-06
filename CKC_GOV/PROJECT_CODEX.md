@@ -259,6 +259,54 @@ The test suite at `CKC_GOV/test_suites/CKC_TEST_SUITE.md` is the canonical, repe
 
 This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above.
 
+### Research-first methodology (binding)
+
+**Before implementing any non-trivial WP, the planner runs a field-research pass and records what it found in the WP body.** The cost is real (an extra hour or three of cycles per WP); the value is staying current with the field — surfacing prior art, libraries, papers, or workflows that could change or simplify the approach. Applies to every WP that touches a new technique, a new library, an external integration, or a domain CKC hasn't worked in before. Trivial changes (typo fixes, doc-only edits, mechanical refactors with no design choice, schema column additions that follow established patterns) are exempt.
+
+**Sources to canvas** (depth scales with WP risk; cover at least 4 of these for a feature WP, at least 6 for a research / architecture WP):
+
+- **Prior art and libraries**:
+  - GitHub topic + code search for the technique and adjacent terms (`openpose`, `pose-estimation`, `mediapipe`, `controlnet`, etc. — adapt per WP).
+  - npm / PyPI for production-grade libraries that already solve the problem.
+  - Hugging Face — models, datasets, Spaces.
+  - Civitai — workflows, LoRAs, ControlNet variants when the WP touches image generation.
+
+- **Vendor and lab blogs**:
+  - AI vendors: Anthropic, OpenAI, Google DeepMind, Meta AI, Mistral, NVIDIA Research.
+  - Hyperscaler engineering blogs: AWS, Azure, GCP.
+  - Domain labs: Stanford HAI, MIT CSAIL, Google Research, FAIR.
+
+- **Academic + benchmarks**:
+  - arXiv (last 12-18 months unless older work is canonical).
+  - Papers with Code for benchmark state-of-the-art.
+  - University research pages when a specific lab owns the domain.
+
+- **Practitioner forums**:
+  - Reddit (`r/LocalLLaMA`, `r/StableDiffusion`, `r/MachineLearning`, etc. — the relevant subs per WP).
+  - Hacker News, Latent Space, Stratechery for industry signals.
+  - Twitter/X for fresh signal — researchers, vendor accounts, practitioners.
+
+- **Standards and vendor docs**:
+  - The canonical docs for every library the WP introduces or extends (Vite, Electron, Three.js, mediapipe, ComfyUI, ControlNet, Postgres, etc.).
+  - W3C / IETF / industry standards if the WP touches a protocol or interchange format.
+
+**Output artifact** — every applicable WP gains a `## Field research / prior art` section, before `## Scope`. It records:
+
+1. **What was searched** — sources canvassed, search terms used, date of the pass.
+2. **What was found** — the 3-7 most relevant hits (paper / repo / blog / discussion). One-line cite each: `<title> (<source>, <date>) — <URL>`.
+3. **How it informed the WP** — concrete deltas to the design. Did a paper change the approach? Did a library replace planned-from-scratch code? Did a known issue surface that needs a mitigation? Did a benchmark suggest a different model? List each.
+4. **What was rejected and why** — alternatives that were considered and dropped. Keeps the design rationale durable so future-me doesn't re-litigate the same choice.
+
+If research surfaces something that reshapes the WP scope, **update the WP draft before any implementation starts**. Don't paper over the find with a TODO; the whole point of the rule is to act on the field, not just acknowledge it.
+
+**Output format constraint**: keep research notes to 1-2 pages of the WP. They are reference, not narrative. Bullets > paragraphs.
+
+**The tradeoff is explicit**: this slows down WP planning by hours, sometimes days for research-heavy work. It is acceptable. The cost of shipping a WP that reinvents a wheel, ignores a recent paper that obsoletes the approach, or misses a library that would have replaced 2 weeks of code is much higher.
+
+This rule binds in addition to the code-truth, in-app-manual, live-verification, schema-compat, and absorption rules.
+
+---
+
 ### Image-sourcing init_task + spec JSON are CKC-governed canon (binding)
 The image-sourcing **init_task.py** reference implementation and the **spec_init JSON** files at `CKC_GOV/references/external_app_data/` are part of CKC governance. CKC is the consumer of the artifacts they produce (`task_state.yaml`, `task_topology.yaml`, `media_items.jsonl`, `app_sync_events.jsonl`, intake lanes, copied scripts, etc.); the `ingestImageSourcingTask` adapter and per-version handlers under `CKC_main/app/backend/imageSourcingHandlers/` are the canon they must agree with.
 
