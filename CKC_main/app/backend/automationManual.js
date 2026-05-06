@@ -667,6 +667,13 @@ function getManualJson() {
       noCursorHijack: true,
       backgroundCaptureOnly: true,
       providerAgnostic: true,
+      liveVerificationRequired: true,
+    },
+    operatingContract: {
+      liveVerification:
+        'When testing, verifying, or demonstrating any CKC feature/fix/change/workflow, drive the running app through this automation surface. Never certify behavior from code-reading or test runs alone. Use automationRunCommand for renderer/backend actions, getRendererUIState for state inspection, and automationCaptureToFile for visual evidence. This binds every CKC surface — sheet editor, library, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, and every future addition. If a surface lacks an automation hook for what you need, file the gap in roadmap rather than skipping verification.',
+      gapPolicy:
+        'If you cannot drive a surface through the wired commands today, name it as a roadmap entry on the relevant feature group and surface the constraint to the operator. Do not silently certify.',
     },
     quickStart: [
       'Create a session with automationCreateSession.',
@@ -674,6 +681,7 @@ function getManualJson() {
       'Acquire a lease such as renderer-navigation before navigation-heavy work.',
       'Use automationRunCommand for renderer/backend actions.',
       'Use automationCaptureToFile for visual debugging screenshots.',
+      'When testing or verifying behavior: drive the running app through this surface. Code-reading and unit-test passes are NOT a substitute for live verification (binding).',
       'Heartbeat during long tasks and end the session when finished.',
     ],
     index: getManualIndex(),
@@ -697,6 +705,14 @@ function manualToMarkdown(manual = getManualJson()) {
   lines.push('- Do not move or hijack the cursor.');
   lines.push('- Do not foreground windows for capture; use background capture APIs.');
   lines.push('- Keep provider-specific LLM behavior outside core app assumptions.');
+  lines.push('');
+  lines.push('## Live verification (binding)');
+  lines.push('Drive the running app through this automation surface whenever testing, verifying, or demonstrating any CKC feature, fix, change, or workflow. Code-reading and test-suite passes are not a substitute for live verification.');
+  lines.push('');
+  lines.push('- Use `automationRunCommand` for renderer/backend actions and `getRendererUIState` for state inspection.');
+  lines.push('- Use `automationCaptureToFile` for visual evidence; inspect the resulting PNG before claiming a UI is correct.');
+  lines.push('- This rule binds every CKC surface: sheet editor, library, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, and every future addition.');
+  lines.push('- If a surface lacks an automation hook for what you need to verify, file the gap as a roadmap entry on the relevant feature group rather than skipping verification.');
   lines.push('');
   lines.push('## Quick start');
   for (const item of manual.quickStart) lines.push(`- ${item}`);
