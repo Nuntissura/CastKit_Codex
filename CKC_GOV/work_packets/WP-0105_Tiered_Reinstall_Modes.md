@@ -53,31 +53,26 @@ The current setup makes accidental data loss possible (someone manually wiping `
   - The `<id>` folder names themselves (so re-attaching by id is possible if DB is preserved).
   - Optionally: a one-shot manifest `images_orphans.json` written to libraryRoot at reset time, listing every preserved file with its hash, character folder id, and last-known character display_name (read from DB before the wipe). This becomes the bridge for re-ingest.
 
-## DB scope decision (open question called out by operator)
+## DB scope on Full reset (decided 2026-05-06: Option 3)
 
-Three plausible answers; this WP must pick one and pin it as the contract:
+**Contract**: Full reset truncates every CKC Postgres table except `ckcdbmigration` and `ckcmeta`. Before the truncate, the app writes an orphan manifest to disk so image bytes remain reachable for re-adoption.
 
-### Option 1 — DB untouched on Full reset
-- Postgres keeps Character / FieldValue / Tag / CharacterTag / ImageAsset / IngestionBatch / etc.
-- After Full reset: app boots, sees `ckc-config.json` is gone → re-creates default config → connects to existing Postgres → all characters, sheets, tags, image rows still there. Folder structure on disk reverts to default but image files are still where ImageAsset rows expect them. End result is "wiped UI prefs and per-character `extras/scripts` but functioning library".
-- **Pro**: simplest, lowest data-loss risk.
-- **Con**: doesn't actually feel like a "Full reset" — characters and tags survive.
+### What gets truncated
+Character, FieldValue, ImageAsset, Tag, CharacterTag, CharacterRelation, NoteDoc, MoodboardDoc, StoryDoc, StoryBoard, Collection, CollectionItem, SavedSearch, LinkIndex, AuditLog, IngestionBatch, IngestionRejection, CharacterScript, SheetVersion, SheetFile, ProtectedField, ImageAnnotation, TagRule, TagTemplate, Template, TemplateSpinOff. Single `TRUNCATE ... CASCADE` transaction; if it fails, rolls back and leaves the marker file in place so the operator can retry.
 
-### Option 2 — DB user-content wiped, ImageAsset preserved
-- Drop / truncate: Character, FieldValue, Tag, CharacterTag, CharacterRelation, NoteDoc, MoodboardDoc, StoryDoc, StoryBoard, Collection, CollectionItem, SavedSearch, LinkIndex, AuditLog, IngestionBatch, IngestionRejection, CharacterScript, SheetVersion, SheetFile, ProtectedField, ImageAnnotation, TagRule, TagTemplate.
-- Keep: ImageAsset rows. Their `character_id` becomes a dangling foreign key.
-- After Full reset: characters are gone, but image rows still exist and point at preserved files on disk. Re-creating a character with the same internal id would re-attach. There's no UI for that today, so this would need a new "Adopt orphan images" backend command.
-- **Pro**: image-DB binding survives, less re-work.
-- **Con**: dangling FKs are a maintenance hazard; if Character is dropped CASCADE will drop ImageAsset too unless we handle it explicitly.
+### What gets preserved
+- `ckcdbmigration` and `ckcmeta` rows so schema versioning survives.
+- Every byte under every `characters/<id>/images/{original,thumb}/`.
+- A new `<libraryRoot>/orphans/<reset-timestamp>/manifest.json` (atomic temp-file + rename) with one entry per prior `ImageAsset` row: `image_id`, `character_id`, `display_name` (read from Character before truncate), `relative_path`, `file_hash`, `width`, `height`, `tags`, `rating`, `favorite`, `notes`, `storage_mode`, `source_path`, `source_url`, `source_note`, plus the WP-0100 provenance fields (`source_dataset_id`, `source_task_id`, `source_run_id`, `source_contact_sheet_ref`, `sheet_version_id`). Manifest carries `manifest_version: 1` so future schema changes are detectable.
+- Historical manifests accumulate under `<libraryRoot>/orphans/<timestamp>/` — never overwritten.
 
-### Option 3 (recommended) — DB fully truncated, image bytes + manifest preserved on disk
-- Truncate ALL CKC tables (everything except `ckcdbmigration` / `ckcmeta` so schema versioning survives).
-- Before truncating, write `<libraryRoot>/orphans/<reset-timestamp>/manifest.json` with one entry per `ImageAsset` row: `image_id`, `character_id`, `display_name` (from Character), `relative_path`, `file_hash`, `tags`, `rating`, `favorite`, `notes`, source provenance, etc.
-- After Full reset: app boots clean. A new menu entry "Adopt orphans from previous reset" reads the manifest, lets the operator pick a target character (existing or new), and re-INSERTs ImageAsset rows pointing at the preserved files (file_hash dedup still works against the new DB).
-- **Pro**: cleanest separation — DB is the source of truth and gets a known-good clean slate; the manifest gives a recovery path; images are never touched on disk; the operator can decide per-character whether to re-adopt.
-- **Con**: requires a new "Adopt orphans" UI + backend command. ~half a day of work.
+### Recovery flow (after Full reset)
+- New backend command `adoptOrphanImages({ manifestPath, targetCharacterId, imageIds })` validates each manifest entry's file is still on disk at `relative_path` and re-hashes the bytes; mismatches fail clean and skip that entry.
+- New "Settings → Recover orphans" UI lists manifest entries grouped by old `display_name`, lets the operator pick a target character (existing or `__new__`), and re-INSERTs `ImageAsset` rows. Tags / rating / favorite / notes / source provenance restored from the manifest. `(character_id, file_hash)` dedup still applies against the new DB, so re-adopting twice is idempotent.
 
-**Proposal**: ship with Option 3. The manifest + adopt-orphans flow is the only one that keeps the contract honest ("Full reset truly resets the DB; image bytes are an explicitly-addressable recovery surface").
+### Why not the alternatives
+- **DB-untouched** (truncate nothing): rejected — characters, tags, and sheet values would survive what's labelled a "Full reset", breaking the contract.
+- **Truncate user content but keep ImageAsset rows**: rejected — leaves dangling foreign keys (orphan ImageAsset rows pointing at non-existent characters); CASCADE rules complicate the truncate path; doesn't actually save work because the adopt-orphans UI is needed regardless.
 
 ## Scope
 
