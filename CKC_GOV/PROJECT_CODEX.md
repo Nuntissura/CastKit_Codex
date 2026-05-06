@@ -244,7 +244,8 @@ The agent (LLM/operator helper running in the repo) is required to interact with
 - For UI verification the agent uses `automationCaptureToFile` (writes PNG + JSON sidecar under `CKC_GOV/targets/CKC/automation_captures/`) and inspects the resulting image. Process status, build success, and unit-test passes are not substitutes for a capture.
 - When background-mode invariants are being checked, launch with `CKC_AUTOMATION_BACKGROUND=1`. The captures still work because the renderer paints offscreen.
 - Tests that exercise the app (smoke flows, regression checks) should be scripted through the automation surface so they replay deterministically and produce captures the operator can inspect.
-- This rule binds every WP that touches the app: it is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
+- **This rule binds every feature, test, demo, smoke, regression check, and bug fix that touches CKC** — not just new WPs. Every existing surface (sheet editor, library list, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, etc.) is expected to be driven through the automation surface when verifying behavior; if a surface lacks an automation hook for what the agent needs to verify, the agent files it as a gap (roadmap entry in the manual) rather than skipping verification.
+- It is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
 
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
