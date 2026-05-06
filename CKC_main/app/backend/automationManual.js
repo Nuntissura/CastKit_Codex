@@ -44,13 +44,24 @@ const featureGroups = [
     wp: ['WP-0003', 'WP-0012', 'WP-0029', 'WP-0030', 'WP-0031', 'WP-0032', 'WP-0033', 'WP-0037', 'WP-0046'],
     summary:
       'The main UI is a 2-panel portfolio viewer with images and sheet side-by-side. Character IDs are system-managed public IDs while internal IDs remain stable folder/DB keys.',
-    commands: ['openLibrary', 'openCharacter', 'getCharacter', 'listCharacters', 'selectImage', 'getRendererState'],
+    commands: [
+      'openLibrary',
+      'openCharacter',
+      'getCharacter',
+      'listCharacters',
+      'selectImage',
+      'getRendererState',
+      'getRendererUIState',
+      'createCharacter',
+      'saveCharacter',
+      'softDeleteCharacters',
+      'restoreCharacters',
+      'listTemplates',
+      'listAllTags',
+      'globalSearch',
+    ],
     roadmap: [
-      'saveCharacter (WP-0099 next slice)',
-      'createCharacter (WP-0099 next slice)',
-      'softDeleteCharacters (WP-0099 next slice)',
-      'restoreCharacters (WP-0099 next slice)',
-      'getRendererUIState (WP-0099 next slice; richer renderer state with live sheet field values)',
+      'Live sheet field values inside getRendererUIState (requires lifting sheet editor state out of CharacterView; current implementation returns App-level state only)',
     ],
     notes: [
       'The sheet editor preserves template field order and user-entered text.',
@@ -84,9 +95,14 @@ const featureGroups = [
     ],
     summary:
       'Image assets support ratings, favorite, notes, tags, source provenance, palettes, dHash similarity, duplicate review, batch metadata edits, AI tag suggestions, and inbox/clipboard/URL import.',
-    commands: ['importImages', 'setImageMeta', 'listGlobalCarouselImages', 'listPendingImages'],
+    commands: [
+      'importImages',
+      'setImageMeta',
+      'setImagesMetaBatch',
+      'listGlobalCarouselImages',
+      'listPendingImages',
+    ],
     roadmap: [
-      'setImagesMetaBatch (WP-0099 next slice; backend handler exists in preload but is not in the automation channel)',
       'findSimilarImages (preload-only today; not exposed to automation)',
       'scanInbox (preload-only today; not exposed to automation)',
       'importFromUrl (preload-only today; not exposed to automation)',
@@ -125,14 +141,13 @@ const featureGroups = [
       'WP-0083',
     ],
     summary:
-      'Docs mode provides DB-first notes/stories/moodboards, backlinks, corkboard/outliner, vector moodboard tools, layers/folders, export options, and global search. None of these are wired into the automation channel today; LLMs needing them must either go through the preload bridge directly or wait for a follow-up WP.',
-    commands: [],
+      'Docs mode provides DB-first notes/stories/moodboards, backlinks, corkboard/outliner, vector moodboard tools, layers/folders, export options, and global search. globalSearch is wired through the automation channel; the per-doc CRUD commands remain preload-only today.',
+    commands: ['globalSearch'],
     roadmap: [
       'listDocs (preload-only today)',
       'getDoc (preload-only today)',
       'upsertDoc (preload-only today)',
       'deleteDoc (preload-only today)',
-      'globalSearch (preload-only today)',
       'resolveLinkToken (preload-only today)',
       'listBacklinks (preload-only today)',
     ],
@@ -383,6 +398,12 @@ const commandReference = [
     description: 'Return a small read-only snapshot: route, selected character/image ids, drawer mode, overlay flags.',
     example: {},
   },
+  {
+    id: 'getRendererUIState',
+    target: 'renderer',
+    description: 'Return a richer read-only snapshot of App-level renderer state: route, init status, selection ids, drawer/overlay flags, exports context, pending doc/focus/tag-filter intents. Sheet field values are not yet included; for stored character data call backend getCharacter.',
+    example: {},
+  },
   // backend commands (dispatched via automationRunCommand({ target: "backend" }))
   {
     id: 'listCharacters',
@@ -431,6 +452,54 @@ const commandReference = [
     target: 'backend',
     description: 'Classify an intake image in folder-only or linked CKC profile mode.',
     example: { sourcePath: 'C:/intake_batch/a.png', status: 'pending', mode: 'linked', characterId: 'char_001' },
+  },
+  {
+    id: 'createCharacter',
+    target: 'backend',
+    description: 'Create a new character (optionally from a template). Returns the new character id.',
+    example: { templateId: 'tpl_default', publicId: null, displayName: 'New Character' },
+  },
+  {
+    id: 'saveCharacter',
+    target: 'backend',
+    description: 'Persist character sheet field values. Template integrity is enforced (no Field ID drops, no reordering, no silent rewrites). Optional validationMode and allowSaveWithErrors override the app config defaults.',
+    example: { characterId: 'char_001', valuesById: { name: 'Aria', height_cm: '170' } },
+  },
+  {
+    id: 'softDeleteCharacters',
+    target: 'backend',
+    description: 'Move characters to Trash (recoverable). Pass an array of character ids.',
+    example: { characterIds: ['char_001'] },
+  },
+  {
+    id: 'restoreCharacters',
+    target: 'backend',
+    description: 'Restore previously soft-deleted characters from Trash.',
+    example: { characterIds: ['char_001'] },
+  },
+  {
+    id: 'listTemplates',
+    target: 'backend',
+    description: 'List installed character templates (id, name, version).',
+    example: {},
+  },
+  {
+    id: 'setImagesMetaBatch',
+    target: 'backend',
+    description: 'Apply metadata patches to many images in one call (rating, favorite, notes, tag add/remove).',
+    example: { imageIds: ['img_001', 'img_002'], patch: { addTags: ['hero'], rating: 4 } },
+  },
+  {
+    id: 'listAllTags',
+    target: 'backend',
+    description: 'List every tag known to the library with counts.',
+    example: {},
+  },
+  {
+    id: 'globalSearch',
+    target: 'backend',
+    description: 'Search across characters, docs, moodboards, and image metadata. Returns hits with snippets.',
+    example: { query: 'red dress', limit: 50 },
   },
 ];
 

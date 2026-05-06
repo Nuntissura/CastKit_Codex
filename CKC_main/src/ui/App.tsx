@@ -258,6 +258,25 @@ function MainApp() {
               globalSearch: isGlobalSearchOpen,
             },
           };
+        } else if (command === 'getRendererUIState') {
+          result = {
+            route: page,
+            initStatus: init.status,
+            selectedCharacterId,
+            selectedImageId,
+            drawerMode,
+            overlays: {
+              commandPalette: isCommandPaletteOpen,
+              globalSearch: isGlobalSearchOpen,
+            },
+            exports: {
+              returnPage: exportsReturnPage,
+              context: exportsContext,
+            },
+            pendingDoc: pendingOpenDoc,
+            pendingFocusField,
+            pendingLibraryTagFilter,
+          };
         } else {
           throw new Error(`Unsupported renderer automation command: ${command}`);
         }
@@ -271,7 +290,20 @@ function MainApp() {
     return () => {
       if (typeof off === 'function') off();
     };
-  }, [page, selectedCharacterId, selectedImageId, drawerMode, isCommandPaletteOpen, isGlobalSearchOpen]);
+  }, [
+    page,
+    init.status,
+    selectedCharacterId,
+    selectedImageId,
+    drawerMode,
+    isCommandPaletteOpen,
+    isGlobalSearchOpen,
+    exportsReturnPage,
+    exportsContext,
+    pendingOpenDoc,
+    pendingFocusField,
+    pendingLibraryTagFilter,
+  ]);
 
   if (init.status !== 'ready') {
     return (

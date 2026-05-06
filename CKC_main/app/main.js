@@ -504,8 +504,23 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'listPendingImages') return lib.listPendingImages(p);
     if (name === 'importImages') return lib.importImages(p);
     if (name === 'setImageMeta') return lib.setImageMeta(p);
+    if (name === 'setImagesMetaBatch') return lib.setImagesMetaBatch(p);
     if (name === 'scanIntakeFolder') return lib.scanIntakeFolder(p);
     if (name === 'classifyIntakeImage') return lib.classifyIntakeImage(p);
+    if (name === 'createCharacter') return lib.createCharacter(p);
+    if (name === 'saveCharacter') {
+        return lib.saveCharacter({
+            characterId: p.characterId,
+            valuesById: p.valuesById,
+            validationMode: p.validationMode ?? appConfig.validationMode,
+            allowSaveWithErrors: p.allowSaveWithErrors ?? appConfig.allowSaveWithErrors,
+        });
+    }
+    if (name === 'softDeleteCharacters') return lib.softDeleteCharacters(p);
+    if (name === 'restoreCharacters') return lib.restoreCharacters(p);
+    if (name === 'listTemplates') return lib.listTemplates();
+    if (name === 'listAllTags') return lib.listAllTags();
+    if (name === 'globalSearch') return lib.globalSearch(p);
 
     throw new Error(`Unsupported backend automation command: ${name}`);
 }

@@ -25,6 +25,7 @@ function getAutomationCommandMap() {
             'toggleMenu',
             'closeOverlays',
             'getRendererState',
+            'getRendererUIState',
         ],
         backend: [
             'listCharacters',
@@ -35,6 +36,14 @@ function getAutomationCommandMap() {
             'setImageMeta',
             'scanIntakeFolder',
             'classifyIntakeImage',
+            'saveCharacter',
+            'createCharacter',
+            'softDeleteCharacters',
+            'restoreCharacters',
+            'listTemplates',
+            'setImagesMetaBatch',
+            'listAllTags',
+            'globalSearch',
         ],
     };
 }
