@@ -118,7 +118,25 @@ The suite is organized so each block can be run independently. Findings get reco
 
 ### F2. Save flow
 - F2.1. UI Save button is labeled `Save` when `isDirty`, `Saved` when clean, `Saving…` while in flight.
-- F2.2. **OPEN GAP (2026-05-06):** clicking the Save button via CDP `.click()` or `MouseEvent` dispatch does not always trigger React 19's onClick handler (no `Saving…`/`Saved` transition observed). UI-driven save tests should use the wired `clickElement` automation command which dispatches `MouseEvent` with `bubbles: true, cancelable: true, view: window`. Backend-driven `window.ckc.saveCharacter({ characterId, valuesById })` always works for test purposes.
+- F2.2. **OPEN GAP (2026-05-06, deeper pass):** clicking the Save button (header right, `<button onClick={() => void saveSheet()} disabled={!isDirty || isSaving}>`) via every UI-driven path fails to trigger `saveCharacter`. Verified end-to-end with DB readback against Aeri's `CHAR-ID-002A`: dirty value never persists. Methods tested:
+  - `__reactProps.onClick({})` direct invocation
+  - `fiber.memoizedProps.onClick({})` (latest commit's live closure)
+  - native `el.click()`
+  - DOM `dispatchEvent` of `pointerdown` → `mousedown` → `focus` → `pointerup` → `mouseup` → `click` with `bubbles: true, cancelable: true, view: window`
+  - the wired `clickElement` automation arm (which performs the same pointer/mouse/click sequence)
+  - `KeyboardEvent` Enter on a focused button
+  - CDP-trusted `Input.dispatchMouseEvent` (per the prior pass)
+
+  Ruled out:
+  - **Disabled state**: button is enabled (`disabled: false`) when `isDirty=true`. Was a confounding variable in the prior pass — when sheet was clean the click was correctly ignored. With sheet dirty, it still doesn't fire.
+  - **Wrong button**: only one element with `textContent === 'Save'` matches when the relations editor is collapsed; rect / parent class confirm it is the header-right SaveSheet button.
+  - **Form ancestor**: no `<form>` ancestor up to `<body>`; `type="submit"` is harmless.
+  - **Stale closure**: `__reactProps.onClick` and `fiber.memoizedProps.onClick` agree on source (`() => void saveSheet()`); CharacterView's `characterId` prop is set; SheetEditor's `valuesById` prop reflects the dirty input value.
+  - **Console errors**: hooking `console.error` during the click captures nothing; no thrown exceptions.
+
+  Other React buttons in the app (Help drawer, menu, sheet-editor `+ Add Hustle_Block` from WP-0104) work fine via `clickElement`. Genuine bug — open as a future investigation WP. Three diagnostic approaches still untried: (a) walk into CharacterView's hooks and pull saveSheet directly to invoke without onClick wrapper, (b) instrument `window.ckc.saveCharacter` via Electron preload re-export to confirm it's never called, (c) bisect — comment out the `() => void` wrapper and use just `saveSheet` to see if void is interfering with React's handling of returned Promise.
+
+  **Canonical agent test path**: backend `window.ckc.saveCharacter({ characterId, valuesById })` direct call. Always works; verified across WP-0103 + WP-0104.
 - F2.3. `saveCharacter` returns `issues[]` of `{ fieldId, severity: warn|error, message }`.
 - F2.4. With `allowSaveWithErrors: true`, errors surface in `issues` but the values are persisted anyway.
 - F2.5. With strict mode (`validationMode: strict, allowSaveWithErrors: false`), errors block the save.

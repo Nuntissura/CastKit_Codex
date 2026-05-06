@@ -18,6 +18,14 @@ const {
 
 const CONFIG_FILE = 'ckc-config.json';
 
+// Disable Chromium's native window-occlusion calculation. Without this,
+// `webContents.capturePage()` returns 0x0 PNGs whenever the CKC window is
+// fully occluded by another window — making operator-mode automation
+// captures unusable when the agent is working from another window. Stealth
+// mode is unaffected (the window is intentionally hidden but Chromium
+// keeps painting).
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+
 protocol.registerSchemesAsPrivileged([
     {
         scheme: 'ckc',
@@ -490,10 +498,42 @@ function getAutomationCaptureDir() {
     return path.join(fallbackRoot, 'automation_captures');
 }
 
+async function captureViaDebugger() {
+    // CDP fallback used when capturePage() returns a 0x0 image (typically
+    // because Chromium's native-occlusion detection treated the window as
+    // hidden despite the disable-features switch). Page.captureScreenshot
+    // bypasses occlusion entirely.
+    const wc = mainWindow.webContents;
+    const wasAttached = wc.debugger.isAttached();
+    if (!wasAttached) wc.debugger.attach('1.3');
+    try {
+        const result = await wc.debugger.sendCommand('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: false,
+        });
+        const buf = Buffer.from(result.data, 'base64');
+        return buf;
+    } finally {
+        if (!wasAttached) {
+            try { wc.debugger.detach(); } catch { /* ignore */ }
+        }
+    }
+}
+
 async function captureAutomationPng({ label = 'capture', sessionId = null } = {}) {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
-    const image = await mainWindow.webContents.capturePage();
-    const size = image.getSize();
+    let image = await mainWindow.webContents.capturePage();
+    let size = image.getSize();
+    let pngBytes = null;
+    if (!size.width || !size.height) {
+        // Fallback to CDP Page.captureScreenshot if capturePage() returned an empty image.
+        pngBytes = await captureViaDebugger();
+        const fallbackImage = nativeImage.createFromBuffer(pngBytes);
+        size = fallbackImage.getSize();
+        image = fallbackImage;
+    } else {
+        pngBytes = image.toPNG();
+    }
     const outDir = getAutomationCaptureDir();
     fs.mkdirSync(outDir, { recursive: true });
     const stamp = new Date().toISOString().replaceAll(/[:.]/g, '').replace('T', '_').replace('Z', 'Z');
@@ -501,7 +541,7 @@ async function captureAutomationPng({ label = 'capture', sessionId = null } = {}
     const base = `${stamp}_${prefix}_${sanitizeCaptureLabel(label)}`;
     const pngPath = path.join(outDir, `${base}.png`);
     const jsonPath = path.join(outDir, `${base}.json`);
-    fs.writeFileSync(pngPath, image.toPNG());
+    fs.writeFileSync(pngPath, pngBytes);
     fs.writeFileSync(
         jsonPath,
         JSON.stringify(
@@ -1382,8 +1422,13 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:automationCapture', async (_evt, params) => {
         if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
         const p = params && typeof params === 'object' ? params : {};
-        const image = await mainWindow.webContents.capturePage();
-        const size = image.getSize();
+        let image = await mainWindow.webContents.capturePage();
+        let size = image.getSize();
+        if (!size.width || !size.height) {
+            const buf = await captureViaDebugger();
+            image = nativeImage.createFromBuffer(buf);
+            size = image.getSize();
+        }
         if (p.format === 'pngBytes') {
             return { ok: true, width: size.width, height: size.height, pngBytes: image.toPNG() };
         }

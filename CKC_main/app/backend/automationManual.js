@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-06.wp-0104';
+const MANUAL_VERSION = '2026-05-06.wp-0104b';
 
 const featureGroups = [
   {
@@ -481,7 +481,7 @@ const commandReference = [
   {
     id: 'getCharacter',
     target: 'backend',
-    description: 'Return a single character (sheet + image refs) by id.',
+    description: 'Return a single character (sheet + image refs) by id. Returns { id, publicId, displayName, templateId, valuesById: { [fieldId]: string }, tags: [...], images: [{ id, ...meta }], ... }. Note: image objects expose `id` (not `imageId`) — pass that field as `imageId` to setImageMeta / setImagesMetaBatch / setCharacterIcon. Block-list and single-block field values inside `valuesById` are JSON-serialized (array of objects for `block_list`, single object for `block`); empty list is `\'\'` not `\'[]\'`.',
     example: { characterId: 'char_001' },
   },
   {
