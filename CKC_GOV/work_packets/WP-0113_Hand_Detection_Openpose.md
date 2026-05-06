@@ -14,6 +14,72 @@ Carry-over citation: derived from OpenRepose `WP-I1-018` (in REVIEW; design inte
 ## Why
 DWPose and several ControlNet workflows use hand keypoints to condition image generation on specific hand gestures and finger positions — critical for character poses involving prop interaction, signing, or expressive gestures. The body-18 + face-70 from WP-0108 leaves both hands as zero-filled in the OpenPose JSON; this WP fills them in.
 
+## Field research / prior art
+
+**Pass date**: 2026-05-07
+**Searched**:
+- Google MediaPipe docs (`ai.google.dev/edge/mediapipe`) — HandLandmarker model card, training data, latency
+- GitHub: `google-ai-edge/mediapipe`, `IDEA-Research/DWPose`, `Fannovel16/comfyui_controlnet_aux`, `geopavlakos/hamer`, `wenquanlu/HandRefiner`, `CMU-Perceptual-Computing-Lab/openpose`
+- HuggingFace model cards: `xinsir/controlnet-openpose-sdxl-1.0`, `thibaud/controlnet-openpose-sdxl-1.0`, `lllyasviel/control_v11p_sd15_openpose`, `dimitribarbot/controlnet-dwpose-sdxl-1.0`
+- arXiv: 2312.05251 (HaMeR), 2307.15880 (DWPose), 2311.17957 (HandRefiner), 2506.12680 (3D Hand Mesh-Guided refinement)
+- Civitai workflow tags ("DWPose", "OpenPose Hand", "Hand Fixer"), r/StableDiffusion / r/comfyui via Google
+
+Queries used: "MediaPipe HandLandmarker tasks-vision 21 keypoints accuracy 2025", "DWPose vs OpenPose hand keypoints format ControlNet ComfyUI 2025", "ControlNet OpenPose hand preprocessor input format SDXL 2025", "HandRefiner HaMeR hand mesh diffusion 2025", "DWPose 133 keypoints whole body hand schema", "OpenPose JSON hand_left_keypoints_2d format", "MediaPipe hand landmark stylized art anime occluded limitations", "civitai DWPose workflow OpenPose hand SDXL 2025 production", "comfyui hands still bad 2025 fix workflow handrefiner"
+
+**Findings (most relevant)**:
+
+- **MediaPipe Hand Landmarker model card** (Google AI Edge, current revision) — https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker
+  - 21 3D landmarks per hand, handedness classifier, 192×192 / 224×224 input, ~17 ms CPU on Pixel 6. Trained on ~30k real images plus synthetic renders. Confirms the model we already load via `@mediapipe/tasks-vision` is the canonical 21-point model and that handedness comes free with the result — we do not need a separate left/right classifier before populating `hand_left_keypoints_2d` vs `hand_right_keypoints_2d`.
+
+- **MediaPipe issue #5806 — occluded hands in multi-person scenarios** (open) — https://github.com/google-ai-edge/mediapipe/issues/5806
+  - Documents that the landmark model is not gated by visibility: it will hallucinate full 21-point hands when a hand is partially out of frame or fully occluded. Critical for our portrait pipeline — we must threshold on `min_hand_detection_confidence` and per-landmark visibility/presence and drop the array (export an empty `hand_left_keypoints_2d`/`hand_right_keypoints_2d` rather than a confident-looking ghost) when below threshold.
+
+- **DWPose (IDEA-Research, ICCV 2023, weights still current in 2026)** — https://github.com/IDEA-Research/DWPose and https://arxiv.org/abs/2307.15880
+  - 133-keypoint COCO-WholeBody schema = 17 body + 6 foot + 68 face + 42 hand (21 per hand). The COCO-WholeBody hand index ordering is identical to OpenPose's hand 21 (wrist + 5 fingers × 4 joints), so a JSON written for OpenPose hand is directly consumable by ComfyUI DWPose-style preprocessors. Confirms we ship 21 per hand, no special remapping for DWPose interop.
+
+- **comfyui_controlnet_aux — DWPreprocessor / OpenPose preprocessor** (Fannovel16) — https://github.com/Fannovel16/comfyui_controlnet_aux
+  - Both preprocessors emit `POSE_KEYPOINT` in OpenPose JSON shape (`people[].pose_keypoints_2d`, `hand_left_keypoints_2d`, `hand_right_keypoints_2d`, `face_keypoints_2d`). DWPreprocessor normalizes x/y to [0,1]; classic OpenPose preprocessor uses pixel coords. The downstream ControlNet model still consumes a *rendered skeleton image*, not raw JSON — the JSON path goes through `convert_pose_keypoints_to_image` / DWPose drawer first.
+
+- **xinsir/controlnet-openpose-sdxl-1.0 model card** (HuggingFace, the de-facto SDXL OpenPose ControlNet in 2025-2026) — https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0
+  - Hard-coded `hand_and_face=False` in the official sample; trained body-only on HumanArt. **Confirms no widely deployed SDXL OpenPose ControlNet is trained on hand keypoints** — hand control on SDXL today is delivered via DWPose-rendered skeletons fed to the body model, or via a depth-based hand refiner, not via a hand-channel ControlNet. SD1.5 (`lllyasviel/control_v11p_sd15_openpose`) is the only widely-shipped model that natively accepts hand+face keypoints in the conditioning image.
+
+- **HaMeR — Reconstructing Hands in 3D with Transformers** (Pavlakos et al., CVPR 2024; HInt annotations May 2024; EgoExo4D challenge 2024) — https://arxiv.org/abs/2312.05251 and https://github.com/geopavlakos/hamer
+  - ViT-H + MANO-regression transformer; SOTA on 3D hand pose benchmarks and the practitioner go-to when MediaPipe fails (motion blur, extreme angles, painted/anime). PyTorch + heavy GPU; not a browser-side option, but informs the fallback story: if MediaPipe confidence is low, mark the hand un-emitted and let the ComfyUI side optionally run HaMeR or HandRefiner downstream.
+
+- **HandRefiner — diffusion-based hand inpainting** (Lu et al., ACM MM 2024) — https://arxiv.org/abs/2311.17957 and https://github.com/wenquanlu/HandRefiner
+  - Confirms the prevailing 2025-2026 production pattern: don't try to *generate* perfect hands from a 2D skeleton — generate the body, then refine the hand crop with a depth/mesh-guided ControlNet (HandRefiner or MeshGraphormer Hand Refiner) at strength 0.4-0.8. Our 21-point export still has value as the *bounding hint* for the refiner crop.
+
+- **OpenPose output spec — `hand_left_keypoints_2d` / `hand_right_keypoints_2d`** (CMU-Perceptual-Computing-Lab) — https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/02_output.md
+  - Canonical schema: flat array `[x0,y0,c0, ... x20,y20,c20]` (length 63), pixel coords by default, confidence in [0,1], nested in `people[]`. This is the exact wire format WP-0113 must emit; matches what comfyui_controlnet_aux already round-trips.
+
+**How findings inform WP-0113**:
+
+- Stick with **canonical OpenPose hand 21** (`[x0,y0,c0,...,x20,y20,c20]`, length 63, pixel coords). Both DWPose and OpenPose preprocessors in `comfyui_controlnet_aux` consume that shape; rendering to a skeleton image is the bridge node's job, not ours. No DWPose-specific JSON variant.
+
+- Emit `hand_left_keypoints_2d` and `hand_right_keypoints_2d` keyed by MediaPipe's `handedness` (top-1 category). Mirror-image portraits (selfies, flipped scans) flip MediaPipe's left/right — add a config flag in the ingest layer rather than guessing.
+
+- **Confidence gate**: drop the entire hand array when palm-detection confidence < 0.5 OR mean per-landmark presence < 0.5, because HandLandmarker hallucinates occluded landmarks (issue #5806). Better an empty array than a confident-wrong one — downstream HandRefiner can fill the gap.
+
+- Recommend SDXL pipelines route hand JSON through a **DWPose-format skeleton render + body-only xinsir ControlNet**, and recommend SD1.5 pipelines use `control_v11p_sd15_openpose` with hand+face channel. **Document in the WP that there is no SDXL ControlNet that natively ingests a hand-keypoint channel as of 2026-05.**
+
+- **Stylized art** (anime, painted): MediaPipe's training set is photographic; expect degraded confidence on stylized portraits. Treat low-confidence hands as a normal/expected outcome and include a `hand_detection_skipped: true` flag in the OpenPose JSON sidecar so downstream ComfyUI workflows can branch into HandRefiner / MeshGraphormer crop-and-refine instead of trying to condition on noise.
+
+- Latency budget: ~12-17 ms/hand on commodity hardware per Google's numbers — adding HandLandmarker to the existing PoseLandmarker + FaceLandmarker worker stays within real-time portrait ingestion. No need for a second worker.
+
+- Schema test: per the code-truth-and-self-consistency principle, ship a CI test that round-trips a fixture portrait through HandLandmarker → OpenPose JSON → `comfyui_controlnet_aux` DWPreprocessor's JSON loader to prove the wire format is byte-compatible.
+
+**Rejected alternatives**:
+
+- **HaMeR in the Web Worker** — rejected. ViT-H + MANO needs a CUDA-class GPU and is not packaged for browser/WASM. Keep as a server-side or ComfyUI-side optional refiner, not a CKC ingestion dependency.
+
+- **DWPose ONNX in-browser instead of MediaPipe** — rejected for this WP. We already have MediaPipe loaded; DWPose's whole-body model is ~100M params and has no first-class WASM/WebGPU build. Switching estimators is a separate WP if MediaPipe quality proves insufficient.
+
+- **Custom hand keypoint schema** — rejected. The OpenPose 21-point format is the lingua franca that DWPose, comfyui_controlnet_aux, HandRefiner, and every Civitai workflow already speak; inventing our own would force a second adapter on the ComfyUI bridge (WP-0109) for zero gain.
+
+**Notes on freshness**: All linked specs are still active references as of 2026-05-07; nothing material superseded since 2026-01 cutoff. The "no SDXL OpenPose ControlNet trained on hand keypoints" finding is the main load-bearing claim worth re-verifying before code-freeze, since a hand-aware SDXL/SD3 OpenPose model could ship at any time and would change the SDXL recommendation above.
+
+---
+
 ## Pre-flight read list
 
 | File | Lines | Why |

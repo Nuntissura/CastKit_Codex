@@ -34,6 +34,61 @@ External: OpenRepose `D:\Projects\LLM projects\OpenRepose\.product\src\openrepos
 - **Order**: yaw → pitch → roll (extrinsic, applied in that sequence). Document this order in `rig.ts` and pin via tests.
 - All angles in degrees at the UI; radians at the math layer; conversion at the boundary.
 
+## Field research / prior art
+
+**Pass date**: 2026-05-07
+**Searched**:
+- GitHub (6DRepNet, DWPose, openpose, controlnet_aux, three.js issues)
+- arXiv (last 18 months: head pose, 6D rotation, diffusion conditioning)
+- ComfyUI / Civitai docs and articles
+- Google AI Edge MediaPipe docs
+- Three.js docs and discourse
+- Reddit (r/StableDiffusion, r/comfyui — limited useful hits)
+- Search queries: "MediaPipe pose_landmarker head pose yaw pitch roll", "ComfyUI ControlNet OpenPose head pose 3-axis", "DWPose openpose 18 keypoints face head pose", "Three.js Euler quaternion intrinsic extrinsic order YXZ head pose", "6DRepNet WHENet head pose", "head pose preservation diffusion conditioning small angle drift", "Civitai openpose 3d editor head rotation pitch roll workflow", "openpose JSON face keypoints 70 head orientation"
+
+**Findings (most relevant)**:
+
+- **OpenPose output spec — face is 2D-only, no head Euler angles** (CMU OpenPose docs) — https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/02_output.md
+  - JSON emits `face_keypoints_2d` (x,y,c) plus body head landmarks (nose=0, R/L eye=15/16, R/L ear=17/18 in BODY_25; same five points in COCO_18). No yaw/pitch/roll fields exist downstream — pose-conditioning pipelines that consume openpose JSON cannot read explicit head rotation; they only see those five points and infer orientation from their geometry. Confirms the "head tilt is implicit, not parametric" assumption for ComfyUI/openpose conditioning.
+
+- **DWPose (IDEA-Research, ICCV 2023) — same 18-point body / 68-point face taxonomy as openpose** — https://github.com/IDEA-Research/DWPose
+  - DWPose is the de-facto preprocessor in `comfyui_controlnet_aux` and emits the same body-18 schema CKC already uses. Confirms our keypoint contract is wire-compatible with the dominant ComfyUI preprocessor; no head-pose angle is added by DWPose either — head pose lives entirely in the geometry of nose/eyes/ears.
+
+- **comfyui_controlnet_aux preprocessor catalog** (Fannovel16) — https://github.com/Fannovel16/comfyui_controlnet_aux
+  - Documents `openpose`, `openpose_hand`, `openpose_faceonly`, `dwpose`. None expose a head-pose angle channel; pitch/roll arrives at ControlNet purely as the 2D arrangement of the five head keypoints relative to the neck. So "ship 3-axis head pose" really means "produce a five-point head splash whose 2D projection encodes pitch and roll correctly."
+
+- **6DRepNet — 6D continuous rotation representation for unconstrained head pose** (Hempel et al., IEEE TIP 33, 2024) — https://github.com/thohemp/6DRepNet
+  - Argues against Euler-angle regression specifically because narrow-range Euler representations break for full-range head pose; uses the first two columns of the rotation matrix instead. Even when CKC stores user-facing yaw/pitch/roll, internal rotation should be quaternion or matrix to avoid gimbal lock at pitch = ±90°, then convert at the boundary.
+
+- **Three.js Quaternion / Euler API** — https://threejs.org/docs/pages/Quaternion.html and Euler-order discussion https://github.com/mrdoob/three.js/issues/25275
+  - Three.js Euler supports orders XYZ (default), YXZ, ZXY, ZYX, YZX, XZY — all **intrinsic** by convention. `Quaternion.setFromEuler(euler)` and `quaternion.multiply(q)` give us composition without hand-rolled trig. YXZ ("yaw-then-pitch-then-roll", intrinsic) is the standard order for head/camera tracking and is what we should pin.
+
+- **MediaPipe Pose Landmarker does not output head Euler angles** (Google AI Edge docs, last revised Jan 2025) — https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker
+  - Confirms the worker we already run cannot give us head yaw/pitch/roll natively — pitch/roll must be derived (FaceMesh + solvePnP, or estimated from rig geometry). Long-standing open issue: https://github.com/google-ai-edge/mediapipe/issues/3171 . CKC's source of truth for head pose stays "user-edited rig," not "pulled from MediaPipe."
+
+- **Civitai "Head rotation poses" pack and 3D OpenPose Editor** — https://civitai.com/models/17362 and https://civitai.com/posts/282850
+  - Practitioners ship pose packs that combine openpose JSON + depth/normal maps for head pitch/roll because openpose alone is widely acknowledged to be weak for non-yaw head rotation. Reinforces that 3-axis head pose is a real user need that current preprocessors do not solve.
+
+- **"From Large Angles to Consistent Faces"** (arXiv 2508.09476, Aug 2025) — https://arxiv.org/html/2508.09476v2
+  - Documents the "identity drift under abrupt head rotation" failure mode in current diffusion video models. Useful framing for WP-0110: small-/mid-angle pitch & roll preservation is exactly the under-served regime that better pose conditioning could improve.
+
+**How findings inform WP-0110**:
+- **Pin convention**: Tait-Bryan, **intrinsic YXZ (yaw-Y, pitch-X, roll-Z)**, right-handed (matches Three.js default head/camera convention and the existing `applyYaw` Y-axis rotation). Document in the `RigData` schema. **Supersedes the "yaw → pitch → roll extrinsic" wording in the original draft above.**
+- **Use Three.js Quaternion as internal storage**; expose yaw/pitch/roll as derived getters/setters via `Quaternion.setFromEuler(new Euler(pitch, yaw, roll, 'YXZ'))`. No hand-rolled trig, no gl-matrix or mathjs dep — Three.js already in bundle. **Replaces** the `applyPitch` / `applyRoll` Euler-style functions; canonical entry point is `applyHeadRotation(rig, quat, anchor)` with `applyHeadPose({yaw, pitch, roll})` as a thin convenience wrapper that builds the quat.
+- **Avoid Euler at the storage boundary** (per 6DRepNet): rig persists rotation as quaternion (4 floats) in `Rig.calibration_json`. Yaw/pitch/roll only at the UI/serialization edge, with explicit `'YXZ'` tag.
+- **Output contract stays 2D openpose-18 / face-70**: the deliverable is a re-projection of the five head keypoints (nose, R/L eye, R/L ear) under the new rotation, NOT a new angle field. ComfyUI/DWPose downstream unchanged.
+- **Calibration extension**: per-keypoint offsets are applied **after** rotation in head-local space (a user's ear-offset doesn't rotate with pitch). One-line schema note in `Calibration` shape.
+- **Soft-clamp pitch to ±75°** in UI; full-range support unnecessary for our generation use case and protects against the narrow-Euler training distribution that most ControlNet OpenPose models were trained on (frontal ± moderate).
+- **Add smoke-test deliverable**: a 5×5 grid of (pitch × roll) renders fed through DWPose ControlNet, verifying tracking at ±30° pitch and ±20° roll. Targets the failure regime called out in the Aug-2025 large-angle paper.
+
+**Rejected alternatives**:
+- **gl-matrix / mathjs for rotation math** — rejected: Three.js already provides Quaternion + Euler with named-order support; new linalg lib duplicates surface area.
+- **Storing rotation as Euler triple in `RigData`** — rejected per 6DRepNet: gimbal lock and order-ambiguity bugs across save/load. Quaternion in storage; Euler only at UI edge.
+- **Emitting a head-pose-angle field in our openpose JSON output** — rejected: no preprocessor downstream reads it; would silently diverge from the DWPose/openpose-18 contract.
+- **Pulling head Euler from MediaPipe directly** — rejected: not an output of `pose_landmarker`; would require adding FaceMesh + solvePnP just to recover what the user is setting in the editor.
+
+---
+
 ## Scope
 
 ### In
