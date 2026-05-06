@@ -2307,16 +2307,17 @@ class CKCLibrary {
     }
 
     // Character tags (manual + derived): count per character (de-duped per character+tag).
+    // NB: avoid camelCase alias — Postgres lowercases unquoted identifiers.
     const charRows = await all(
       this.db,
-      `SELECT t.tag_text AS tagText, COUNT(DISTINCT ct.character_id) AS c
+      `SELECT t.tag_text, COUNT(DISTINCT ct.character_id) AS c
        FROM CharacterTag ct
        JOIN Tag t ON t.tag_id = ct.tag_id
        GROUP BY t.tag_text`,
       []
     );
     for (const r of charRows) {
-      const s = touch(r.tagText);
+      const s = touch(r.tag_text ?? r.tagText);
       if (s) s.characterCount = Number(r.c) || 0;
     }
 
@@ -2511,15 +2512,18 @@ class CKCLibrary {
     const lim = Number.isFinite(limNum) ? Math.max(0, Math.min(200, Math.floor(limNum))) : 60;
     if (lim <= 0) return [];
 
+    // NB: Postgres lowercases unquoted identifiers, including aliases.
+    // We avoid camelCase aliases here so the JS read works on both
+    // SQLite and Postgres without double-quoting.
     const rows = await all(
       this.db,
-      `SELECT value_text AS valueText, MAX(updated_at) AS updatedAt
+      `SELECT value_text, MAX(updated_at) AS max_updated_at
        FROM FieldValue
        WHERE field_id = ?
          AND value_text IS NOT NULL
          AND LENGTH(TRIM(value_text)) > 0
        GROUP BY value_text
-       ORDER BY updatedAt DESC
+       ORDER BY max_updated_at DESC
        LIMIT ?`,
       [fid, lim]
     );
@@ -2527,7 +2531,7 @@ class CKCLibrary {
     const seen = new Set();
     const out = [];
     for (const r of rows) {
-      const raw = String(r.valueText ?? '');
+      const raw = String(r.value_text ?? r.valueText ?? '');
       const v = raw.trim();
       if (!v) continue;
       if (v.includes('\n') || v.includes('\r')) continue;
