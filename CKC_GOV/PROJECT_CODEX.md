@@ -44,7 +44,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.063.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.064.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -68,7 +68,7 @@ Daily workflow (MUST):
 - No censorship: never redact, soften, euphemize, or rewrite user-entered text in templates, character sheets, exports, labels, or UI strings.
 - Template integrity: never drop Field IDs; preserve template order; preserve user bytes verbatim.
 - UI: minimal by default; sharp corners.
-- Naming: do not introduce spaces in file names, folder names, or generated artifact names. Use `_` or `-`.
+- Naming: do not introduce spaces in file names, folder names, generated artifact names, or generated output names. This applies to both product code (`CKC_main/`) and repo governance (`CKC_GOV/`). Use `_` or `-`.
 - Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
 - Workflow: create a Work Packet + update Task Board, then **commit + push BEFORE coding starts** (planning checkpoint). After implementation, update Task Board + Spec, then commit + push again (shipping checkpoint).
 
@@ -85,7 +85,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.063.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.064.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`

@@ -41,7 +41,7 @@
   },
   "build": {
     "appId": "com.nuntissura.castkitcodex",
-    "productName": "CastKit Codex",
+    "productName": "CastKit-Codex",
     "directories": {
       "output": "../CKC_GOV/targets/CKC/artifacts"
     },
@@ -62,11 +62,18 @@
       ],
       "icon": "app/icon.ico"
     },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    },
     "mac": {
       "target": [
         "dmg",
         "zip"
       ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "category": "public.app-category.productivity",
       "hardenedRuntime": false,
       "gatekeeperAssess": false

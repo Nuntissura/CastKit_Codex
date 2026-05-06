@@ -32,8 +32,8 @@ function getPortableBaseDir() {
 
 function getDefaultLibraryRoot() {
     const portableDir = getPortableBaseDir();
-    if (portableDir) return path.join(portableDir, 'CastKit Codex Library');
-    return path.join(app.getPath('userData'), 'CastKit Codex Library');
+    if (portableDir) return path.join(portableDir, 'CastKit-Codex-Library');
+    return path.join(app.getPath('userData'), 'CastKit-Codex-Library');
 }
 
 function getPrimaryConfigPath() {
@@ -251,7 +251,7 @@ async function ensureLibraryRootAvailable() {
     const configured = String(appConfig?.libraryRoot || '').trim();
     const portableDir = getPortableBaseDir();
     const defaultRoot = getDefaultLibraryRoot();
-    const nearExeCandidate = portableDir ? path.join(portableDir, 'CastKit Codex Library') : null;
+    const nearExeCandidate = portableDir ? path.join(portableDir, 'CastKit-Codex-Library') : null;
 
     if (configured && fs.existsSync(configured)) {
         // Portable UX: if a portable build is pointing at a libraryRoot outside the portable folder,

@@ -4,7 +4,7 @@
 CKC_recovery/
 
 # Local ingest scratch (never commit)
-CKC ingest/
+CKC_ingest/
 
 # Governance build artifacts / caches / logs (never commit)
 CKC_GOV/targets/

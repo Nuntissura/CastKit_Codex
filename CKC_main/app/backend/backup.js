@@ -20,8 +20,9 @@ function sanitizeFolderName(name, fallback) {
   const base = raw.length ? raw : String(fallback ?? 'backup');
   const cleaned = base
     .replaceAll(/[<>:"/\\|?*\x00-\x1F]/g, '_')
-    .replaceAll(/\s+/g, ' ')
-    .trim();
+    .replaceAll(/\s+/g, '_')
+    .replaceAll(/_+/g, '_')
+    .replaceAll(/^[._-]+|[._-]+$/g, '');
   const safe = cleaned.length ? cleaned.slice(0, 180) : String(fallback ?? 'backup');
   if (safe === '.' || safe === '..') return String(fallback ?? 'backup');
   return safe;

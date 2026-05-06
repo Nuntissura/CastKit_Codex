@@ -160,7 +160,7 @@ const stagePkg = {
   },
   build: {
     appId: 'com.nuntissura.castkitcodex',
-    productName: 'CastKit Codex',
+    productName: 'CastKit-Codex',
     electronVersion,
     directories: {
       output: path.join('..', '..', 'artifacts', ...artifactsRelParts),
@@ -170,6 +170,7 @@ const stagePkg = {
     asarUnpack: ['**/*.node'],
     mac: {
       target: ['dmg', 'zip'],
+      artifactName: '${productName}-${version}-${arch}.${ext}',
       category: 'public.app-category.productivity',
       hardenedRuntime: false,
       gatekeeperAssess: false,

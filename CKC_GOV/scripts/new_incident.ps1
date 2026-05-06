@@ -10,7 +10,7 @@ param(
 
   [string]$Owner = '',
 
-  [string]$Projects = 'CastKit Codex',
+  [string]$Projects = 'CastKit-Codex',
 
   [string]$FailLogRoot = ''
 )

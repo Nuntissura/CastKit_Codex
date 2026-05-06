@@ -62,11 +62,12 @@ function assertNotForbiddenDrive(p, contextLabel = 'Path') {
 function sanitizeFileName(name, fallback) {
   const raw = String(name ?? '').trim();
   const base = raw.length ? raw : String(fallback ?? 'export.txt');
-  // Windows-safe filename sanitization.
+  // Windows-safe, no-space filename sanitization.
   const cleaned = base
     .replaceAll(/[<>:"/\\|?*\x00-\x1F]/g, '_')
-    .replaceAll(/\s+/g, ' ')
-    .trim();
+    .replaceAll(/\s+/g, '_')
+    .replaceAll(/_+/g, '_')
+    .replaceAll(/^[._-]+|[._-]+$/g, '');
   return cleaned.length ? cleaned.slice(0, 180) : 'export.txt';
 }
 

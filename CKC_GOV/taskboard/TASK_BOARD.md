@@ -1,6 +1,6 @@
 ﻿# CKC — Task Board
 
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 This is the single source of truth for work status. It lives only in `CKC_GOV/` — do not mirror into `CKC_main/docs/`.
 
@@ -108,6 +108,7 @@ This is the single source of truth for work status. It lives only in `CKC_GOV/` 
 | WP-0093 | LLM automation and visual debugger | DONE | Codex | JSON state inspection, renderer/backend automation commands, and non-focus-stealing capture IPC/preload. Validation not run. |
 | WP-0094 | Image intake sorter | DONE | Codex | Drawer page + scan/classify IPC; folder-only moves to pass/reject/pending; linked mode copies accepted/pending to CKC and exposes pending images. Validation not run. |
 | WP-0095 | Background LLM control plane + internal manual | DONE | Codex | Internal indexed manual, multi-agent sessions/leases/logs, hidden background mode, non-focus-stealing screenshot-to-file, and explicit command/navigation API. Validation not run. |
+| WP-0096 | No-space folders and generated artifacts | DONE | Codex | Checkout renamed; default library/artifact/export/backup names no longer preserve blanks; path inventory is 0 files/dirs with blank names. `tsc` + touched tests pass; full `npm test` timed out. |
 
 ## Current focus
 - Current: No open work packets.

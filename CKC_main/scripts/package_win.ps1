@@ -154,7 +154,7 @@ $stagePkg = [ordered]@{
   }
   build = [ordered]@{
     appId = 'com.nuntissura.castkitcodex'
-    productName = 'CastKit Codex'
+    productName = 'CastKit-Codex'
     electronVersion = $electronVersion
     directories = [ordered]@{
       # Keep build metadata drive-letter agnostic: a relative output is resolved from --projectDir ($stageRoot).
@@ -174,8 +174,12 @@ $stagePkg = [ordered]@{
       signAndEditExecutable = $false
     }
     nsis = [ordered]@{
+      artifactName = '${productName}-Setup-${version}-${arch}.${ext}'
       oneClick = $false
       allowToChangeInstallationDirectory = $true
+    }
+    portable = [ordered]@{
+      artifactName = '${productName}-Portable-${version}-${arch}.${ext}'
     }
   }
 }

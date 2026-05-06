@@ -31,9 +31,10 @@ test('library backup/restore snapshot writes manifest + SHA256SUMS (excludes exp
   fs.mkdirSync(excludedDir, { recursive: true });
   fs.writeFileSync(path.join(excludedDir, 'SHOULD_NOT_BE_INCLUDED.txt'), 'nope', 'utf8');
 
-  const backupRes = await createLibraryBackup({ libraryRoot, db: lib.db, outDirBase: null, backupName: 'unit_test_backup' });
+  const backupRes = await createLibraryBackup({ libraryRoot, db: lib.db, outDirBase: null, backupName: 'unit test backup' });
   assert.equal(backupRes.ok, true);
   assert.ok(fs.existsSync(backupRes.snapshotDir));
+  assert.equal(/[ \t]/.test(path.basename(backupRes.snapshotDir)), false);
   assert.ok(fs.existsSync(backupRes.manifestPath));
   assert.ok(fs.existsSync(backupRes.checksumsPath));
   assert.equal(fs.existsSync(path.join(backupRes.snapshotDir, 'exports', 'backups', 'SHOULD_NOT_BE_INCLUDED.txt')), false);
@@ -63,4 +64,3 @@ test('library backup/restore snapshot writes manifest + SHA256SUMS (excludes exp
   await lib2.initialize();
   lib2.close();
 });
-

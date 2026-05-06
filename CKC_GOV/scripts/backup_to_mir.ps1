@@ -108,7 +108,7 @@ $libraryRootConfigured = [bool]$libInfo.configured
 $libraryRootMissingOnDisk = [bool]$libInfo.missingOnDisk
 
 if (-not $DestinationRoot) { $DestinationRoot = $env:CKC_BACKUP_DEST }
-if (-not $DestinationRoot) { $DestinationRoot = '\\MIR\home\LLM\CastKit Codex remote\K_CastKit_Codex' }
+if (-not $DestinationRoot) { $DestinationRoot = '\\MIR\home\LLM\CastKit-Codex-remote\K_CastKit_Codex' }
 $DestinationRoot = $DestinationRoot.TrimEnd('\')
 
 if (-not $LogDir) { $LogDir = (Join-Path $PSScriptRoot '..\\targets\\backup_logs') }
@@ -122,7 +122,7 @@ if ($libraryRootWarning) {
 }
 
 # Safety: destination must be the expected UNC prefix unless explicitly changed by editing this script.
-$expectedPrefix = '\\MIR\home\LLM\CastKit Codex remote\'
+$expectedPrefix = '\\MIR\home\LLM\CastKit-Codex-remote\'
 if (-not ($DestinationRoot.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase))) {
   Exit-With 3 "Refusing to run: DestinationRoot must start with '$expectedPrefix' (got: $DestinationRoot)"
 }
