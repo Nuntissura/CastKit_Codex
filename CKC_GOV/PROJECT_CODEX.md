@@ -247,6 +247,17 @@ The agent (LLM/operator helper running in the repo) is required to interact with
 - **This rule binds every feature, test, demo, smoke, regression check, and bug fix that touches CKC** — not just new WPs. Every existing surface (sheet editor, library list, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, etc.) is expected to be driven through the automation surface when verifying behavior; if a surface lacks an automation hook for what the agent needs to verify, the agent files it as a gap (roadmap entry in the manual) rather than skipping verification.
 - It is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
 
+### Updating the in-app manual is a hard requirement (binding)
+The in-app LLM/operator manual at `CKC_main/app/backend/automationManual.js` is part of the product, not a side artifact. Every CKC change that touches an automation command, an IPC channel, a feature group described in the manual, a roadmap item, the safety contract, the quick-start sequence, or the operating contract MUST update the manual in the same commit.
+
+- Adding a wired automation command without the matching `commandReference` entry + feature-group `commands` list update is a contract violation; the self-consistency test fails CI when it happens, but the rule applies even when the test would pass (e.g. moving a roadmap entry without updating the prose).
+- Removing or renaming a command requires removing/renaming it in the manual in the same commit.
+- Adding a new feature in CKC that is not yet automation-callable still requires a feature-group entry with the surface in `roadmap` so the LLM/operator knows it exists and how to drive it later.
+- Bumping `MANUAL_VERSION` is required when any of the above happens.
+- The in-app Help drawer (`HelpModal`) renders the same manual operators see; if you would not want the operator to read what you wrote, rewrite it.
+
+This rule is in addition to the code-truth + self-consistency test rule above; together they make the manual the canonical, code-truth, always-current reference.
+
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
 - Publish official builds as **GitHub Release assets** (immutable, off-machine backup).
