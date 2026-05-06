@@ -568,6 +568,9 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'getIngestionBatch') return lib.getIngestionBatch(p);
     if (name === 'listIngestionRejections') return lib.listIngestionRejections(p);
 
+    // WP-0100 slice 2: v00.19 image-sourcing ingestion adapter
+    if (name === 'ingestImageSourcingTask') return lib.ingestImageSourcingTask(p);
+
     throw new Error(`Unsupported backend automation command: ${name}`);
 }
 

@@ -274,9 +274,10 @@ const featureGroups = [
       'listIngestionBatches',
       'getIngestionBatch',
       'listIngestionRejections',
+      'ingestImageSourcingTask',
     ],
     roadmap: [
-      'ingestImageSourcingTask (WP-0100 slice 2; the multi-version dispatcher that walks intake/<lane>/, imports with provenance, writes app_sync_events.jsonl, and copies task_tools/scripts/)',
+      'v00.20+ handler — registers as a new module under app/backend/imageSourcingHandlers/; the adapter dispatches by spec_version from task_state.yaml.',
     ],
     notes: [
       'Workflow specs live under CKC_GOV/references/external_app_data/specs/. Operator drops new spec versions there; CKC reads on demand.',
@@ -580,6 +581,20 @@ const commandReference = [
     target: 'backend',
     description: 'List rejected items ingested as audit-only rows from a v00.19 task rejected lane.',
     example: { characterId: 'char_001' },
+  },
+  {
+    id: 'ingestImageSourcingTask',
+    target: 'backend',
+    description: 'Ingest one v00.19 image-sourcing task into CKC. Reads task_state.yaml + task_topology.yaml + task_requirements.yaml, walks intake/<lane>/, imports each image with full provenance (dataset_id, task_id, run_id, contact_sheet_ref, source_url, sheet_version_id), enforces identity-decoupling (content-hash filenames), dedupes across batches (content-hash, selection, url), copies task_tools/scripts/ into the per-character script store, writes one v00.19-shaped JSONL line per image to app/<task_id>.app_sync_events.jsonl, and records an IngestionBatch row. Pending lane sets review_status=pending and the pending tag (WP-0094 intake sorter convention). Rejected lane writes IngestionRejection audit rows only. Honors run_state_lock.json. sheetVersionId is required; spec_version must match a registered handler.',
+    example: {
+      taskRootPath: 'D:/Projects/Image_sourcing/lora_avatar_test_0006/task_cwb_isrc_0006_01KQVAP2YN4KKNT5AABWEFQF3J',
+      characterId: 'char_abc',
+      sheetVersionId: 'ver_001',
+      lane: 'accepted',
+      dryRun: false,
+      copyScripts: true,
+      dedupReasons: ['content-hash', 'selection', 'url'],
+    },
   },
   {
     id: 'createCharacter',

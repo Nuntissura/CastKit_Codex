@@ -59,6 +59,8 @@ function getAutomationCommandMap() {
             'listIngestionBatches',
             'getIngestionBatch',
             'listIngestionRejections',
+            // WP-0100 slice 2: multi-version v00.19 ingestion adapter
+            'ingestImageSourcingTask',
         ],
     };
 }

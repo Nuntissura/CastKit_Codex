@@ -7950,6 +7950,157 @@ class CKCLibrary {
     return { ok: true, rejectionId: rid };
   }
 
+  // ===== WP-0100 slice 2: v00.19 image-sourcing adapter helpers =====
+
+  // Internal: SheetVersion lookup (used by the adapter to validate
+  // sheetVersionId belongs to the character).
+  async _getSheetVersionRow(characterId, sheetVersionId) {
+    if (!this.db) dbNotReady('_getSheetVersionRow');
+    const cid = String(characterId || '').trim();
+    const sid = String(sheetVersionId || '').trim();
+    if (!cid || !sid) return null;
+    return get(
+      this.db,
+      `SELECT version_id, character_id FROM SheetVersion WHERE character_id = ? AND version_id = ?`,
+      [cid, sid]
+    );
+  }
+
+  // Internal: dedup lookup by (character, dataset, task, contactSheetRef).
+  async _findImageBySourceSelection(characterId, datasetId, taskId, contactSheetRef) {
+    if (!this.db) dbNotReady('_findImageBySourceSelection');
+    if (!characterId || !datasetId || !taskId || !contactSheetRef) return null;
+    const row = await get(
+      this.db,
+      `SELECT image_id FROM ImageAsset
+       WHERE character_id = ?
+         AND source_dataset_id = ?
+         AND source_task_id = ?
+         AND source_contact_sheet_ref = ?
+       LIMIT 1`,
+      [String(characterId), String(datasetId), String(taskId), String(contactSheetRef)]
+    );
+    return row ? { imageId: row.image_id } : null;
+  }
+
+  async _findImageBySourceUrl(characterId, sourceUrl) {
+    if (!this.db) dbNotReady('_findImageBySourceUrl');
+    if (!characterId || !sourceUrl) return null;
+    const row = await get(
+      this.db,
+      `SELECT image_id FROM ImageAsset WHERE character_id = ? AND source_url = ? LIMIT 1`,
+      [String(characterId), String(sourceUrl)]
+    );
+    return row ? { imageId: row.image_id } : null;
+  }
+
+  // Internal: import a single image file with provenance + review_status
+  // + tags. Returns { skipped: true, existingImageId } when content-hash
+  // already exists for this character (dup-content-hash).
+  async _importOneImageWithProvenance({ characterId, filePath, sourceUrl, provenance, reviewStatus, addTags } = {}) {
+    if (!this.db) dbNotReady('_importOneImageWithProvenance');
+    const cid = String(characterId || '').trim();
+    if (!cid) throw new Error('characterId is required');
+    if (!filePath) throw new Error('filePath is required');
+
+    const paths = this.getCharacterPaths(cid);
+    ensureDir(paths.imagesOriginalDir);
+    ensureDir(paths.imagesThumbDir);
+
+    const bytes = fs.readFileSync(filePath);
+    const fileHash = sha256Hex(bytes);
+    const ext = path.extname(filePath).toLowerCase() || '.png';
+    const hashPrefix = fileHash.slice(0, 16);
+
+    // dup-content-hash check
+    const existing = await get(
+      this.db,
+      `SELECT image_id FROM ImageAsset WHERE character_id = ? AND file_hash = ? LIMIT 1`,
+      [cid, fileHash]
+    );
+    if (existing) {
+      return { skipped: true, existingImageId: existing.image_id, fileHash };
+    }
+
+    // Hash-addressed filename — never includes the character's name
+    // (identity-decoupling rule). On collision we fall back to a
+    // suffixed dup name (no current row exists, so this is just
+    // collision-safety against parallel writers).
+    const baseName = `${hashPrefix}${ext}`;
+    const rel = path.join('images', 'original', baseName).replaceAll('\\', '/');
+    const dest = path.join(paths.base, baseName === path.basename(rel) ? path.dirname(rel) : '', baseName);
+    const destAbs = path.join(paths.base, rel);
+    fs.writeFileSync(destAbs, bytes);
+
+    const imageId = randomId('img_');
+    const sourcePathText = String(filePath);
+    const sourceUrlText = sourceUrl == null ? null : String(sourceUrl).trim() || null;
+
+    const prov = provenance && typeof provenance === 'object' ? provenance : {};
+    const datasetId = prov.datasetId == null ? null : String(prov.datasetId);
+    const taskId = prov.taskId == null ? null : String(prov.taskId);
+    const runId = prov.runId == null ? null : String(prov.runId);
+    const contactSheetRef = prov.contactSheetRef == null ? null : String(prov.contactSheetRef);
+    const sheetVersionId = prov.sheetVersionId == null ? null : String(prov.sheetVersionId);
+
+    const reviewStatusText = String(reviewStatus || 'accepted');
+    const tagList = Array.isArray(addTags) ? addTags.map((t) => String(t)).filter(Boolean) : [];
+    const tagsJson = JSON.stringify(tagList);
+
+    // Width/height best-effort via Electron native image (not in tests).
+    let width = null;
+    let height = null;
+    if (this.electronNativeImage) {
+      try {
+        const img = this.electronNativeImage.createFromPath(destAbs);
+        const size = img.getSize();
+        width = size.width;
+        height = size.height;
+        const thumb = img.resize({ width: 320 });
+        const thumbName = `${hashPrefix}.png`;
+        const thumbRel = path.join('images', 'thumb', thumbName);
+        fs.writeFileSync(path.join(paths.base, thumbRel), thumb.toPNG());
+      } catch {
+        // best-effort
+      }
+    }
+
+    await run(
+      this.db,
+      `INSERT INTO ImageAsset(image_id, character_id, relative_path, file_hash, width, height, favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note,
+                              source_dataset_id, source_task_id, source_run_id, source_contact_sheet_ref, sheet_version_id, review_status)
+       VALUES(?, ?, ?, ?, ?, ?, 0, 0, '', ?, 'copy', ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+      [imageId, cid, rel, fileHash, width, height, tagsJson, sourcePathText, sourceUrlText,
+       datasetId, taskId, runId, contactSheetRef, sheetVersionId, reviewStatusText]
+    );
+
+    return {
+      skipped: false,
+      imageId,
+      relativePath: rel,
+      fileHash,
+      reviewStatus: reviewStatusText,
+      tags: tagList,
+    };
+  }
+
+  // Public adapter entry point. Multi-version dispatch via
+  // imageSourcingAdapter; only v00_19 handler is registered today.
+  async ingestImageSourcingTask({ taskRootPath, characterId, sheetVersionId, lane, dryRun, copyScripts, dedupReasons } = {}) {
+    if (!this.db) dbNotReady('ingestImageSourcingTask');
+    const adapter = require('./imageSourcingAdapter');
+    return adapter.runIngestion({
+      lib: this,
+      taskRootPath,
+      characterId,
+      sheetVersionId,
+      lane,
+      dryRun,
+      copyScripts,
+      dedupReasons,
+    });
+  }
+
   async listIngestionRejections({ characterId, batchId } = {}) {
     if (!this.db) dbNotReady('listIngestionRejections');
     const conds = [];
