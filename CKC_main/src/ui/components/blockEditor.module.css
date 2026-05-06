@@ -1,0 +1,123 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  font-style: italic;
+  color: var(--text-secondary);
+  padding: 6px 0;
+}
+
+.warning {
+  background: rgba(220, 53, 69, 0.08);
+  border: 1px solid rgba(220, 53, 69, 0.35);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.block {
+  border: 1px solid var(--glass-border);
+  background: rgba(253, 245, 230, 0.3);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.blockHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px dashed var(--glass-border);
+  padding-bottom: 4px;
+}
+
+.blockTitle {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.blockButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.iconBtn {
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.iconBtn:hover {
+  background: var(--bg-accent);
+}
+
+.iconBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.iconBtn.danger {
+  color: rgb(180, 60, 60);
+}
+
+.subFields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subFieldHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.subFieldLabel {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.subFieldId {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.65rem;
+  color: var(--accent-color);
+  background: var(--bg-accent);
+  padding: 1px 4px;
+}
+
+.addRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.addBtn {
+  border: 1px solid var(--glass-border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.addBtn:hover {
+  background: var(--bg-accent);
+}

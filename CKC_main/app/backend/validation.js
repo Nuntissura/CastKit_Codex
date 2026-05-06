@@ -114,16 +114,91 @@ function validateValueForField(field, valueText, mode) {
   return { issues, normalized: str };
 }
 
+function validateBlockListValue(field, valueText, blockSchemasByName, mode) {
+  const issues = [];
+  const raw = String(valueText ?? '');
+  const trimmed = raw.trim();
+  if (!trimmed) return { issues, normalized: raw };
+
+  const schema = field.blockSchemaName ? blockSchemasByName.get(field.blockSchemaName) : null;
+  if (!schema) {
+    // Fall back to JSON-only check (existing behavior).
+    try {
+      JSON.parse(trimmed);
+    } catch {
+      issues.push({ fieldId: field.id, severity: mode === 'advisory' ? 'warn' : 'error', message: 'Expected JSON value' });
+    }
+    return { issues, normalized: raw };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    issues.push({ fieldId: field.id, severity: mode === 'advisory' ? 'warn' : 'error', message: 'Expected JSON value' });
+    return { issues, normalized: raw };
+  }
+
+  const isList = field.type === 'block_list';
+  const items = isList ? parsed : [parsed];
+  if (isList && !Array.isArray(parsed)) {
+    issues.push({ fieldId: field.id, severity: mode === 'advisory' ? 'warn' : 'error', message: 'Expected JSON array of blocks' });
+    return { issues, normalized: raw };
+  }
+  if (!isList && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))) {
+    issues.push({ fieldId: field.id, severity: mode === 'advisory' ? 'warn' : 'error', message: 'Expected JSON object for block' });
+    return { issues, normalized: raw };
+  }
+
+  const subFieldsById = new Map(schema.fields.map((f) => [f.id, f]));
+  const normalizedItems = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] ?? {};
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      issues.push({
+        fieldId: isList ? `${field.id}[${i}]` : field.id,
+        severity: mode === 'advisory' ? 'warn' : 'error',
+        message: 'Expected block object',
+      });
+      normalizedItems.push(item);
+      continue;
+    }
+    const normalizedItem = { ...item };
+    for (const [subFieldId, subValue] of Object.entries(item)) {
+      const subField = subFieldsById.get(subFieldId);
+      if (!subField) continue; // unknown sub-field id; preserve verbatim, no warning
+      const subText = subValue == null ? '' : String(subValue);
+      const r = validateValueForField(subField, subText, mode);
+      const path = isList ? `${field.id}[${i}].${subFieldId}` : `${field.id}.${subFieldId}`;
+      for (const issue of r.issues) {
+        issues.push({ ...issue, fieldId: path });
+      }
+      if (r.normalized !== subText) normalizedItem[subFieldId] = r.normalized;
+    }
+    normalizedItems.push(normalizedItem);
+  }
+
+  const reSerialized = isList ? JSON.stringify(normalizedItems) : JSON.stringify(normalizedItems[0] ?? {});
+  return { issues, normalized: reSerialized };
+}
+
 function validateCharacterValues(templateAst, valuesById, mode = 'strict') {
   const issues = [];
   const normalized = { ...valuesById };
 
   const fields = templateAst.sections.flatMap((s) => s.fields);
   const byId = new Map(fields.map((f) => [f.id, f]));
+  const blockSchemasByName = new Map((templateAst.blockSchemas || []).map((b) => [b.name, b]));
 
   for (const [fieldId, valueText] of Object.entries(valuesById)) {
     const field = byId.get(fieldId);
     if (!field) continue;
+    if (field.type === 'block_list' || field.type === 'block') {
+      const r = validateBlockListValue(field, valueText, blockSchemasByName, mode);
+      issues.push(...r.issues);
+      if (r.normalized !== valueText) normalized[fieldId] = r.normalized;
+      continue;
+    }
     const r = validateValueForField(field, valueText, mode);
     issues.push(...r.issues);
     if (r.normalized !== valueText) normalized[fieldId] = r.normalized;

@@ -1,5 +1,7 @@
 import React from 'react';
 import styles from './sheetEditor.module.css';
+import { SheetField } from './SheetField';
+import { BlockListEditor } from './BlockListEditor';
 
 type Field = CKCTemplateAstField;
 type Section = { title: string; fields: Field[] };
@@ -13,58 +15,59 @@ function initialCollapsed(title: string): boolean {
   return false;
 }
 
-function inputRowsForField(field: Field): number {
-  switch (field.type) {
-    case 'paragraph':
-      return 6;
-    case 'list':
-    case 'block':
-    case 'block_list':
-      return 5;
-    default:
-      return 3;
-  }
-}
-
 export function SheetEditor({
   templateSections,
+  blockSchemas,
   valuesById,
   onChange,
   focusFieldId,
   onFocusFieldHandled,
 }: {
   templateSections: Section[];
+  blockSchemas?: CKCTemplateBlockSchema[];
   valuesById: Record<string, string>;
   onChange: (fieldId: string, value: string) => void;
   focusFieldId?: string | null;
   onFocusFieldHandled?: () => void;
 }) {
-  const [suggestionsByFieldId, setSuggestionsByFieldId] = React.useState<Record<string, string[]>>({});
+  const [suggestionsByKey, setSuggestionsByKey] = React.useState<Record<string, string[]>>({});
   const loadedSuggestionsRef = React.useRef<Set<string>>(new Set());
   const loadingSuggestionsRef = React.useRef<Set<string>>(new Set());
 
-  const ensureSuggestionsLoaded = React.useCallback((fieldId: string) => {
-    const fid = String(fieldId ?? '').trim();
-    if (!fid) return;
-    if (loadedSuggestionsRef.current.has(fid)) return;
-    if (loadingSuggestionsRef.current.has(fid)) return;
+  const ensureSuggestionsLoaded = React.useCallback((key: string) => {
+    const k = String(key ?? '').trim();
+    if (!k) return;
+    if (loadedSuggestionsRef.current.has(k)) return;
+    if (loadingSuggestionsRef.current.has(k)) return;
 
-    loadingSuggestionsRef.current.add(fid);
+    loadingSuggestionsRef.current.add(k);
+    // Suggestion key is either a top-level field id (e.g. CHAR-WRK-001)
+    // or a block sub-field key (parentFieldId + '.' + blockFieldId). Both
+    // are fed to the same backend lookup; the backend currently keys by
+    // exact field id, so block sub-fields share suggestions across all
+    // characters that filled the same sub-field id.
+    const lookupId = k.includes('.') ? k.split('.').slice(-1)[0] : k;
     window.ckc
-      .listFieldValueSuggestions({ fieldId: fid, limit: 60 })
+      .listFieldValueSuggestions({ fieldId: lookupId, limit: 60 })
       .then((rows) => {
         const vals = Array.isArray(rows) ? rows.map((v) => String(v)).map((v) => v.trim()).filter(Boolean) : [];
-        loadedSuggestionsRef.current.add(fid);
-        setSuggestionsByFieldId((prev) => ({ ...prev, [fid]: vals }));
+        loadedSuggestionsRef.current.add(k);
+        setSuggestionsByKey((prev) => ({ ...prev, [k]: vals }));
       })
       .catch(() => {
-        loadedSuggestionsRef.current.add(fid);
-        setSuggestionsByFieldId((prev) => ({ ...prev, [fid]: [] }));
+        loadedSuggestionsRef.current.add(k);
+        setSuggestionsByKey((prev) => ({ ...prev, [k]: [] }));
       })
       .finally(() => {
-        loadingSuggestionsRef.current.delete(fid);
+        loadingSuggestionsRef.current.delete(k);
       });
   }, []);
+
+  const blockSchemaByName = React.useMemo(() => {
+    const map = new Map<string, CKCTemplateBlockSchema>();
+    for (const b of blockSchemas ?? []) map.set(b.name, b);
+    return map;
+  }, [blockSchemas]);
 
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
@@ -73,7 +76,6 @@ export function SheetEditor({
   });
 
   React.useEffect(() => {
-    // Ensure new/changed sections get a default collapsed state.
     setCollapsed((prev) => {
       const next = { ...prev };
       for (const s of templateSections) {
@@ -135,13 +137,16 @@ export function SheetEditor({
               <div className={styles.fields}>
                 {section.fields.map((field) => {
                   const value = valuesById[field.id] ?? '';
-                  const isRule = field.type === 'rule';
-                  const rows = inputRowsForField(field);
-                  const listId = `ckc-field-suggest-${field.id}`;
-                  const presets = suggestionsByFieldId[field.id] ?? [];
-                  const enumValues = field.type === 'enum' && Array.isArray(field.enumValues) ? field.enumValues : [];
                   const isReadOnly = READ_ONLY_FIELD_IDS.has(field.id);
+                  const isBlockType = field.type === 'block_list' || field.type === 'block';
+                  const blockSchema =
+                    isBlockType && field.blockSchemaName
+                      ? blockSchemaByName.get(field.blockSchemaName) ?? null
+                      : null;
 
+                  const enumValues =
+                    field.type === 'enum' && Array.isArray(field.enumValues) ? field.enumValues : [];
+                  const presets = suggestionsByKey[field.id] ?? [];
                   const suggestions = (() => {
                     const seen = new Set<string>();
                     const out: string[] = [];
@@ -166,54 +171,23 @@ export function SheetEditor({
                         <div className={styles.fieldId}>{field.id}</div>
                       </div>
 
-                      {isRule ? (
-                        <pre className={styles.ruleText}>{value}</pre>
-                      ) : field.type === 'enum' && field.enumValues?.length ? (
-                        <>
-                          <input
-                            className={styles.input}
-                            value={value}
-                            onChange={(e) => onChange(field.id, e.target.value)}
-                            onFocus={() => ensureSuggestionsLoaded(field.id)}
-                            list={suggestions.length ? listId : undefined}
-                            placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
-                            readOnly={isReadOnly}
-                          />
-                          {suggestions.length ? (
-                            <datalist id={listId}>
-                              {suggestions.map((opt) => (
-                                <option key={opt} value={opt} />
-                              ))}
-                            </datalist>
-                          ) : null}
-                        </>
-                      ) : rows <= 3 ? (
-                        <>
-                          <input
-                            className={styles.input}
-                            value={value}
-                            onChange={(e) => onChange(field.id, e.target.value)}
-                            onFocus={() => ensureSuggestionsLoaded(field.id)}
-                            list={suggestions.length ? listId : undefined}
-                            placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
-                            readOnly={isReadOnly}
-                          />
-                          {suggestions.length ? (
-                            <datalist id={listId}>
-                              {suggestions.map((opt) => (
-                                <option key={opt} value={opt} />
-                              ))}
-                            </datalist>
-                          ) : null}
-                        </>
-                      ) : (
-                        <textarea
-                          className={styles.textarea}
-                          rows={rows}
+                      {isBlockType ? (
+                        <BlockListEditor
+                          field={field}
+                          blockSchema={blockSchema}
                           value={value}
-                          onChange={(e) => onChange(field.id, e.target.value)}
-                          onFocus={() => ensureSuggestionsLoaded(field.id)}
-                          placeholder={field.templateDescriptor ? field.templateDescriptor : undefined}
+                          onChange={(v) => onChange(field.id, v)}
+                          ensureSuggestionsLoaded={ensureSuggestionsLoaded}
+                          suggestionsByKey={suggestionsByKey}
+                        />
+                      ) : (
+                        <SheetField
+                          field={field}
+                          value={value}
+                          onChange={(v) => onChange(field.id, v)}
+                          suggestionListId={`ckc-field-suggest-${field.id}`}
+                          suggestions={suggestions}
+                          onFocusLoadSuggestions={() => ensureSuggestionsLoaded(field.id)}
                           readOnly={isReadOnly}
                         />
                       )}

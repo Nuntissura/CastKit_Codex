@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-06.wp-0103';
+const MANUAL_VERSION = '2026-05-06.wp-0104';
 
 const featureGroups = [
   {
@@ -67,6 +67,7 @@ const featureGroups = [
       'The sheet editor preserves template field order and user-entered text.',
       'Use explicit characterId values for automation; never drive navigation through mouse clicks.',
       'Resizable layouts are persisted in app config.',
+      'Block-list and single-block fields (e.g. Side_Hustles: <list of Hustle_Block | optional>) render as structured sub-form editors with per-sub-field input types, + Add / Remove / Move up/down controls. Storage format is a JSON string (array of objects for block_list, single object for block); empty list serializes to "" not "[]". Sub-field validation surfaces issues with paths like CHAR-WRK-007[0].HUS-BLK-003. Malformed pre-existing JSON falls back to an empty list with a one-time warning.',
     ],
   },
   {

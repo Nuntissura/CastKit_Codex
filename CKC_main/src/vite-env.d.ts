@@ -170,8 +170,15 @@ type CKCTemplateAstField = {
   optional: boolean;
   enumValues?: string[];
   blockSchemaName?: string;
+  allowOtherType?: CKCTemplateAstFieldType;
+  allowedSpecialValues?: string[];
   section: string;
   templateDescriptor: string;
+};
+
+type CKCTemplateBlockSchema = {
+  name: string;
+  fields: CKCTemplateAstField[];
 };
 
 type CKCTemplateAst = {
@@ -183,7 +190,7 @@ type CKCTemplateAst = {
     title: string;
     fields: CKCTemplateAstField[];
   }>;
-  blockSchemas: unknown[];
+  blockSchemas: CKCTemplateBlockSchema[];
   unmappedLines: string[];
 };
 

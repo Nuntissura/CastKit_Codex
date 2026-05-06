@@ -2,7 +2,7 @@
 
 Date: 2026-05-06
 Owner: Codex
-Status: DRAFT
+Status: DONE
 
 ## Summary
 Replace the single-textarea fallback for block-list fields (e.g. `<list of Hustle_Block | optional>`, `<list of Animal_Comparison_Block | optional>`) with a proper inline editor that renders each block instance as a sub-form whose inputs are typed per the block schema. Render empty schema-descriptor lines (e.g. `HUS-BLK-001 — Hustle_Name: <string>`) only inside their parent block context — not as standalone empty `ckc-field-*` divs at the top sheet level.

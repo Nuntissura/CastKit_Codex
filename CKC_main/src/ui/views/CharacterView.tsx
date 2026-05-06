@@ -3095,6 +3095,7 @@ export function CharacterView({
                   ) : (
                     <SheetEditor
                       templateSections={templateAst.sections || []}
+                      blockSchemas={templateAst.blockSchemas || []}
                       valuesById={draftValuesById}
                       onChange={(fieldId, value) => setDraftValuesById((prev) => ({ ...prev, [fieldId]: value }))}
                       focusFieldId={focusFieldId}
