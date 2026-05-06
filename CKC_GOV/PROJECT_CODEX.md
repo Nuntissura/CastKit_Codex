@@ -73,6 +73,21 @@ Daily workflow (MUST):
 - Naming: do not introduce spaces in file names, folder names, generated artifact names, or generated output names. This applies to both product code (`CKC_main/`) and repo governance (`CKC_GOV/`). Use `_` or `-`.
 - Build artifacts must NOT be committed to git (they live under `CKC_GOV/targets/` and are ignored).
 - Workflow: create a Work Packet + update Task Board, then **commit + push BEFORE coding starts** (planning checkpoint). After implementation, update Task Board + Spec, then commit + push again (shipping checkpoint).
+- **Code-truth.** Code is the source of truth. The Task Board, work packets, spec, and in-app manual describe code that exists; they do not authorize code that does not. When a Task Board row, manual entry, or spec section references a code-defined surface (a command, an IPC channel, a field, a schema, a configuration key, a CLI flag), that reference MUST be backed by code — verify against the code before relying on it.
+- **Self-consistency tests are required for any doc that catalogs a code-defined surface.** If a markdown file, JSON manual, or generated reference lists commands / IPC names / fields / schemas / config keys, a test in `CKC_main/test/` MUST fail when the doc drifts from the code. The test is the enforcement; reviewers are not. Rule of thumb: if a future change to the code could silently invalidate the doc, you owe the repo a consistency test before merging the doc.
+
+## Code-truth and documentation consistency
+This rule binds every WP and every governance change.
+
+- The wired surface in code is canonical. Manuals, docs, Task Board notes, and spec sections that name commands/IPC channels/fields/schemas/config keys describe what is wired today; they do not describe what is planned, hoped for, or aspirational. Aspirational entries belong in a clearly labeled `roadmap` section, never alongside wired entries.
+- For every catalog-style doc (e.g. the in-app LLM manual served by `automationGetManual`), there MUST be a corresponding self-consistency test under `CKC_main/test/` that:
+  1. Imports or queries the doc data structure.
+  2. Imports the canonical code-side source of truth (e.g. `getAutomationCommandMap()` for automation commands).
+  3. Asserts every non-roadmap entry in the doc resolves to a real entry in the code.
+  4. Asserts no wired code entry is silently undocumented (or is explicitly marked as undocumented in the doc).
+- When adding a new catalog-style doc, the consistency test lands in the same commit. No "we'll add the test later."
+- When existing docs drift, the fix is to either (a) wire the code or (b) move the entry to `roadmap` and explain why — never to silently leave the doc lying.
+- Memory entries (in the Claude memory system) are informational and decay; they are NEVER authoritative. If memory and code disagree, code wins.
 
 ## Folder map
 ### 1) Source repo (code)
