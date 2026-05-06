@@ -247,6 +247,18 @@ The agent (LLM/operator helper running in the repo) is required to interact with
 - **This rule binds every feature, test, demo, smoke, regression check, and bug fix that touches CKC** — not just new WPs. Every existing surface (sheet editor, library list, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, etc.) is expected to be driven through the automation surface when verifying behavior; if a surface lacks an automation hook for what the agent needs to verify, the agent files it as a gap (roadmap entry in the manual) rather than skipping verification.
 - It is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
 
+### CKC test suite is a binding governance document (must stay current)
+The test suite at `CKC_GOV/test_suites/CKC_TEST_SUITE.md` is the canonical, repeatable list of checks for the running CKC application. It is part of the product's governance, not a one-off WP.
+
+- **Every addition, expansion, or large refactor of CKC must update the test suite in the same change** — add new check rows for new features, mark existing rows deprecated when behavior changes, update the agent-driven script section so the suite stays runnable end-to-end.
+- New automation commands → new check rows under their section (Boot/Manual/Automation/Stealth/Image-sourcing/Sheet/Library/Image-meta).
+- New UI surfaces → new check rows describing both the visual state and the CDP-driven verification.
+- Bugs surfaced during inspection → either fix and remove the row, or tag the row "OPEN BUG" with the date so the next pass picks it up.
+- Findings from each inspection pass go into the `Findings (latest pass)` block at the bottom, dated.
+- The agent runs the suite by attaching CDP, executing the scripts described inline, and updating the findings block. The suite is meant to be reproducible on a clean clone with the dev environment described in `### How to run the suite`.
+
+This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above.
+
 ### Updating the in-app manual is a hard requirement (binding)
 The in-app LLM/operator manual at `CKC_main/app/backend/automationManual.js` is part of the product, not a side artifact. Every CKC change that touches an automation command, an IPC channel, a feature group described in the manual, a roadmap item, the safety contract, the quick-start sequence, or the operating contract MUST update the manual in the same commit.
 
