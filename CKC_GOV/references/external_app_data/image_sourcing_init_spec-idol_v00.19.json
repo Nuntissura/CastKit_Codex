@@ -1,0 +1,4849 @@
+{
+  "schema_version": 1,
+  "spec_id": "idol_image_sourcing_init_spec",
+  "spec_version": "v00.19",
+  "version_token": "_v00.19",
+  "spec_status": "draft",
+  "spec_file": "image_sourcing_init_spec-idol_v00.19.json",
+  "canonical_format": "json",
+  "canonical_text_encoding": "utf-8",
+  "canonical_text_bom": false,
+  "canonical_line_ending": "lf",
+  "downstream_language_allowed": false,
+  "goals": {
+    "rid": "RID-GOALS-001",
+    "goals": [
+      "Initialize a neutral, mechanically importable image sourcing workflow.",
+      "Make every required artifact survive a no-context handoff to another assistant.",
+      "Make every task folder portable across disks and machines without rewrites.",
+      "Make concurrent tool runs safe through a documented lock and rewrite protocol.",
+      "Keep downstream use intentionally unspecified at the task layer."
+    ]
+  },
+  "version_token_policy": {
+    "rid": "RID-VERSIONTOKEN-001",
+    "rule": "version_token duplicates spec_version intentionally so simple parsers can grep without composing strings.",
+    "invariant": "version_token must always equal an underscore prefix concatenated with spec_version.",
+    "example": {
+      "spec_version": "v00.19",
+      "version_token": "_v00.19"
+    }
+  },
+  "spec_declaration": {
+    "rid": "RID-SPEC-PURPOSE-001",
+    "kind": "image_sourcing_workflow_init_spec",
+    "rule": "This file initializes neutral image sourcing workflow tasks.",
+    "scope": [
+      "task_folder_topology",
+      "required_machine_readable_artifacts",
+      "fixed_task_rules",
+      "mutable_task_specific_rules",
+      "lane_state_contract",
+      "media_naming_contract",
+      "validation_contract",
+      "app_sync_contract",
+      "no_context_handoff_contract"
+    ],
+    "generated_task_artifacts_are_operational_contract": true,
+    "parent_spec_required_after_init": false,
+    "downstream_use_policy": "Downstream use remains intentionally unspecified in initialized task artifacts.",
+    "non_goals": [
+      "Does not define a downstream build pipeline.",
+      "Does not encode target identity in filenames.",
+      "Does not make Markdown the authoritative task state."
+    ]
+  },
+  "workspace_policy": {
+    "rid": "RID-WORKSPACE-001",
+    "rule": "Each initialized task occupies an inner task_root subfolder named exactly after the full task_id, nested inside an outer operator workspace folder whose name is human-chosen and never inspected by tools.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "layout": {
+      "operator_workspace_root": {
+        "naming": "Operator chooses any human-friendly nickname (for example operator_workspace_0001). Tools must not parse, modify, or depend on this folder name.",
+        "contents_owned_by": "operator",
+        "assistant_write_allowed": false,
+        "purpose": "Free workspace for moodboards, scratch references, manual notes, and any artifact the operator wants near the task without disturbing the assistant-managed task root."
+      },
+      "task_root": {
+        "naming": "Equals the full task_id verbatim (for example task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8). Located directly inside the operator_workspace_root.",
+        "contents_owned_by": "assistant_and_tools",
+        "operator_write_allowed": true,
+        "operator_write_caveat": "Operator may edit task_root contents at their own risk; validate_task remains the source of truth on whether the contract still holds.",
+        "purpose": "Holds every artifact, folder, and tool defined by this spec. RID-PATH-001 paths are relative to this directory."
+      }
+    },
+    "rules": [
+      "Tools must derive every artifact path from the task_root inward; tools must never touch siblings of task_root inside the operator_workspace_root.",
+      "Init must refuse to operate when an existing task_root with the same task_id already exists at the same location.",
+      "task_root rename is forbidden after init; relocating to a different operator_workspace_root is allowed because RID-PATH-001 is disk-agnostic.",
+      "Operator workspace root cannot be the task_root itself; the two must be distinct directories at distinct depths."
+    ],
+    "validation_checks": [
+      "task_root basename equals task_state.yaml.task_id.",
+      "task_root parent directory exists and contains task_root.",
+      "No artifact path stored in task_topology.yaml escapes task_root."
+    ]
+  },
+  "changelog": [
+    {
+      "version": "v00.19",
+      "date": "2026-05-05",
+      "change": "Format pivot to pure JSON to lower LLM token cost and remove prose-data drift vectors. Adds init_algorithm and placeholder_catalog so a stdlib-only Python init script can execute the spec mechanically. Adds description fields on policies that previously carried only RID and rule. Adds one-line lesson_policy deferral note. Adds spec_file_format_policy explicitly stating that the canonical spec is now a single JSON file with no prose. No semantic changes to existing rules."
+    },
+    {
+      "version": "v00.19",
+      "date": "2026-05-05",
+      "change": "Audit pass and assistant onboarding pass. Patches reject_manifest and restore_manifest required_fields to include the five header fields the skeletons already carried. Adds dataset_id and task_id to rule_change_event and operator_approval JSONL records and skeletons. Adds diagnostic to task_state.counts. Introduces start_here as a required generated markdown artifact at task_root carrying the canonical entrypoint instructions for any new assistant (RID-ENTRY-001). Introduces handoffs/ folder and handoff_message artifact for optional operator-driven assistant switches (RID-HANDOFF-001); missing handoffs are explicitly not a validation failure. Extends RID-ARTFILE-001 to allow md extension."
+    },
+    {
+      "version": "v00.17",
+      "date": "2026-05-05",
+      "change": "Structural pass for app consumption. Splits operator workspace from assistant-managed task root via inner task_id subfolder. Regroups artifacts into state/logs/governance/app/runs subdirectories. Promotes contact_sheets to top level with sheets/manifests/selections split. Adds task_requirements.yaml as the outcome spec, separating identity and deliverable from behavior contract. Universally stamps every authoritative artifact with dataset_id and task_id. Adds artifact_kind, artifact_id, and artifact_handle headers so apps can identify any artifact in isolation. Pins artifact filenames to {task_id}.{artifact_kind}.{ext} so files remain unambiguous when separated from their folder. Folds a cross-task registry contract into this spec for app-side discovery without filesystem walks. Adds RID-TOPOLOGY-001..005 making task_topology.yaml the single source of truth for in-task paths."
+    },
+    {
+      "version": "v00.16",
+      "date": "2026-05-05",
+      "change": "Hardening pass. Fixes topology and init_task inconsistencies. Renumbers GATE-008 to GATE-007. Adds full JSON Schema export coverage, concurrency and lock protocol, JSONL append rules, RFC 3339 UTC timestamp pinning, UUIDv7 for event ids, JSON Schema 2020-12 dialect pin, missing enums, disk-agnostic path policy, extension normalization, parent_init_spec_hash drift detection, explicit policy-only enforcement note for app_sync_events, spec_status promotion criteria and migration policy, phash threshold slot in task_rules, and version_token rationale."
+    },
+    {
+      "version": "v00.15",
+      "date": "2026-05-05",
+      "change": "Adds explicit declaration that this is an image sourcing workflow initialization spec and clarifies generated task artifacts become the operational contract."
+    },
+    {
+      "version": "v00.14",
+      "date": "2026-05-05",
+      "change": "Adds task self-containment policy and mirrors no-context assistant startup instructions into initialized task_rules.yaml fixed rules."
+    },
+    {
+      "version": "v00.13",
+      "date": "2026-05-05",
+      "change": "Mirrors the full canonical filename policy into initialized task_rules.yaml fixed rules so tasks remain self-contained for no-context handoff."
+    },
+    {
+      "version": "v00.12",
+      "date": "2026-05-05",
+      "change": "Locks canonical neutral media filename policy using full task_id plus dot-separated batch, item, and sha256-prefix segments."
+    },
+    {
+      "version": "v00.11",
+      "date": "2026-05-05",
+      "change": "Adds canonical dataset/task/batch IDs, JSON Schema export artifacts, duplicate policy, source provenance requirements, sensitive path policy, and app-owned app_sync_events.jsonl contract."
+    },
+    {
+      "version": "v00.10",
+      "date": "2026-05-05",
+      "change": "Adds layered contract model with immutable fixed contract, mutable task-specific rules, operator approvals, rule change events, validation report states, and after-init consistency requirements."
+    },
+    {
+      "version": "v00.09",
+      "date": "2026-05-05",
+      "change": "Adds concrete skeletons for artifact_manifest, run_state lock, media events, source expansion events, failure and insight records, reject/restore manifests, task tool contracts, app adapter config, and generated view policy."
+    },
+    {
+      "version": "v00.08",
+      "date": "2026-05-05",
+      "change": "Renames canonical spec from image sourcing task spec to image sourcing init spec to reflect that it initializes topology, artifacts, lanes, and app-import contract."
+    },
+    {
+      "version": "v00.07",
+      "date": "2026-05-05",
+      "change": "Clarifies accepted lane: accepted requires both visual pass and active task requirement pass."
+    },
+    {
+      "version": "v00.06",
+      "date": "2026-05-05",
+      "change": "Replaces CSV-first artifacts with JSONL/YAML-first artifacts, clarifies raw/accepted/pending/rejected lane semantics, adds media_items.jsonl as canonical image table, and models CastKit Codex/OpenRepose as adapter targets."
+    },
+    {
+      "version": "v00.05",
+      "date": "2026-05-05",
+      "change": "Creates canonical YAML spec for unambiguous app import."
+    },
+    {
+      "version": "v00.04",
+      "date": "2026-05-05",
+      "change": "Adds machine-readable artifact contract and learning logs."
+    },
+    {
+      "version": "v00.03",
+      "date": "2026-05-05",
+      "change": "Adds immutable versioning rule and app-facing intake topology."
+    }
+  ],
+  "versioning": {
+    "rid": "RID-SPEC-001",
+    "rule": "Never edit the latest released spec in place. Create a new versioned file, update filename version, internal version, and changelog.",
+    "current_filename": "image_sourcing_init_spec-idol_v00.19.json",
+    "predecessor": "image_sourcing_init_spec-idol_v00.19.json"
+  },
+  "spec_status_policy": {
+    "rid": "RID-SPEC-STATUS-001",
+    "values": {
+      "draft": "In active iteration. Tasks may be initialized for experimentation but should not be promoted to handoff state until the spec is released.",
+      "released": "Locked for ongoing tasks. Only patch-level corrections may be issued, each as a new version with changelog.",
+      "superseded": "Replaced by a higher version. Tasks already initialized continue under their pinned spec_version."
+    },
+    "promotion_criteria_draft_to_released": [
+      "All required artifacts have validated skeletons that round-trip through the JSON Schema exports.",
+      "init_task, validate_task, refresh_state, move_media, sync_app_adapter, and export_json_schemas tool contracts each have a working reference implementation.",
+      "At least one initialized task has reached handoff with validation_state == valid.",
+      "No outstanding RID-CONTRACT invariants are flagged in workflow_failure_log.jsonl entries with severity high or critical."
+    ]
+  },
+  "migration_policy": {
+    "rid": "RID-MIGRATION-001",
+    "rule": "In-flight tasks remain pinned to the spec_version they were initialized with. A spec_version bump never silently re-targets existing tasks.",
+    "task_pin_field": "task_state.yaml.spec_version",
+    "upgrade_procedure": [
+      "Operator decides explicitly to migrate a task to a newer spec_version.",
+      "Tooling writes a rule_change_event with rule_scope = spec_version_migration referencing the old and new spec_version.",
+      "Tooling writes an operator_approval with approval_scope = spec_version_migration.",
+      "Tooling regenerates task_rules.yaml fixed embedded rules from the new spec and updates parent_init_spec_hash.",
+      "validate_task must re-run and produce validation_state == valid before any further task operation."
+    ],
+    "forbidden": [
+      "Editing task_state.yaml.spec_version in place without the rule_change_event and operator_approval pair.",
+      "Mass-migrating tasks across folders without per-task validation."
+    ]
+  },
+  "timestamp_policy": {
+    "rid": "RID-TIME-001",
+    "rule": "Every {{ISO_TIMESTAMP}} field is RFC 3339 in UTC with a trailing Z. Local time and offset suffixes other than Z are not permitted.",
+    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$",
+    "examples_valid": [
+      "2026-05-05T13:24:55Z",
+      "2026-05-05T13:24:55.123Z"
+    ],
+    "examples_invalid": [
+      "2026-05-05 13:24:55",
+      "2026-05-05T13:24:55+02:00",
+      "2026-05-05T13:24:55"
+    ],
+    "monotonicity_rule": "Within a single append-only log, event_at values should be non-decreasing in append order. A later append with an earlier event_at is allowed only when accompanied by an explicit reason field."
+  },
+  "uuid_policy": {
+    "rid": "RID-UUID-001",
+    "default_for_event_or_log_ids": "uuidv7",
+    "default_for_static_ids": "uuidv4",
+    "rationale_uuidv7": "Time-ordered UUIDs sort by creation, making append-only logs recoverable and pageable without a separate index.",
+    "fields_using_uuidv7": [
+      "event_id",
+      "sync_event_id",
+      "source_event_id",
+      "failure_id",
+      "insight_id",
+      "rule_event_id",
+      "approval_id",
+      "run_id",
+      "manifest_id",
+      "schema_export_id"
+    ],
+    "fields_using_uuidv4_or_ulid_allowed": [
+      "item_id",
+      "dataset_id",
+      "task_id",
+      "batch_id"
+    ],
+    "format_pattern_uuidv7": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "format_pattern_uuidv4": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "legacy_acceptance": "Existing v00.15 tasks may continue with UUIDv4 for event ids; new tasks initialized under v00.16 must use UUIDv7 for the listed event/log id fields."
+  },
+  "path_policy": {
+    "rid": "RID-PATH-001",
+    "rule": "All task artifact paths are relative to the task folder root and must remain disk-agnostic so the task folder can be moved between disks, machines, or sync roots without rewrites.",
+    "task_folder_root_resolution": "The task folder root is the directory containing task_state.yaml. Tools must derive every absolute filesystem path by joining the task folder root with the stored relative path at use time.",
+    "separator": "/",
+    "separator_normalization": "Tools must accept platform-native separators on input and normalize to forward slash before writing back to artifacts.",
+    "forbidden_in_artifacts": [
+      "Drive letters such as C:\\\\ or D:\\\\.",
+      "UNC prefixes such as \\\\\\\\?\\\\ or \\\\\\\\server\\\\share.",
+      "User home expansions such as ~ or %USERPROFILE%.",
+      "Absolute POSIX paths beginning with /.",
+      "Backslash separators in stored values."
+    ],
+    "case_sensitivity": "Treat paths as case-sensitive in all artifacts even on case-insensitive filesystems. Tools must reject collisions that differ only in case.",
+    "windows_long_path_guidance": "Tools running on Windows should prefer task folder roots short enough to keep absolute paths under 240 characters; long-path support must be enabled when this cannot be guaranteed.",
+    "symlink_policy": "Symlinks inside the task folder are not part of the contract. Tools must record the resolved relative path of the actual file.",
+    "validation_checks": [
+      "media_items.jsonl current_path values match the regex ^[a-zA-Z0-9._/-]+$ and do not begin with /.",
+      "task_topology.yaml file and folder values do not contain backslashes, drive letters, or absolute prefixes.",
+      "No artifact value resolves outside the task folder root after path normalization."
+    ]
+  },
+  "extension_policy": {
+    "rid": "RID-EXT-001",
+    "rule": "Media file extensions stored in artifacts must be lowercase, without a leading dot, and normalized at import time.",
+    "allowed_pattern": "^[a-z0-9]{2,5}$",
+    "normalization": [
+      "Strip the leading dot from the source extension if present.",
+      "Lowercase the extension.",
+      "Reject the file when the resulting value does not match the allowed_pattern."
+    ],
+    "preserve_original_extension_in": "media_items.jsonl.original_filename",
+    "recognized_examples": [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "tiff",
+      "heic",
+      "mp4",
+      "mov"
+    ]
+  },
+  "artifact_filename_policy": {
+    "rid": "RID-ARTFILE-001",
+    "rule": "Every authoritative artifact filename inside the task_root carries the full task_id as a prefix so the file remains unambiguous when separated from its folder.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "pattern": "{task_id}.{artifact_kind}.{ext}",
+    "segment_separator": ".",
+    "segments": {
+      "task_id": {
+        "source": "task_state.yaml.task_id",
+        "allowed_pattern": "^task_[a-z0-9_]{3,24}_[0-9]{4}_[A-HJKMNP-TV-Z0-9]{26}$",
+        "rule": "Use the full task_id verbatim. Do not shorten, hash, or alias."
+      },
+      "artifact_kind": {
+        "source": "artifact_manifest.yaml",
+        "allowed_pattern": "^[a-z0-9_]+$",
+        "examples": [
+          "task_state",
+          "task_topology",
+          "task_rules",
+          "task_requirements",
+          "artifact_manifest",
+          "app_adapter",
+          "validation_report",
+          "run_state_lock",
+          "media_items",
+          "media_events",
+          "app_sync_events",
+          "source_expansion_matrix",
+          "workflow_failure_log",
+          "insights_log",
+          "rule_change_events",
+          "operator_approvals"
+        ]
+      },
+      "ext": {
+        "derivation": "From the artifact's authoritative format. yaml -> yaml, json -> json, jsonl -> jsonl, markdown -> md.",
+        "allowed_pattern": "^(yaml|json|jsonl|md)$",
+        "markdown_artifacts": [
+          "start_here",
+          "handoff_message"
+        ]
+      }
+    },
+    "examples": [
+      "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8.task_state.yaml",
+      "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8.media_items.jsonl",
+      "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8.run_state_lock.json"
+    ],
+    "scope": {
+      "applies_to": "artifact_files",
+      "does_not_apply_to": [
+        "media_files",
+        "schema_export_files",
+        "generated_view_files"
+      ]
+    },
+    "media_filename_separation": "Media files follow RID-FILENAME-001. Generated JSON Schema files in schemas/ are reusable definitions and remain plain (for example media_item.schema.json).",
+    "parse_strategy": "Split basename on the first occurrence of the artifact_kind token following the task_id; everything before the first dot of artifact_kind is the task_id, the next segment is the artifact_kind, the final segment after the last dot is the extension.",
+    "validation_checks": [
+      "Every artifact filename listed in task_topology.yaml.files matches the pattern.",
+      "task_id segment equals task_state.yaml.task_id verbatim.",
+      "artifact_kind segment matches an entry in artifact_manifest.yaml.",
+      "ext segment matches the artifact's authoritative format."
+    ]
+  },
+  "artifact_kind_policy": {
+    "rid": "RID-ARTKIND-001",
+    "rule": "Every YAML and JSON artifact must declare its kind in its top-level header so apps can identify any artifact in isolation without inspecting its filename or path.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "required_header_fields_for_yaml_and_json": [
+      "artifact_kind",
+      "artifact_id"
+    ],
+    "jsonl_kind_resolution": {
+      "rule": "JSONL files cannot carry headers without breaking line uniformity; their kind is resolved through artifact_manifest.yaml.",
+      "lookup_steps": [
+        "Read artifact_manifest.yaml at task_root.",
+        "Find the entry whose path matches the JSONL file's path inside task_root.",
+        "Use that entry's id as artifact_id and its logical name as artifact_kind."
+      ]
+    },
+    "artifact_kind_registry": [
+      {
+        "kind": "task_state",
+        "id": "ART-TASK-STATE",
+        "format": "yaml"
+      },
+      {
+        "kind": "task_topology",
+        "id": "ART-TASK-TOPOLOGY",
+        "format": "yaml"
+      },
+      {
+        "kind": "task_rules",
+        "id": "ART-TASK-RULES",
+        "format": "yaml"
+      },
+      {
+        "kind": "task_requirements",
+        "id": "ART-TASK-REQUIREMENTS",
+        "format": "yaml"
+      },
+      {
+        "kind": "artifact_manifest",
+        "id": "ART-ARTIFACT-MANIFEST",
+        "format": "yaml"
+      },
+      {
+        "kind": "app_adapter",
+        "id": "ART-APP-ADAPTER",
+        "format": "yaml"
+      },
+      {
+        "kind": "validation_report",
+        "id": "ART-VALIDATION-REPORT",
+        "format": "json"
+      },
+      {
+        "kind": "run_state_lock",
+        "id": "ART-RUN-LOCK",
+        "format": "json"
+      },
+      {
+        "kind": "media_items",
+        "id": "ART-MEDIA-ITEMS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "media_events",
+        "id": "ART-MEDIA-EVENTS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "app_sync_events",
+        "id": "ART-APP-SYNC-EVENTS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "source_expansion_matrix",
+        "id": "ART-SOURCE-MATRIX",
+        "format": "jsonl"
+      },
+      {
+        "kind": "workflow_failure_log",
+        "id": "ART-WORKFLOW-FAILURES",
+        "format": "jsonl"
+      },
+      {
+        "kind": "insights_log",
+        "id": "ART-INSIGHTS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "rule_change_events",
+        "id": "ART-RULE-CHANGE-EVENTS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "operator_approvals",
+        "id": "ART-OPERATOR-APPROVALS",
+        "format": "jsonl"
+      },
+      {
+        "kind": "reject_manifest",
+        "id": "ART-REJECT-MANIFEST",
+        "format": "json"
+      },
+      {
+        "kind": "restore_manifest",
+        "id": "ART-RESTORE-MANIFEST",
+        "format": "json"
+      },
+      {
+        "kind": "start_here",
+        "id": "ART-START-HERE",
+        "format": "markdown"
+      },
+      {
+        "kind": "handoff_message",
+        "id": "ART-HANDOFF-MESSAGE",
+        "format": "markdown_with_yaml_frontmatter"
+      }
+    ],
+    "validation_checks": [
+      "Every YAML or JSON artifact contains artifact_kind and artifact_id.",
+      "Declared artifact_kind appears in artifact_kind_registry.",
+      "Declared artifact_id matches the registry entry for that kind."
+    ]
+  },
+  "artifact_handle_policy": {
+    "rid": "RID-HANDLE-001",
+    "rule": "Every authoritative artifact carries an artifact_handle in its header (or via artifact_manifest for JSONL) using the full task_id so handles are globally unique across all tasks and projects.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "pattern": "{task_id}/{artifact_kind}",
+    "examples": [
+      "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8/media_items",
+      "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8/task_state"
+    ],
+    "uniqueness": "Globally unique by construction: task_id is unique per RID-ID-001 and artifact_kind is unique per task per RID-ARTKIND-001.",
+    "use_as_primary_key": "The cross-task registry uses artifact_handle as its primary key. Apps reference artifacts by handle, never by filename.",
+    "required_header_fields_for_yaml_and_json": [
+      "artifact_handle"
+    ],
+    "jsonl_handle_resolution": "Resolved through artifact_manifest.yaml the same way artifact_kind is.",
+    "validation_checks": [
+      "artifact_handle equals task_id + '/' + artifact_kind.",
+      "task_id segment of artifact_handle equals task_state.yaml.task_id verbatim."
+    ]
+  },
+  "idstamp_policy": {
+    "rid": "RID-IDSTAMP-001",
+    "rule": "After init, every authoritative artifact header contains dataset_id and task_id; batch_id is included on artifacts whose scope is a single batch.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "required_header_fields": {
+      "always": [
+        "dataset_id",
+        "task_id"
+      ],
+      "when_batch_scoped": [
+        "batch_id"
+      ]
+    },
+    "applies_to": {
+      "yaml_or_json_artifacts": [
+        "task_state",
+        "task_topology",
+        "task_rules",
+        "task_requirements",
+        "artifact_manifest",
+        "app_adapter",
+        "validation_report",
+        "run_state_lock",
+        "reject_manifest",
+        "restore_manifest"
+      ],
+      "jsonl_artifacts_per_record": [
+        "media_items",
+        "media_events",
+        "app_sync_events",
+        "source_expansion_matrix",
+        "workflow_failure_log",
+        "insights_log",
+        "rule_change_events",
+        "operator_approvals"
+      ]
+    },
+    "does_not_apply_to": [
+      "schema_export_files"
+    ],
+    "rationale": "Lets apps grep any artifact across the filesystem and immediately know which task and dataset it belongs to without resolving file paths.",
+    "validation_checks": [
+      "Every YAML or JSON artifact in applies_to.yaml_or_json_artifacts contains dataset_id and task_id.",
+      "Every JSONL record in applies_to.jsonl_artifacts_per_record contains dataset_id and task_id.",
+      "When the artifact is batch-scoped, batch_id is also present."
+    ]
+  },
+  "assistant_entrypoint_policy": {
+    "rid": "RID-ENTRY-001",
+    "rule": "Every initialized task carries a single canonical entrypoint file at task_root that tells any new assistant what to read, in what order, before changing anything. The entrypoint is a generated markdown artifact regenerated on init and on refresh_state.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "artifact_kind": "start_here",
+    "artifact_id": "ART-START-HERE",
+    "filename_pattern": "{task_id}.start_here.md",
+    "location": "task_root",
+    "required": true,
+    "generated_by": [
+      "init_task",
+      "refresh_state"
+    ],
+    "refresh_trigger": "Whenever task_state changes or whenever validate_task runs.",
+    "rationale": "Operator should not have to point a new model at a dozen files. The new model lands in task_root, opens the one start_here file, and follows it.",
+    "required_content_blocks": [
+      {
+        "block_id": "header",
+        "contents": [
+          "dataset_id",
+          "task_id",
+          "spec_version",
+          "task_root_relative_marker_note",
+          "written_at"
+        ]
+      },
+      {
+        "block_id": "read_in_this_order",
+        "contents": [
+          "task_topology",
+          "task_rules",
+          "task_requirements",
+          "task_state",
+          "artifact_manifest",
+          "validation_report",
+          "run_state_lock",
+          "media_items",
+          "media_events"
+        ],
+        "content_note": "Logical names; resolve through task_topology.yaml per RID-TOPOLOGY-005."
+      },
+      {
+        "block_id": "must_know_rules",
+        "contents": [
+          "task_rules.yaml is self-contained; do not require the parent init spec.",
+          "All paths resolve via task_topology.yaml; never hardcode paths.",
+          "Acquire run_state_lock before writing artifacts; see RID-CONCURRENCY-001.",
+          "Append-only logs follow RID-JSONL-001; in-place updates require lock + temp+rename.",
+          "Validate before changing anything; see validation_report current state.",
+          "Identity and outcome live in task_requirements.yaml; behavior contract lives in task_rules.yaml."
+        ]
+      },
+      {
+        "block_id": "live_status",
+        "contents": [
+          "Latest validation_state from validation_report.",
+          "Active run lock state from run_state_lock.",
+          "Current accepted/raw/pending/rejected counts from task_state.",
+          "Last 3 entries from workflow_failure_log if any."
+        ]
+      },
+      {
+        "block_id": "handoffs_pointer",
+        "contents": [
+          "Look in handoffs/ for any handoff_message left by a prior assistant. Optional. Missing handoffs are not a failure."
+        ]
+      },
+      {
+        "block_id": "optional_repo_pointers",
+        "contents": [
+          "If task_state.repo_pointers is populated, list those paths as informational reads outside the task contract."
+        ],
+        "content_note": "Operator-configured; never required; never validated."
+      }
+    ],
+    "validation_checks": [
+      "start_here file exists at task_root with the expected filename per RID-ARTFILE-001.",
+      "start_here references no_context_handoff_contract from task_rules.",
+      "start_here lists each required logical name from required_content_blocks.read_in_this_order."
+    ]
+  },
+  "handoff_policy": {
+    "rid": "RID-HANDOFF-001",
+    "rule": "Operators may switch between assistants at any time. When they do, the prior assistant should leave a handoff_message in handoffs/. Handoffs are nice to have, never required. Missing handoffs are not a validation failure; the rest of the artifact set already carries enough state to onboard a new assistant.",
+    "embedded_after_init_in": [],
+    "embedding_rationale": "Intentionally NOT embedded as a required fixed rule. Operators routinely switch assistants only after work is already lost or stalled; making handoffs mandatory would generate noise without value.",
+    "artifact_kind": "handoff_message",
+    "artifact_id": "ART-HANDOFF-MESSAGE",
+    "filename_pattern": "{task_id}.handoff.{iso_timestamp_compact}.md",
+    "iso_timestamp_compact_format": "YYYY-MM-DDTHH-MM-SSZ",
+    "iso_timestamp_compact_note": "Replace colons in RFC 3339 UTC timestamp with hyphens for filesystem safety; preserve the trailing Z.",
+    "iso_timestamp_compact_example": "2026-05-05T13-24-55Z",
+    "location": "handoffs/",
+    "required": false,
+    "may_be_authored_by": [
+      "assistant",
+      "operator"
+    ],
+    "validation_behavior": {
+      "missing_handoffs_action": "ignore",
+      "parse_error_action": "warn",
+      "schema_violation_action": "warn",
+      "note": "Handoffs never block validation. Bad handoffs only emit warnings, not errors."
+    },
+    "recommended_when": [
+      "Operator is about to switch the active assistant.",
+      "Assistant has finished a meaningful chunk of work and wants to leave a breadcrumb for whoever picks up next.",
+      "Assistant is hitting a known dead end and wants to warn the next assistant."
+    ],
+    "required_content_blocks": [
+      {
+        "block_id": "header",
+        "contents": [
+          "artifact_kind",
+          "artifact_id",
+          "artifact_handle",
+          "dataset_id",
+          "task_id",
+          "handoff_id",
+          "written_at",
+          "written_by",
+          "intended_for"
+        ]
+      },
+      {
+        "block_id": "summary",
+        "contents": [
+          "One or two sentences."
+        ]
+      },
+      {
+        "block_id": "where_i_left_off",
+        "contents": [
+          "Free text. What state the task is in at the moment of handoff."
+        ]
+      },
+      {
+        "block_id": "next_action_recommended",
+        "contents": [
+          "Free text. What the next assistant should probably do next."
+        ]
+      },
+      {
+        "block_id": "watch_out_for",
+        "contents": [
+          "List of gotchas. Optional."
+        ]
+      },
+      {
+        "block_id": "references",
+        "contents": [
+          "List of artifact handles or relative paths the next assistant should look at first. Optional."
+        ]
+      },
+      {
+        "block_id": "notes",
+        "contents": [
+          "Free text catchall. Optional."
+        ]
+      }
+    ],
+    "validation_checks": [
+      "handoffs/ folder exists if the start_here points at it; folder may be empty.",
+      "Any file in handoffs/ matching the filename_pattern is parseable as the handoff_message schema; otherwise emit a warning."
+    ]
+  },
+  "topology_authority_policy": {
+    "rid": "RID-TOPOLOGY-001",
+    "rule": "task_topology.yaml is the single source of truth for every artifact and folder path inside the task_root. Tools must resolve all paths by reading task_topology.yaml at startup; hardcoded paths in tool code are a violation.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "rules": [
+      {
+        "rid": "RID-TOPOLOGY-001",
+        "text": "task_topology.yaml is the single source of truth for in-task paths."
+      },
+      {
+        "rid": "RID-TOPOLOGY-002",
+        "text": "Any artifact creation, rename, move, or deletion must update task_topology.yaml in the same locked write transaction. Filesystem state and task_topology.yaml must never disagree."
+      },
+      {
+        "rid": "RID-TOPOLOGY-003",
+        "text": "validate_task must verify that every entry in task_topology.yaml.files exists at the declared path and every entry in task_topology.yaml.folders exists. Mismatch sets validation_state = blocked_state_mismatch."
+      },
+      {
+        "rid": "RID-TOPOLOGY-004",
+        "text": "task_topology.yaml, task_state.yaml, task_rules.yaml, and task_requirements.yaml live at the task_root and cannot be relocated. Their entries in task_topology.yaml are immutable after init."
+      },
+      {
+        "rid": "RID-TOPOLOGY-005",
+        "text": "required_artifacts, artifact_manifest.yaml, and tool_contracts inputs and outputs must reference logical names (for example media_items, app_sync_events) that resolve through task_topology.yaml, not literal paths."
+      }
+    ],
+    "resolution_protocol": [
+      "Tool starts up and reads task_topology.yaml from task_root.",
+      "Tool builds an in-memory map from logical name to relative path.",
+      "Tool resolves every artifact reference through that map for the duration of the run.",
+      "Tool refuses to operate when task_topology.yaml is missing, unparsable, or inconsistent with the filesystem."
+    ],
+    "validation_checks": [
+      "Every required logical name in artifact_manifest.yaml has a corresponding entry in task_topology.yaml.files.",
+      "Every entry in task_topology.yaml.files exists on disk relative to task_root.",
+      "Every entry in task_topology.yaml.folders exists on disk relative to task_root.",
+      "No tool input or output uses a literal path that is not also present in task_topology.yaml."
+    ]
+  },
+  "cross_task_registry": {
+    "rid": "RID-REGISTRY-001",
+    "rule": "A cross-task registry catalogs every initialized task across a configured scan root so apps can discover, group, and join artifacts without filesystem walks. The registry is generated, never authoritative; task_root contents remain the source of truth.",
+    "registry_root_resolution": "Operator chooses a registry_root directory above one or more operator workspace folders. The registry tool walks scan_roots, identifies task_root subfolders by matching the task_id pattern, parses each task's task_state.yaml and artifact_manifest.yaml, and rebuilds the registry.",
+    "registry_layout": [
+      {
+        "path": "registry.yaml",
+        "kind": "registry_index",
+        "authoritative": false
+      },
+      {
+        "path": "tasks.jsonl",
+        "kind": "registry_tasks",
+        "authoritative": false
+      },
+      {
+        "path": "artifacts.jsonl",
+        "kind": "registry_artifacts",
+        "authoritative": false
+      },
+      {
+        "path": "subjects.jsonl",
+        "kind": "registry_subjects",
+        "authoritative": false,
+        "optional": true
+      }
+    ],
+    "registry_index_schema": {
+      "rid": "RID-REGISTRY-002",
+      "fields": [
+        "schema_version",
+        "spec_version",
+        "registry_id",
+        "generated_at",
+        "generator",
+        "scan_roots",
+        "tasks_count",
+        "artifacts_count",
+        "freshness_threshold_seconds"
+      ],
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.17",
+        "registry_id": "{{UUIDV7}}",
+        "generated_at": "{{ISO_TIMESTAMP}}",
+        "generator": "image_sourcing_registry_refresher",
+        "scan_roots": [
+          "{{REGISTRY_RELATIVE_SCAN_ROOT}}"
+        ],
+        "tasks_count": 0,
+        "artifacts_count": 0,
+        "freshness_threshold_seconds": 3600
+      }
+    },
+    "registry_task_record": {
+      "rid": "RID-REGISTRY-003",
+      "required_fields": [
+        "task_id",
+        "dataset_id",
+        "project_code",
+        "spec_version",
+        "task_root",
+        "operator_workspace_root",
+        "status",
+        "accepted_count",
+        "target_subject",
+        "last_seen_at",
+        "validation_state",
+        "is_legacy"
+      ],
+      "skeleton_record": {
+        "task_id": "{{TASK_ID}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "project_code": "cwb_isrc",
+        "spec_version": "v00.17",
+        "task_root": "{{REGISTRY_RELATIVE_PATH_TO_TASK_ROOT}}",
+        "operator_workspace_root": "{{REGISTRY_RELATIVE_PATH_TO_WORKSPACE_ROOT}}",
+        "status": "in_progress",
+        "accepted_count": 0,
+        "target_subject": null,
+        "last_seen_at": "{{ISO_TIMESTAMP}}",
+        "validation_state": "blocked_missing_artifact",
+        "is_legacy": false
+      }
+    },
+    "registry_artifact_record": {
+      "rid": "RID-REGISTRY-004",
+      "required_fields": [
+        "artifact_handle",
+        "task_id",
+        "dataset_id",
+        "artifact_kind",
+        "artifact_id",
+        "format",
+        "path",
+        "sha256",
+        "last_modified_at"
+      ],
+      "skeleton_record": {
+        "artifact_handle": "{{TASK_ID}}/{{ARTIFACT_KIND}}",
+        "task_id": "{{TASK_ID}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "artifact_kind": "media_items",
+        "artifact_id": "ART-MEDIA-ITEMS",
+        "format": "jsonl",
+        "path": "{{REGISTRY_RELATIVE_PATH_TO_ARTIFACT}}",
+        "sha256": "{{SHA256_OF_ARTIFACT_FILE}}",
+        "last_modified_at": "{{ISO_TIMESTAMP}}"
+      }
+    },
+    "registry_subject_record": {
+      "rid": "RID-REGISTRY-005",
+      "required_fields": [
+        "subject_slug",
+        "task_ids",
+        "last_seen_at"
+      ],
+      "skeleton_record": {
+        "subject_slug": "{{SUBJECT_SLUG}}",
+        "task_ids": [],
+        "last_seen_at": "{{ISO_TIMESTAMP}}"
+      }
+    },
+    "primary_key_policy": {
+      "rid": "RID-REGISTRY-006",
+      "rule": "artifact_handle is the primary key in artifacts.jsonl. task_id is the primary key in tasks.jsonl. subject_slug is the primary key in subjects.jsonl. Apps must use these keys for cross-task joins, never filenames or paths."
+    },
+    "refresh_protocol": {
+      "rid": "RID-REGISTRY-007",
+      "mode": "pull",
+      "rule": "The registry refresher walks scan_roots, identifies task_root candidates by matching the task_id naming convention, opens each candidate's task_state.yaml plus artifact_manifest.yaml, and rebuilds the registry files using temp-then-rename atomic writes.",
+      "legacy_task_handling": "Folders that look like task_root candidates but have no parseable task_state.yaml or whose spec_version is not in legacy_compatible_spec_versions are recorded with is_legacy = true and validation_state = blocked_missing_artifact. They are visible to apps but not validated.",
+      "legacy_compatible_spec_versions": [
+        "v00.17"
+      ]
+    },
+    "staleness_policy": {
+      "rid": "RID-REGISTRY-008",
+      "rule": "Apps treat the registry as a cache. If now() minus registry.yaml.generated_at exceeds freshness_threshold_seconds, apps must trigger a refresh before relying on registry contents."
+    },
+    "registry_owns_only_registry_files": "The registry never writes inside any task_root. The registry never substitutes for task_topology.yaml. task_topology.yaml is in-task; the registry is cross-task.",
+    "registry_validation_checks": [
+      "Every record in artifacts.jsonl has a corresponding task_id in tasks.jsonl.",
+      "artifact_handle is unique across artifacts.jsonl.",
+      "task_id is unique across tasks.jsonl.",
+      "registry.yaml.tasks_count equals the count of records in tasks.jsonl.",
+      "registry.yaml.artifacts_count equals the count of records in artifacts.jsonl."
+    ]
+  },
+  "concurrency_protocol": {
+    "rid": "RID-CONCURRENCY-001",
+    "rule": "Every tool that writes any artifact must coordinate through run_state.lock.json so concurrent runs cannot corrupt the artifact set.",
+    "lock_artifact": "run_state.lock.json",
+    "acquisition": [
+      "Open run_state.lock.json with create-new-exclusive semantics (POSIX O_CREAT|O_EXCL or equivalent on Windows). If creation fails because the file exists, treat the lock as held and follow the stale-lock procedure before retrying.",
+      "Write the full lock skeleton in a single write call before performing any other artifact write.",
+      "Refresh last_heartbeat_at on a fixed cadence while the lock is held."
+    ],
+    "release": [
+      "Set active to false, populate finished_at and exit_code, then write the file in a single replacement using temp-then-rename."
+    ],
+    "heartbeat": {
+      "cadence_seconds": 15,
+      "freshness_threshold_seconds": 60,
+      "stale_when": "now() minus last_heartbeat_at exceeds freshness_threshold_seconds."
+    },
+    "stale_lock_recovery": [
+      "Verify the recorded pid is no longer alive on this host.",
+      "Append a workflow_failure_log.jsonl entry with failure_type = stale_lock_recovered.",
+      "Reset run_state.lock.json to the inactive skeleton via temp-then-rename.",
+      "Then attempt acquisition again."
+    ],
+    "jsonl_in_place_update_rule": "Updating an existing record in any JSONL file requires the lock plus a temp-then-rename whole-file rewrite. Pure appends of new records do not require the lock but must follow the JSONL append rules.",
+    "yaml_or_json_update_rule": "Every YAML and JSON artifact write must be temp-then-rename atomic and must hold the lock for the duration of the write.",
+    "forbidden": [
+      "Partial in-place edits of media_items.jsonl, app_sync_events.jsonl, or any other JSONL file.",
+      "Holding the lock across operator review cycles or interactive prompts.",
+      "Writing run_state.lock.json with append semantics."
+    ]
+  },
+  "jsonl_append_policy": {
+    "rid": "RID-JSONL-001",
+    "rule": "Append-only JSONL artifacts must be safely concatenated, parseable line by line, and resilient to partial writes.",
+    "file_encoding": "utf-8",
+    "byte_order_mark_allowed": false,
+    "line_ending": "\\n",
+    "trailing_newline_required": true,
+    "record_serialization": [
+      "Each record is exactly one JSON object on a single line with no embedded newlines and no pretty printing.",
+      "The record must be terminated by a single line-feed character.",
+      "Compose the full bytes of the record plus terminator in memory and append in one write call."
+    ],
+    "read_tolerance": [
+      "Readers must process the file line by line and must not abort on a single bad line.",
+      "Bad lines must be quarantined to runs/jsonl_quarantine_<artifact>.jsonl and a workflow_failure_log.jsonl entry must be appended with failure_type = jsonl_bad_line."
+    ],
+    "validation_checks": [
+      "No line is empty except an optional final newline.",
+      "Every line parses as a JSON object.",
+      "Every record contains the required fields for its schema."
+    ],
+    "applies_to": [
+      "media_items.jsonl",
+      "media_events.jsonl",
+      "app_sync_events.jsonl",
+      "source_expansion_matrix.jsonl",
+      "workflow_failure_log.jsonl",
+      "insights_log.jsonl",
+      "rule_change_events.jsonl",
+      "operator_approvals.jsonl"
+    ]
+  },
+  "app_import_contract": {
+    "rid": "RID-ARTIFACT-001",
+    "rule": "Every authoritative artifact must be mechanically importable without interpreting prose.",
+    "authoritative_formats": {
+      "state": "yaml",
+      "topology": "yaml",
+      "artifact_registry": "yaml",
+      "append_only_events": "jsonl",
+      "current_media_table": "jsonl",
+      "run_lock": "json",
+      "reject_restore_manifest": "json"
+    },
+    "discouraged_formats": {
+      "csv": {
+        "reason": "CSV is fragile for URLs, source titles, nested evidence, and app synchronization metadata.",
+        "allowed_only_for_export_views": true
+      }
+    },
+    "markdown_policy": {
+      "allowed": true,
+      "authoritative": false,
+      "role": "generated_human_view"
+    }
+  },
+  "target_apps": {
+    "primary_candidates": [
+      {
+        "app_id": "castkit_codex",
+        "status": "likely_target",
+        "role": "image_database_review_sort_accept_reject_cross_project_reuse",
+        "adapter_status": "not_defined_yet"
+      },
+      {
+        "app_id": "openrepose",
+        "status": "conditional_target",
+        "role": "openpose_artifact_and_comfyui_workflow_related_intake",
+        "adapter_status": "not_defined_yet"
+      }
+    ],
+    "rule": "This spec defines a neutral mirrored intake. App-specific database import/export adapters are separate artifacts."
+  },
+  "task_self_containment_policy": {
+    "rid": "RID-TASK-SELF-CONTAINED-001",
+    "rule": "Every initialized task must carry enough fixed instructions for a no-context assistant to operate without reading this init spec or chat history.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "parent_init_spec_required_for_task_operation": false,
+    "task_fixed_rules_authoritative": true,
+    "required_no_context_startup_reads": [
+      "task_rules",
+      "task_state",
+      "task_topology",
+      "task_requirements",
+      "artifact_manifest",
+      "media_items",
+      "media_events"
+    ],
+    "required_no_context_startup_reads_resolution": "These are logical names; resolve through task_topology.yaml per RID-TOPOLOGY-005.",
+    "required_embedded_policy_rids": [
+      "RID-PURPOSE-001",
+      "RID-FILENAME-001",
+      "RID-APP-SYNC-001",
+      "RID-CONTRACT-001",
+      "RID-CONTRACT-002",
+      "RID-WORKSPACE-001",
+      "RID-ASSISTANT-WORKSPACE-001",
+      "RID-GOVERNANCE-MAINTENANCE-001",
+      "RID-TOPOLOGY-001",
+      "RID-TOPOLOGY-002",
+      "RID-TOPOLOGY-003",
+      "RID-IDSTAMP-001",
+      "RID-ARTKIND-001",
+      "RID-HANDLE-001",
+      "RID-ARTFILE-001",
+      "RID-REQ-001",
+      "RID-ENTRY-001"
+    ]
+  },
+  "downstream_purpose_policy": {
+    "rid": "RID-PURPOSE-001",
+    "rule": "Every initialized task must keep downstream use intentionally unspecified.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "permitted_task_scope_terms": [
+      "image_sourcing",
+      "intake",
+      "visual_review",
+      "requirement_review",
+      "validation",
+      "app_sync",
+      "handoff"
+    ],
+    "forbidden_task_scope_pattern": "Any wording that names, implies, or optimizes for a specific downstream build, model, or production pipeline.",
+    "task_artifact_validation": "Fail validation when task_rules.yaml omits RID-PURPOSE-001 or when fixed embedded rules state a specific downstream use."
+  },
+  "contract_layers": {
+    "fixed_contract": {
+      "rid_prefix": "RID-CONTRACT",
+      "change_policy": "operator_approval_required",
+      "applies_at_all_times_after_init": true,
+      "rule": "Fixed contract requirements cannot be changed during a task without an operator approval event.",
+      "invariants": [
+        {
+          "rid": "RID-CONTRACT-001",
+          "text": "All required artifacts must exist after init."
+        },
+        {
+          "rid": "RID-CONTRACT-002",
+          "text": "All required artifacts must remain parseable at all times."
+        },
+        {
+          "rid": "RID-CONTRACT-003",
+          "text": "All lane moves must append media_events.jsonl."
+        },
+        {
+          "rid": "RID-CONTRACT-004",
+          "text": "media_items.jsonl must reflect current lane and current path."
+        },
+        {
+          "rid": "RID-CONTRACT-005",
+          "text": "Accepted count must be derived from media_items.jsonl plus intake/accepted filesystem verification."
+        },
+        {
+          "rid": "RID-CONTRACT-006",
+          "text": "No rule change may rewrite history; rule changes append rule_change_events.jsonl."
+        },
+        {
+          "rid": "RID-CONTRACT-007",
+          "text": "Missing, stale, or unparsable artifacts block continuation until validation is restored."
+        },
+        {
+          "rid": "RID-CONTRACT-008",
+          "text": "Handoff requires validation first."
+        },
+        {
+          "rid": "RID-CONTRACT-009",
+          "text": "Dataset, task, and batch IDs must remain stable after init."
+        },
+        {
+          "rid": "RID-CONTRACT-010",
+          "text": "App sync event history is app-owned and must not be manually edited by assistants."
+        },
+        {
+          "rid": "RID-CONTRACT-011",
+          "text": "Fixed contract rules must stay focused on image sourcing, intake, review, validation, and app sync."
+        },
+        {
+          "rid": "RID-CONTRACT-012",
+          "text": "Every initialized task_rules.yaml must embed RID-PURPOSE-001 and keep downstream use intentionally unspecified."
+        },
+        {
+          "rid": "RID-CONTRACT-013",
+          "text": "Canonical media filenames must follow RID-FILENAME-001."
+        },
+        {
+          "rid": "RID-CONTRACT-014",
+          "text": "Initialized task_rules.yaml must be self-contained for no-context assistants."
+        }
+      ]
+    },
+    "task_specific_rules": {
+      "artifact": "task_rules.yaml",
+      "change_policy": "append_only_rule_event",
+      "event_log": "rule_change_events.jsonl",
+      "approval_log": "operator_approvals.jsonl",
+      "rule": "Task-specific rules may change during lifecycle only through append-only rule change events.",
+      "examples": [
+        "identity_notes",
+        "source_preferences",
+        "excluded_people_or_eras",
+        "visual_tolerance_adjustments",
+        "app_sync_preferences"
+      ]
+    },
+    "runtime_state": {
+      "change_policy": "tool_maintained",
+      "authoritative_artifacts": [
+        "task_state.yaml",
+        "media_items.jsonl",
+        "media_events.jsonl",
+        "run_state.lock.json",
+        "validation_report.json"
+      ]
+    }
+  },
+  "canonical_ids": {
+    "rid": "RID-ID-001",
+    "rule": "Every initialized task must define stable dataset_id, task_id, and batch_id values that survive folder renames and app sync.",
+    "default_project_code": "cwb_isrc",
+    "id_fields": {
+      "project_code": {
+        "format": "^[a-z0-9_]{3,24}$",
+        "default": "cwb_isrc",
+        "scope": "neutral project family abbreviation",
+        "mutable": false
+      },
+      "dataset_id": {
+        "format": "dataset_{{PROJECT_CODE}}_{{DATASET_ORDINAL_4}}_{{ULID}}",
+        "scope": "whole image sourcing dataset",
+        "mutable": false
+      },
+      "task_id": {
+        "format": "task_{{PROJECT_CODE}}_{{TASK_ORDINAL_4}}_{{ULID}}",
+        "scope": "one sourcing task lifecycle",
+        "mutable": false
+      },
+      "batch_id": {
+        "format": "batch_{{PROJECT_CODE}}_{{TASK_ORDINAL_4}}_{{BATCH_ORDINAL_4}}_{{ULID}}",
+        "scope": "current import/review batch",
+        "mutable": false
+      }
+    },
+    "required_in": [
+      "task_state.yaml",
+      "media_items.jsonl",
+      "media_events.jsonl",
+      "source_expansion_matrix.jsonl",
+      "workflow_failure_log.jsonl",
+      "insights_log.jsonl",
+      "app_sync_events.jsonl"
+    ]
+  },
+  "filename_policy": {
+    "rid": "RID-FILENAME-001",
+    "rule": "Canonical media filenames must be neutral, mechanically parseable, and based on the full task_id.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "canonical_pattern": "{task_id}.b{batch_ordinal:04d}.i{item_sequence:07d}.s{sha256_prefix}.{ext}",
+    "example": "task_cwb_isrc_0006_01K9Z8Y7X6W5V4T3S2R1Q0P9N8.b0001.i0000024.s8f3a9c1d.jpg",
+    "task_id_allowed_pattern": "^[a-z0-9_]+$",
+    "segment_separator": ".",
+    "segment_order": [
+      "task_id",
+      "batch_ordinal",
+      "item_sequence",
+      "sha256_prefix",
+      "extension"
+    ],
+    "segment_patterns": {
+      "task_id": "^task_[a-z0-9_]{3,24}_[0-9]{4}_[A-HJKMNP-TV-Z0-9]{26}$",
+      "batch_ordinal": "^b[0-9]{4}$",
+      "item_sequence": "^i[0-9]{7}$",
+      "sha256_prefix": "^[a-f0-9]{8}$",
+      "sha256_segment": "^s[a-f0-9]{8}$",
+      "extension": "^[a-z0-9]{2,5}$"
+    },
+    "sha256_prefix_length": 8,
+    "parse_strategy": "Remove the final extension, split the remaining stem on dots, then parse task_id, b####, i#######, and s######## in order.",
+    "rename_policy": {
+      "preserve_original_filename_in": "media_items.jsonl",
+      "canonical_filename_mutable": false,
+      "lane_moves_must_preserve_filename": true
+    },
+    "forbidden_filename_content": [
+      "identity_names",
+      "group_names",
+      "source_names",
+      "downstream_purpose_terms"
+    ]
+  },
+  "json_schema_exports": {
+    "rid": "RID-SCHEMA-001",
+    "rule": "Apps may consume generated JSON Schema files for validation. YAML spec remains canonical.",
+    "dialect": "https://json-schema.org/draft/2020-12/schema",
+    "schema_id_base": "https://comfyui-workbench.local/schemas/image_sourcing_init_spec/v00.19/",
+    "generated_directory": "schemas",
+    "generated_files": [
+      {
+        "path": "schemas/media_item.schema.json",
+        "schema_ref": "media_item_schema"
+      },
+      {
+        "path": "schemas/media_event.schema.json",
+        "schema_ref": "media_event_schema"
+      },
+      {
+        "path": "schemas/task_state.schema.json",
+        "schema_ref": "task_state_schema"
+      },
+      {
+        "path": "schemas/task_topology.schema.json",
+        "schema_ref": "task_topology_schema"
+      },
+      {
+        "path": "schemas/artifact_manifest.schema.json",
+        "schema_ref": "artifact_manifest_schema"
+      },
+      {
+        "path": "schemas/app_sync_event.schema.json",
+        "schema_ref": "app_sync_event_schema"
+      },
+      {
+        "path": "schemas/app_adapter.schema.json",
+        "schema_ref": "app_adapter_schema"
+      },
+    {
+      "path": "schemas/task_rules.schema.json",
+      "schema_ref": "task_rules_schema"
+    },
+    {
+      "path": "schemas/task_requirements.schema.json",
+      "schema_ref": "task_requirements_schema"
+    },
+    {
+      "path": "schemas/workflow_failure.schema.json",
+      "schema_ref": "workflow_failure_schema"
+      },
+      {
+        "path": "schemas/insight.schema.json",
+        "schema_ref": "insight_schema"
+      },
+      {
+        "path": "schemas/source_expansion_event.schema.json",
+        "schema_ref": "source_expansion_event_schema"
+      },
+      {
+        "path": "schemas/reject_manifest.schema.json",
+        "schema_ref": "reject_manifest_schema"
+      },
+      {
+        "path": "schemas/restore_manifest.schema.json",
+        "schema_ref": "restore_manifest_schema"
+      },
+      {
+        "path": "schemas/rule_change_event.schema.json",
+        "schema_ref": "rule_change_event_schema"
+      },
+      {
+        "path": "schemas/operator_approval.schema.json",
+        "schema_ref": "operator_approval_schema"
+      },
+      {
+        "path": "schemas/validation_report.schema.json",
+        "schema_ref": "validation_report_schema"
+      },
+      {
+        "path": "schemas/run_state_lock.schema.json",
+        "schema_ref": "run_state_lock_schema"
+      },
+      {
+        "path": "schemas/start_here.schema.json",
+        "schema_ref": "start_here_schema"
+      },
+      {
+        "path": "schemas/handoff_message.schema.json",
+        "schema_ref": "handoff_message_schema"
+      }
+    ]
+  },
+  "duplicate_policy": {
+    "rid": "RID-DUPE-001",
+    "exact_duplicate": {
+      "field": "sha256",
+      "action": "move_to_intake_rejected_duplicate",
+      "event_type": "duplicate_exact_reject"
+    },
+    "near_duplicate": {
+      "field": "phash",
+      "action": "pending_or_rejected_duplicate_after_visual_check",
+      "threshold_policy": "task_rules_yaml"
+    },
+    "variant_allowance": {
+      "rule": "Near-duplicate variants may be kept only when task_rules.yaml permits them and media_events.jsonl records the reason."
+    },
+    "required_fields": [
+      "sha256",
+      "phash",
+      "duplicate_of_item_id",
+      "duplicate_decision"
+    ]
+  },
+  "source_provenance": {
+    "rid": "RID-SOURCE-003",
+    "rule": "Every media item must carry structured provenance, even when values are unknown.",
+    "required_source_fields": [
+      "source_url",
+      "source_page_url",
+      "source_title",
+      "source_family",
+      "collector_run_id",
+      "downloaded_at",
+      "source_license_status",
+      "source_access_method"
+    ],
+    "unknown_policy": "Use null or unknown enum values; do not omit fields.",
+    "enums": {
+      "source_family": [
+        "news_outlet",
+        "photo_agency",
+        "fan_site",
+        "social_media",
+        "video_capture",
+        "search_engine_image",
+        "manual_drop",
+        "generated_diagnostic",
+        "other",
+        "unknown"
+      ],
+      "source_license_status": [
+        "public_domain",
+        "creative_commons",
+        "editorial_use",
+        "press_release",
+        "rights_managed",
+        "unknown",
+        "prohibited"
+      ],
+      "source_access_method": [
+        "direct_url",
+        "paginated_listing",
+        "search_query",
+        "api_pull",
+        "operator_upload",
+        "mirrored_archive",
+        "unknown"
+      ]
+    }
+  },
+  "sensitive_path_policy": {
+    "rid": "RID-SEC-001",
+    "rule": "Task artifacts must not contain secrets or sensitive local credentials.",
+    "forbidden_artifact_content": [
+      "api_tokens",
+      "cookies",
+      "browser_profiles",
+      "login_dumps",
+      "session_headers",
+      "password_material"
+    ],
+    "allowed_reference_style": "Reference secret-dependent steps by blocker note or operator action, not by storing the secret."
+  },
+  "lesson_policy": {
+    "rid": "RID-LESSON-001",
+    "rule": "Lessons promoted into this spec must remain heuristic, reusable, target-agnostic, and idol-agnostic.",
+    "destination_for_reusable_lessons": "insights_log.jsonl",
+    "disallowed_in_promoted_lessons": [
+      "target_specific_identity_claims",
+      "idol_names",
+      "group_names",
+      "one_off_source_links_without_generalized_pattern"
+    ],
+    "task_specific_observations_destination": "insights_log.jsonl",
+    "promotion_requirement": "A task observation may become a spec lesson only after it is rewritten as a reusable heuristic with evidence references.",
+    "description": "In-task storage of reusable observations only. Cross-task lesson promotion and aggregation is out of scope for this init spec; a separate collector tool or sibling spec owns that flow.",
+    "cross_task_export_status": "deferred_to_separate_spec_or_tool"
+  },
+  "task_requirements_policy": {
+    "rid": "RID-REQ-001",
+    "rule": "task_requirements.yaml is the outcome spec for the task; it defines what is being delivered, who the subject is, and which inclusion and exclusion criteria define a passing requirement_result. It is distinct from task_rules.yaml, which defines how to behave.",
+    "embedded_after_init_in": [
+      "task_rules.yaml"
+    ],
+    "separation_from_task_rules": {
+      "task_rules": "Behavior contract: fixed embedded rules, drift hash, runtime preferences, dupe thresholds, app sync mode.",
+      "task_requirements": "Outcome contract: deliverable target, identity, inclusion, exclusion, diversity targets, pass criteria for requirement_result."
+    },
+    "identity_relocation": {
+      "moved_from": "task_rules.active_rules.identity",
+      "moved_to": "task_requirements.identity",
+      "fields": [
+        "target_subject",
+        "group",
+        "other_members",
+        "same_name_people",
+        "excluded_eras"
+      ]
+    },
+    "required_startup_reads_addition": {
+      "add_to_task_rules": "task_requirements.yaml",
+      "rule": "task_requirements.yaml joins the no-context startup reads alongside task_rules.yaml, task_state.yaml, task_topology.yaml, artifact_manifest.yaml, media_items.jsonl, and media_events.jsonl."
+    },
+    "requirement_result_evaluation": {
+      "rule": "media_items.jsonl.requirement_result is computed by evaluating requirement_check_definition against the item. visual_result remains a separate human or model judgement on visual quality.",
+      "pass_when_all": [
+        "Item identity matches identity.target_subject.",
+        "Item does not match any excluded entry under exclusion_criteria.",
+        "If diversity_targets is defined, accepting this item does not push any bucket past its diversity_overflow_factor."
+      ]
+    },
+    "validation_checks": [
+      "task_requirements.yaml exists at task_root.",
+      "task_rules.yaml.active_rules no longer contains identity fields after init.",
+      "task_requirements.yaml header carries dataset_id and task_id per RID-IDSTAMP-001."
+    ]
+  },
+  "quality_gate": {
+    "gate_version": "gate_v1_short1080_face90_visible_identity",
+    "accepted_count_algorithm": {
+      "rid": "RID-GATE-007",
+      "count": "items where current_lane == accepted, visual_result == pass, requirement_result == pass, gate_result == pass, file_exists == true, hash_verified == true, and min(width,height) >= 1080"
+    },
+    "requirements": [
+      {
+        "rid": "RID-GATE-001",
+        "field": "min_short_side",
+        "operator": ">=",
+        "value": 1080
+      },
+      {
+        "rid": "RID-GATE-002",
+        "field": "min_face_side",
+        "operator": ">=",
+        "value": 90
+      },
+      {
+        "rid": "RID-GATE-003",
+        "field": "face_visibility",
+        "operator": ">=",
+        "value": 0.7,
+        "exception": "genuine_side_profile"
+      },
+      {
+        "rid": "RID-GATE-004",
+        "field": "identity",
+        "operator": "==",
+        "value": "target"
+      },
+      {
+        "rid": "RID-GATE-005",
+        "field": "mask_covering_nose_or_mouth",
+        "operator": "==",
+        "value": false
+      },
+      {
+        "rid": "RID-GATE-006",
+        "field": "sunglasses_or_tinted_eye_lenses",
+        "operator": "==",
+        "value": false
+      }
+    ]
+  },
+  "lane_semantics": {
+    "raw": {
+      "rid": "RID-LANE-RAW-001",
+      "path": "intake/raw",
+      "app_state": "raw",
+      "meaning": "Unreviewed image acquired by scraper, import, or manual drop. No visual acceptance decision yet.",
+      "counts_toward_target": false
+    },
+    "accepted": {
+      "rid": "RID-LANE-ACCEPTED-001",
+      "path": "intake/accepted",
+      "app_state": "accepted",
+      "meaning": "Assistant or operator visually inspected the image and it passed both visual criteria and active task requirements.",
+      "counts_toward_target": true
+    },
+    "pending": {
+      "rid": "RID-LANE-PENDING-001",
+      "path": "intake/pending",
+      "app_state": "pending",
+      "meaning": "Assistant is unsure after inspection; needs operator or later review. This is not raw.",
+      "counts_toward_target": false
+    },
+    "rejected": {
+      "rid": "RID-LANE-REJECTED-001",
+      "path": "intake/rejected",
+      "app_state": "rejected",
+      "meaning": "Obvious reject after failing visual inspection or task requirement tolerance.",
+      "counts_toward_target": false,
+      "reason_lanes": {
+        "identity": "intake/rejected/identity",
+        "quality": "intake/rejected/quality",
+        "corrupt": "intake/rejected/corrupt",
+        "duplicate": "intake/rejected/duplicate",
+        "source_mismatch": "intake/rejected/source_mismatch",
+        "below_gate": "intake/rejected/below_gate"
+      }
+    },
+    "diagnostic": {
+      "path": "intake/diagnostic",
+      "app_state": "diagnostic",
+      "meaning": "Debug, smoke-test, scraper-test, contact, or non-candidate evidence.",
+      "counts_toward_target": false
+    },
+    "thumbnails": {
+      "path": "intake/thumbnails",
+      "app_state": "derived_preview",
+      "meaning": "Generated previews for apps or review contact sheets.",
+      "counts_toward_target": false
+    }
+  },
+  "legal_lane_transitions": [
+    {
+      "from": "raw",
+      "to": "accepted",
+      "requires_event": "accept_after_visual_and_requirement_pass"
+    },
+    {
+      "from": "raw",
+      "to": "pending",
+      "requires_event": "visual_unsure"
+    },
+    {
+      "from": "raw",
+      "to": "rejected",
+      "requires_event": "visual_reject_or_auto_gate_fail"
+    },
+    {
+      "from": "raw",
+      "to": "diagnostic",
+      "requires_event": "classified_as_diagnostic"
+    },
+    {
+      "from": "pending",
+      "to": "accepted",
+      "requires_event": "later_accept_after_visual_and_requirement_pass"
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "requires_event": "later_visual_reject"
+    },
+    {
+      "from": "accepted",
+      "to": "rejected",
+      "requires_event": "correction_reject"
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "requires_event": "restore_manifest"
+    },
+    {
+      "from": "diagnostic",
+      "to": "rejected",
+      "requires_event": "diagnostic_disposed"
+    }
+  ],
+  "folder_topology": {
+    "rule": "All paths are relative to the inner task_root per RID-WORKSPACE-001 and RID-PATH-001.",
+    "required_directories": [
+      "state",
+      "logs",
+      "governance",
+      "app",
+      "schemas",
+      "intake/raw",
+      "intake/accepted",
+      "intake/pending",
+      "intake/rejected",
+      "intake/rejected/identity",
+      "intake/rejected/quality",
+      "intake/rejected/corrupt",
+      "intake/rejected/duplicate",
+      "intake/rejected/source_mismatch",
+      "intake/rejected/below_gate",
+      "intake/diagnostic",
+      "intake/thumbnails",
+      "review/batches",
+      "review/_reference_{{SUBJECT_SLUG}}",
+      "contact_sheets/sheets",
+      "contact_sheets/manifests",
+      "contact_sheets/selections",
+      "handoffs",
+      "runs",
+      "task_tools",
+      "task_tools/scripts",
+      "assistant_workspace",
+      "assistant_workspace/scratch",
+      "assistant_workspace/notes",
+      "assistant_workspace/outputs"
+    ],
+    "artifact_grouping": {
+      "root_keep_at_task_root": {
+        "reason": "Required for no-context startup discovery.",
+        "files": [
+          "task_topology",
+          "task_state",
+          "task_rules",
+          "task_requirements",
+          "start_here"
+        ]
+      },
+      "state": {
+        "directory": "state",
+        "reason": "Current truth that gets rewritten in place.",
+        "files": [
+          "artifact_manifest",
+          "validation_report",
+          "run_state_lock"
+        ]
+      },
+      "logs": {
+        "directory": "logs",
+        "reason": "Append-only event streams about media.",
+        "files": [
+          "media_items",
+          "media_events",
+          "source_expansion_matrix",
+          "workflow_failure_log",
+          "insights_log"
+        ]
+      },
+      "governance": {
+        "directory": "governance",
+        "reason": "Append-only event streams about rules and approvals.",
+        "files": [
+          "rule_change_events",
+          "operator_approvals"
+        ]
+      },
+      "app": {
+        "directory": "app",
+        "reason": "External app integration.",
+        "files": [
+          "app_adapter",
+          "app_sync_events"
+        ]
+      },
+      "runs": {
+        "directory": "runs",
+        "reason": "Per-operation artifacts: reject and restore manifests, command captures, JSONL quarantine outputs."
+      },
+      "task_tools": {
+        "directory": "task_tools",
+        "reason": "Task-local helper tooling. Put reusable assistant-created scripts in task_tools/scripts so they travel with the task."
+      },
+      "assistant_workspace": {
+        "directory": "assistant_workspace",
+        "reason": "Free assistant work area inside task_root for scratch files, notes, temporary manifests, exploratory outputs, and non-authoritative working material. Keep task-specific work here instead of writing beside task_root in the operator workspace."
+      },
+      "handoffs": {
+        "directory": "handoffs",
+        "reason": "Optional handoff_message files left for the next assistant when the operator switches models.",
+        "required": false,
+        "files_pattern": "{task_id}.handoff.{iso_timestamp_compact}.md"
+      }
+    }
+  },
+  "required_artifacts": {
+    "rule": "Path resolution is delegated to task_topology.yaml per RID-TOPOLOGY-005. The logical_name field is the lookup key into task_topology.yaml.files; tools must never hardcode the path values.",
+    "artifacts": [
+      {
+        "id": "ART-TASK-TOPOLOGY",
+        "logical_name": "task_topology",
+        "kind": "task_topology",
+        "format": "yaml",
+        "authoritative_for": [
+          "paths",
+          "folder_topology"
+        ],
+        "schema_ref": "task_topology_schema"
+      },
+      {
+        "id": "ART-TASK-STATE",
+        "logical_name": "task_state",
+        "kind": "task_state",
+        "format": "yaml",
+        "authoritative_for": [
+          "current_status",
+          "counts",
+          "active_gate",
+          "next_action"
+        ],
+        "schema_ref": "task_state_schema"
+      },
+      {
+        "id": "ART-TASK-RULES",
+        "logical_name": "task_rules",
+        "kind": "task_rules",
+        "format": "yaml",
+        "authoritative_for": [
+          "task_specific_rules",
+          "fixed_embedded_rules"
+        ],
+        "schema_ref": "task_rules_schema"
+      },
+      {
+        "id": "ART-TASK-REQUIREMENTS",
+        "logical_name": "task_requirements",
+        "kind": "task_requirements",
+        "format": "yaml",
+        "authoritative_for": [
+          "deliverable",
+          "identity",
+          "inclusion_criteria",
+          "exclusion_criteria",
+          "requirement_check_definition"
+        ],
+        "schema_ref": "task_requirements_schema"
+      },
+      {
+        "id": "ART-ARTIFACT-MANIFEST",
+        "logical_name": "artifact_manifest",
+        "kind": "artifact_manifest",
+        "format": "yaml",
+        "authoritative_for": [
+          "artifact_registry"
+        ],
+        "schema_ref": "artifact_manifest_schema"
+      },
+      {
+        "id": "ART-VALIDATION-REPORT",
+        "logical_name": "validation_report",
+        "kind": "validation_report",
+        "format": "json",
+        "authoritative_for": [
+          "latest_validation_state"
+        ],
+        "schema_ref": "validation_report_schema"
+      },
+      {
+        "id": "ART-RUN-LOCK",
+        "logical_name": "run_state_lock",
+        "kind": "run_state_lock",
+        "format": "json",
+        "authoritative_for": [
+          "active_run"
+        ],
+        "schema_ref": "run_state_lock_schema"
+      },
+      {
+        "id": "ART-MEDIA-ITEMS",
+        "logical_name": "media_items",
+        "kind": "media_items",
+        "format": "jsonl",
+        "authoritative_for": [
+          "current_image_table",
+          "current_lane",
+          "file_identity",
+          "gate_result",
+          "app_sync_state"
+        ],
+        "schema_ref": "media_item_schema"
+      },
+      {
+        "id": "ART-MEDIA-EVENTS",
+        "logical_name": "media_events",
+        "kind": "media_events",
+        "format": "jsonl",
+        "authoritative_for": [
+          "append_only_image_events",
+          "lane_transitions",
+          "review_decisions"
+        ],
+        "schema_ref": "media_event_schema"
+      },
+      {
+        "id": "ART-SOURCE-MATRIX",
+        "logical_name": "source_expansion_matrix",
+        "kind": "source_expansion_matrix",
+        "format": "jsonl",
+        "authoritative_for": [
+          "source_yields",
+          "exhausted_sources"
+        ],
+        "schema_ref": "source_expansion_event_schema"
+      },
+      {
+        "id": "ART-WORKFLOW-FAILURES",
+        "logical_name": "workflow_failure_log",
+        "kind": "workflow_failure_log",
+        "format": "jsonl",
+        "authoritative_for": [
+          "workflow_failures",
+          "blockers"
+        ],
+        "schema_ref": "workflow_failure_schema"
+      },
+      {
+        "id": "ART-INSIGHTS",
+        "logical_name": "insights_log",
+        "kind": "insights_log",
+        "format": "jsonl",
+        "authoritative_for": [
+          "reusable_insights",
+          "spec_improvement_candidates"
+        ],
+        "schema_ref": "insight_schema"
+      },
+      {
+        "id": "ART-RULE-CHANGE-EVENTS",
+        "logical_name": "rule_change_events",
+        "kind": "rule_change_events",
+        "format": "jsonl",
+        "authoritative_for": [
+          "task_rule_change_history"
+        ],
+        "schema_ref": "rule_change_event_schema"
+      },
+      {
+        "id": "ART-OPERATOR-APPROVALS",
+        "logical_name": "operator_approvals",
+        "kind": "operator_approvals",
+        "format": "jsonl",
+        "authoritative_for": [
+          "operator_approval_history"
+        ],
+        "schema_ref": "operator_approval_schema"
+      },
+      {
+        "id": "ART-APP-ADAPTER",
+        "logical_name": "app_adapter",
+        "kind": "app_adapter",
+        "format": "yaml",
+        "authoritative_for": [
+          "external_app_adapter_targets",
+          "app_sync_mapping"
+        ],
+        "schema_ref": "app_adapter_schema"
+      },
+      {
+        "id": "ART-APP-SYNC-EVENTS",
+        "logical_name": "app_sync_events",
+        "kind": "app_sync_events",
+        "format": "jsonl",
+        "owner": "app_or_sync_tool",
+        "manual_assistant_write_allowed": false,
+        "authoritative_for": [
+          "app_sync_history",
+          "external_app_record_links",
+          "import_export_attempts"
+        ],
+        "schema_ref": "app_sync_event_schema"
+      },
+      {
+        "id": "ART-REJECT-MANIFEST-TEMPLATE",
+        "logical_name_pattern": "runs/{{TASK_ID}}.reject_<timestamp>_<reason>.json",
+        "kind": "reject_manifest",
+        "format": "json",
+        "authoritative_for": [
+          "bulk_reject_moves"
+        ],
+        "schema_ref": "reject_manifest_schema",
+        "created_per_operation": true
+      },
+      {
+        "id": "ART-RESTORE-MANIFEST-TEMPLATE",
+        "logical_name_pattern": "runs/{{TASK_ID}}.restore_<timestamp>_<reason>.json",
+        "kind": "restore_manifest",
+        "format": "json",
+        "authoritative_for": [
+          "bulk_restore_moves"
+        ],
+        "schema_ref": "restore_manifest_schema",
+        "created_per_operation": true
+      },
+      {
+        "id": "ART-START-HERE",
+        "logical_name": "start_here",
+        "kind": "start_here",
+        "format": "markdown",
+        "generated": true,
+        "authoritative_for": [
+          "assistant_entrypoint"
+        ],
+        "schema_ref": "start_here_schema"
+      },
+      {
+        "id": "ART-HANDOFF-MESSAGE-TEMPLATE",
+        "logical_name_pattern": "handoffs/{{TASK_ID}}.handoff.{{ISO_TIMESTAMP_COMPACT}}.md",
+        "kind": "handoff_message",
+        "format": "markdown_with_yaml_frontmatter",
+        "authoritative_for": [
+          "optional_assistant_handoff"
+        ],
+        "schema_ref": "handoff_message_schema",
+        "required": false,
+        "created_per_operation": true
+      },
+      {
+        "id": "ART-SCHEMA-EXPORTS",
+        "logical_name": "schemas",
+        "kind": "schema_export_directory",
+        "format": "json_schema_directory",
+        "generated": true,
+        "authoritative_for": [
+          "app_validation_schemas"
+        ],
+        "schema_ref": "json_schema_export_schema"
+      }
+    ]
+  },
+  "schemas": {
+    "media_item_schema": {
+      "format": "jsonl",
+      "record_type": "media_item",
+      "required_fields": [
+        "item_id",
+        "project_code",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "batch_ordinal",
+        "item_sequence",
+        "canonical_filename",
+        "original_filename",
+        "filename_stem",
+        "file_extension",
+        "current_lane",
+        "current_path",
+        "sha256",
+        "sha256_prefix",
+        "phash",
+        "width",
+        "height",
+        "short_side",
+        "gate_version",
+        "visual_result",
+        "requirement_result",
+        "gate_result",
+        "review_status",
+        "source",
+        "duplicate",
+        "app_sync"
+      ],
+      "enums": {
+        "current_lane": [
+          "raw",
+          "accepted",
+          "pending",
+          "rejected",
+          "diagnostic"
+        ],
+        "gate_result": [
+          "pass",
+          "fail",
+          "not_evaluated"
+        ],
+        "visual_result": [
+          "pass",
+          "fail",
+          "unsure",
+          "not_evaluated"
+        ],
+        "requirement_result": [
+          "pass",
+          "fail",
+          "not_evaluated"
+        ],
+        "review_status": [
+          "unreviewed",
+          "accepted",
+          "unsure",
+          "rejected",
+          "restored"
+        ]
+      },
+      "skeleton_record": {
+        "item_id": "{{UUID_OR_SHA256_DERIVED_ID}}",
+        "project_code": "cwb_isrc",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "batch_ordinal": 1,
+        "item_sequence": 24,
+        "canonical_filename": "{{TASK_ID}}.b0001.i0000024.s{{SHA256_PREFIX}}.jpg",
+        "original_filename": "{{SOURCE_ORIGINAL_FILENAME}}",
+        "filename_stem": "{{TASK_ID}}.b0001.i0000024.s{{SHA256_PREFIX}}",
+        "file_extension": "jpg",
+        "current_lane": "raw",
+        "current_path": "intake/raw/{{CANONICAL_FILENAME}}",
+        "sha256": "{{SHA256}}",
+        "sha256_prefix": "{{SHA256_PREFIX}}",
+        "phash": "{{PHASH}}",
+        "width": 0,
+        "height": 0,
+        "short_side": 0,
+        "gate_version": "gate_v1_short1080_face90_visible_identity",
+        "visual_result": "not_evaluated",
+        "requirement_result": "not_evaluated",
+        "gate_result": "not_evaluated",
+        "review_status": "unreviewed",
+        "source": {
+          "source_url": null,
+          "source_page_url": null,
+          "source_title": null,
+          "source_family": null,
+          "collector_run_id": null,
+          "downloaded_at": null,
+          "source_license_status": "unknown",
+          "source_access_method": "unknown"
+        },
+        "duplicate": {
+          "duplicate_of_item_id": null,
+          "duplicate_decision": "not_evaluated"
+        },
+        "app_sync": {
+          "target_app": null,
+          "app_collection_id": null,
+          "app_record_id": null,
+          "app_import_status": "not_synced",
+          "app_last_synced_at": null
+        }
+      }
+    },
+    "media_event_schema": {
+      "format": "jsonl",
+      "record_type": "media_event",
+      "required_fields": [
+        "event_id",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "item_id",
+        "event_at",
+        "event_type",
+        "from_lane",
+        "to_lane",
+        "actor",
+        "gate_version",
+        "reason"
+      ],
+      "enums": {
+        "event_type": [
+          "imported_raw",
+          "auto_gate_fail",
+          "accept_after_visual_and_requirement_pass",
+          "visual_unsure",
+          "visual_reject",
+          "correction_reject",
+          "restore",
+          "duplicate_exact_reject",
+          "app_sync"
+        ],
+        "actor": [
+          "assistant",
+          "operator",
+          "tool",
+          "app"
+        ]
+      },
+      "skeleton_record": {
+        "event_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "item_id": "{{ITEM_ID}}",
+        "event_at": "{{ISO_TIMESTAMP}}",
+        "event_type": "imported_raw",
+        "from_lane": null,
+        "to_lane": "raw",
+        "actor": "tool",
+        "gate_version": "gate_v1_short1080_face90_visible_identity",
+        "reason": "initial_import",
+        "evidence": {
+          "source_url": null,
+          "source_title": null,
+          "run_id": "{{RUN_ID}}"
+        },
+        "paths": {
+          "from_path": null,
+          "to_path": "intake/raw/{{CANONICAL_FILENAME}}"
+        }
+      }
+    },
+    "workflow_failure_schema": {
+      "format": "jsonl",
+      "record_type": "workflow_failure",
+      "required_fields": [
+        "failure_id",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "logged_at",
+        "run_id",
+        "phase",
+        "severity",
+        "failure_type",
+        "symptom",
+        "root_cause",
+        "impact",
+        "action_taken",
+        "resolution_status",
+        "spec_change_candidate"
+      ],
+      "enums": {
+        "severity": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "resolution_status": [
+          "open",
+          "mitigated",
+          "resolved",
+          "accepted_blocker"
+        ],
+        "phase": [
+          "initialize_task",
+          "collect_raw",
+          "visual_review",
+          "app_sync",
+          "handoff",
+          "validation",
+          "tooling",
+          "other"
+        ],
+        "failure_type": [
+          "missing_artifact",
+          "parse_error",
+          "schema_violation",
+          "state_mismatch",
+          "duplicate_detection_error",
+          "source_collector_error",
+          "download_error",
+          "lane_move_error",
+          "lock_contention",
+          "stale_lock_recovered",
+          "jsonl_bad_line",
+          "app_sync_error",
+          "validation_error",
+          "rule_change_violation",
+          "unapproved_contract_change",
+          "unknown"
+        ]
+      },
+      "skeleton_record": {
+        "failure_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "logged_at": "{{ISO_TIMESTAMP}}",
+        "run_id": "{{RUN_ID_OR_NULL}}",
+        "phase": "tooling",
+        "severity": "medium",
+        "failure_type": "unknown",
+        "symptom": "{{OBSERVED_SYMPTOM}}",
+        "root_cause": "{{KNOWN_OR_UNKNOWN_ROOT_CAUSE}}",
+        "impact": "{{TASK_IMPACT}}",
+        "action_taken": "{{ACTION_TAKEN}}",
+        "resolution_status": "open",
+        "spec_change_candidate": false,
+        "related_rids": []
+      }
+    },
+    "insight_schema": {
+      "format": "jsonl",
+      "record_type": "insight",
+      "required_fields": [
+        "insight_id",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "logged_at",
+        "run_id",
+        "phase",
+        "lesson_policy_rid",
+        "insight_type",
+        "observation",
+        "evidence",
+        "confidence",
+        "reuse_scope",
+        "target_specific_allowed",
+        "subject_identifiers_present",
+        "spec_change_candidate"
+      ],
+      "enums": {
+        "confidence": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "insight_type": [
+          "source_yield",
+          "subject_disambiguation_pattern",
+          "review_rule",
+          "query_strategy",
+          "app_integration",
+          "handoff_improvement",
+          "quality_gate",
+          "automation_candidate"
+        ]
+      },
+      "skeleton_record": {
+        "insight_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "logged_at": "{{ISO_TIMESTAMP}}",
+        "run_id": "{{RUN_ID_OR_NULL}}",
+        "phase": "{{WORKFLOW_PHASE}}",
+        "lesson_policy_rid": "RID-LESSON-001",
+        "insight_type": "source_yield",
+        "observation": "{{REUSABLE_OBSERVATION}}",
+        "evidence": "{{EVIDENCE_REFERENCE}}",
+        "confidence": "medium",
+        "reuse_scope": "cross_task",
+        "target_specific_allowed": false,
+        "subject_identifiers_present": false,
+        "spec_change_candidate": false,
+        "template_change_candidate": false
+      }
+    },
+    "task_state_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "project_code",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "status",
+        "counts",
+        "gate_version",
+        "next_action"
+      ],
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "task_state",
+        "artifact_id": "ART-TASK-STATE",
+        "artifact_handle": "{{TASK_ID}}/task_state",
+        "project_code": "cwb_isrc",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "status": "not_started",
+        "gate_version": "gate_v1_short1080_face90_visible_identity",
+        "counts": {
+          "raw": 0,
+          "accepted": 0,
+          "pending": 0,
+          "rejected": 0,
+          "diagnostic": 0
+        },
+        "next_action": "initialize_task"
+      }
+    },
+    "task_topology_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "files",
+        "folders"
+      ],
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "task_topology",
+        "artifact_id": "ART-TASK-TOPOLOGY",
+        "artifact_handle": "{{TASK_ID}}/task_topology",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "path_root_note": "All file and folder values are relative to task_root per RID-PATH-001 and RID-WORKSPACE-001.",
+        "files": {
+          "task_topology": "{{TASK_ID}}.task_topology.yaml",
+          "task_state": "{{TASK_ID}}.task_state.yaml",
+          "task_rules": "{{TASK_ID}}.task_rules.yaml",
+          "task_requirements": "{{TASK_ID}}.task_requirements.yaml",
+          "start_here": "{{TASK_ID}}.start_here.md",
+          "artifact_manifest": "state/{{TASK_ID}}.artifact_manifest.yaml",
+          "validation_report": "state/{{TASK_ID}}.validation_report.json",
+          "run_state_lock": "state/{{TASK_ID}}.run_state_lock.json",
+          "media_items": "logs/{{TASK_ID}}.media_items.jsonl",
+          "media_events": "logs/{{TASK_ID}}.media_events.jsonl",
+          "source_expansion_matrix": "logs/{{TASK_ID}}.source_expansion_matrix.jsonl",
+          "workflow_failure_log": "logs/{{TASK_ID}}.workflow_failure_log.jsonl",
+          "insights_log": "logs/{{TASK_ID}}.insights_log.jsonl",
+          "rule_change_events": "governance/{{TASK_ID}}.rule_change_events.jsonl",
+          "operator_approvals": "governance/{{TASK_ID}}.operator_approvals.jsonl",
+          "app_adapter": "app/{{TASK_ID}}.app_adapter.yaml",
+          "app_sync_events": "app/{{TASK_ID}}.app_sync_events.jsonl",
+          "schemas": {
+            "media_item": "schemas/media_item.schema.json",
+            "media_event": "schemas/media_event.schema.json",
+            "task_state": "schemas/task_state.schema.json",
+            "task_topology": "schemas/task_topology.schema.json",
+            "task_rules": "schemas/task_rules.schema.json",
+            "task_requirements": "schemas/task_requirements.schema.json",
+            "artifact_manifest": "schemas/artifact_manifest.schema.json",
+            "app_sync_event": "schemas/app_sync_event.schema.json",
+            "app_adapter": "schemas/app_adapter.schema.json",
+            "workflow_failure": "schemas/workflow_failure.schema.json",
+            "insight": "schemas/insight.schema.json",
+            "source_expansion_event": "schemas/source_expansion_event.schema.json",
+            "reject_manifest": "schemas/reject_manifest.schema.json",
+            "restore_manifest": "schemas/restore_manifest.schema.json",
+            "rule_change_event": "schemas/rule_change_event.schema.json",
+            "operator_approval": "schemas/operator_approval.schema.json",
+            "validation_report": "schemas/validation_report.schema.json",
+            "run_state_lock": "schemas/run_state_lock.schema.json",
+            "start_here": "schemas/start_here.schema.json",
+            "handoff_message": "schemas/handoff_message.schema.json"
+          }
+        },
+        "folders": {
+          "state": "state",
+          "logs": "logs",
+          "governance": "governance",
+          "app": "app",
+          "schemas": "schemas",
+          "intake_raw": "intake/raw",
+          "intake_accepted": "intake/accepted",
+          "intake_pending": "intake/pending",
+          "intake_rejected": "intake/rejected",
+          "intake_rejected_identity": "intake/rejected/identity",
+          "intake_rejected_quality": "intake/rejected/quality",
+          "intake_rejected_corrupt": "intake/rejected/corrupt",
+          "intake_rejected_duplicate": "intake/rejected/duplicate",
+          "intake_rejected_source_mismatch": "intake/rejected/source_mismatch",
+          "intake_rejected_below_gate": "intake/rejected/below_gate",
+          "intake_diagnostic": "intake/diagnostic",
+          "intake_thumbnails": "intake/thumbnails",
+          "review_batches": "review/batches",
+          "review_reference": "review/_reference_{{SUBJECT_SLUG}}",
+          "contact_sheets_sheets": "contact_sheets/sheets",
+          "contact_sheets_manifests": "contact_sheets/manifests",
+          "contact_sheets_selections": "contact_sheets/selections",
+          "handoffs": "handoffs",
+          "runs": "runs",
+          "task_tools": "task_tools",
+          "task_tools_scripts": "task_tools/scripts",
+          "assistant_workspace": "assistant_workspace",
+          "assistant_workspace_scratch": "assistant_workspace/scratch",
+          "assistant_workspace_notes": "assistant_workspace/notes",
+          "assistant_workspace_outputs": "assistant_workspace/outputs"
+        },
+        "handoff_files_pattern": "handoffs/{{TASK_ID}}.handoff.{{ISO_TIMESTAMP_COMPACT}}.md",
+        "handoff_files_pattern_note": "Handoff messages are listed by pattern, not enumerated; they are optional and time-stamped per RID-HANDOFF-001."
+      }
+    },
+    "artifact_manifest_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "artifacts"
+      ],
+      "item_required_fields": [
+        "id",
+        "logical_name",
+        "kind",
+        "format",
+        "schema_ref"
+      ],
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "artifact_manifest",
+        "artifact_id": "ART-ARTIFACT-MANIFEST",
+        "artifact_handle": "{{TASK_ID}}/artifact_manifest",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "manifest_note": "Each artifact entry uses logical_name; resolve to a relative path through task_topology.yaml.files per RID-TOPOLOGY-005.",
+        "artifacts": [
+          {
+            "id": "ART-TASK-TOPOLOGY",
+            "logical_name": "task_topology",
+            "kind": "task_topology",
+            "format": "yaml",
+            "schema_ref": "task_topology_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-TASK-STATE",
+            "logical_name": "task_state",
+            "kind": "task_state",
+            "format": "yaml",
+            "schema_ref": "task_state_schema",
+            "required": true,
+            "regenerable": true
+          },
+          {
+            "id": "ART-TASK-RULES",
+            "logical_name": "task_rules",
+            "kind": "task_rules",
+            "format": "yaml",
+            "schema_ref": "task_rules_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-TASK-REQUIREMENTS",
+            "logical_name": "task_requirements",
+            "kind": "task_requirements",
+            "format": "yaml",
+            "schema_ref": "task_requirements_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-VALIDATION-REPORT",
+            "logical_name": "validation_report",
+            "kind": "validation_report",
+            "format": "json",
+            "schema_ref": "validation_report_schema",
+            "required": true,
+            "regenerable": true
+          },
+          {
+            "id": "ART-RUN-LOCK",
+            "logical_name": "run_state_lock",
+            "kind": "run_state_lock",
+            "format": "json",
+            "schema_ref": "run_state_lock_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-MEDIA-ITEMS",
+            "logical_name": "media_items",
+            "kind": "media_items",
+            "format": "jsonl",
+            "schema_ref": "media_item_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-MEDIA-EVENTS",
+            "logical_name": "media_events",
+            "kind": "media_events",
+            "format": "jsonl",
+            "schema_ref": "media_event_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-APP-ADAPTER",
+            "logical_name": "app_adapter",
+            "kind": "app_adapter",
+            "format": "yaml",
+            "schema_ref": "app_adapter_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-APP-SYNC-EVENTS",
+            "logical_name": "app_sync_events",
+            "kind": "app_sync_events",
+            "format": "jsonl",
+            "owner": "app_or_sync_tool",
+            "manual_assistant_write_allowed": false,
+            "schema_ref": "app_sync_event_schema",
+            "required": true,
+            "regenerable": false
+          },
+          {
+            "id": "ART-START-HERE",
+            "logical_name": "start_here",
+            "kind": "start_here",
+            "format": "markdown",
+            "schema_ref": "start_here_schema",
+            "required": true,
+            "regenerable": true
+          },
+          {
+            "id": "ART-SCHEMA-EXPORTS",
+            "logical_name": "schemas",
+            "kind": "schema_export_directory",
+            "format": "json_schema_directory",
+            "schema_ref": "json_schema_export_schema",
+            "required": true,
+            "regenerable": true
+          }
+        ]
+      }
+    },
+    "run_state_lock_schema": {
+      "format": "json",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "active",
+        "run_id",
+        "pid",
+        "command",
+        "started_at",
+        "log",
+        "stderr",
+        "expected_output_root",
+        "output_lane"
+      ],
+      "skeleton": {
+        "artifact_kind": "run_state_lock",
+        "artifact_id": "ART-RUN-LOCK",
+        "artifact_handle": "{{TASK_ID}}/run_state_lock",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "active": false,
+        "run_id": null,
+        "pid": null,
+        "command": null,
+        "started_at": null,
+        "finished_at": null,
+        "exit_code": null,
+        "log": null,
+        "stderr": null,
+        "expected_output_root": "intake/raw",
+        "output_lane": "raw",
+        "last_heartbeat_at": null
+      }
+    },
+    "source_expansion_event_schema": {
+      "format": "jsonl",
+      "record_type": "source_expansion_event",
+      "required_fields": [
+        "source_event_id",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "source_family",
+        "run_id",
+        "started_at",
+        "finished_at",
+        "status",
+        "records_found",
+        "candidates_after_dedupe",
+        "accepted_after_gate",
+        "rejected_after_gate",
+        "blocker",
+        "next_action"
+      ],
+      "enums": {
+        "status": [
+          "not_started",
+          "running",
+          "useful",
+          "exhausted",
+          "blocked",
+          "rejected_path"
+        ]
+      },
+      "skeleton_record": {
+        "source_event_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "source_family": "{{SOURCE_FAMILY}}",
+        "run_id": "{{RUN_ID}}",
+        "command_ref": "runs/{{RUN_ID}}_command.txt",
+        "started_at": "{{ISO_TIMESTAMP}}",
+        "finished_at": null,
+        "status": "running",
+        "records_found": 0,
+        "candidates_after_dedupe": 0,
+        "accepted_after_gate": 0,
+        "rejected_after_gate": 0,
+        "blocker": null,
+        "next_action": null
+      }
+    },
+    "reject_manifest_schema": {
+      "format": "json",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "manifest_type",
+        "manifest_id",
+        "created_at",
+        "gate_version",
+        "items"
+      ],
+      "enums": {
+        "reason": [
+          "identity",
+          "quality",
+          "corrupt",
+          "duplicate",
+          "source_mismatch",
+          "below_gate"
+        ]
+      },
+      "item_field_rules": {
+        "reason": "Must equal the final path segment of to_path under intake/rejected so reason and destination cannot disagree."
+      },
+      "skeleton": {
+        "artifact_kind": "reject_manifest",
+        "artifact_id": "ART-REJECT-MANIFEST",
+        "artifact_handle": "{{TASK_ID}}/reject_manifest",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "manifest_type": "reject",
+        "manifest_id": "{{UUIDV7}}",
+        "created_at": "{{ISO_TIMESTAMP}}",
+        "gate_version": "gate_v1_short1080_face90_visible_identity",
+        "items": [
+          {
+            "item_id": "{{ITEM_ID}}",
+            "from_path": "intake/raw/{{CANONICAL_FILENAME}}",
+            "to_path": "intake/rejected/identity/{{CANONICAL_FILENAME}}",
+            "reason": "identity",
+            "notes": "{{NOTES}}"
+          }
+        ]
+      }
+    },
+    "restore_manifest_schema": {
+      "format": "json",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "manifest_type",
+        "manifest_id",
+        "created_at",
+        "gate_version",
+        "items"
+      ],
+      "skeleton": {
+        "artifact_kind": "restore_manifest",
+        "artifact_id": "ART-RESTORE-MANIFEST",
+        "artifact_handle": "{{TASK_ID}}/restore_manifest",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "manifest_type": "restore",
+        "manifest_id": "{{UUIDV7}}",
+        "created_at": "{{ISO_TIMESTAMP}}",
+        "gate_version": "gate_v1_short1080_face90_visible_identity",
+        "items": [
+          {
+            "item_id": "{{ITEM_ID}}",
+            "from_path": "intake/rejected/quality/{{CANONICAL_FILENAME}}",
+            "to_path": "intake/pending/{{CANONICAL_FILENAME}}",
+            "reason": "rule_changed_or_review_correction",
+            "notes": "{{NOTES}}"
+          }
+        ]
+      }
+    },
+    "app_adapter_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "sync_event_log",
+        "adapters"
+      ],
+      "enums": {
+        "sync_mode": [
+          "manual",
+          "on_demand",
+          "scheduled",
+          "continuous"
+        ],
+        "adapter_status": [
+          "not_defined_yet",
+          "draft",
+          "enabled",
+          "disabled",
+          "deprecated"
+        ]
+      },
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "app_adapter",
+        "artifact_id": "ART-APP-ADAPTER",
+        "artifact_handle": "{{TASK_ID}}/app_adapter",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "sync_event_log": {
+          "logical_name": "app_sync_events",
+          "owner": "app_or_sync_tool",
+          "manual_assistant_write_allowed": false,
+          "append_only": true,
+          "schema_ref": "app_sync_event_schema"
+        },
+        "adapters": {
+          "castkit_codex": {
+            "enabled": false,
+            "status": "not_defined_yet",
+            "import_root": null,
+            "collection_id": null,
+            "sync_mode": "manual",
+            "mapped_lanes": {
+              "raw": "intake/raw",
+              "accepted": "intake/accepted",
+              "pending": "intake/pending",
+              "rejected": "intake/rejected"
+            }
+          },
+          "openrepose": {
+            "enabled": false,
+            "status": "not_defined_yet",
+            "import_root": null,
+            "collection_id": null,
+            "sync_mode": "manual",
+            "mapped_lanes": {
+              "accepted": "intake/accepted",
+              "diagnostic": "intake/diagnostic"
+            }
+          }
+        }
+      }
+    },
+    "app_sync_event_schema": {
+      "format": "jsonl",
+      "record_type": "app_sync_event",
+      "owner": "app_or_sync_tool",
+      "manual_assistant_write_allowed": false,
+      "append_only": true,
+      "required_fields": [
+        "sync_event_id",
+        "event_at",
+        "actor",
+        "target_app",
+        "adapter_id",
+        "operation",
+        "operation_status",
+        "dataset_id",
+        "task_id",
+        "batch_id",
+        "item_id",
+        "local_path",
+        "media_sha256",
+        "app_collection_id",
+        "app_record_id",
+        "request",
+        "response",
+        "error",
+        "retry"
+      ],
+      "enums": {
+        "actor": [
+          "app",
+          "sync_tool"
+        ],
+        "target_app": [
+          "castkit_codex",
+          "openrepose",
+          "other"
+        ],
+        "operation": [
+          "import_item",
+          "update_item",
+          "export_item",
+          "verify_link",
+          "delete_link",
+          "bulk_import",
+          "bulk_update"
+        ],
+        "operation_status": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "skipped",
+          "blocked"
+        ]
+      },
+      "write_policy": {
+        "owner": "app_or_sync_tool",
+        "assistant_manual_edit_allowed": false,
+        "assistant_allowed_actions": [
+          "read",
+          "validate",
+          "report_blocker"
+        ],
+        "append_source": "Only the app adapter or sync tool may append records.",
+        "enforcement_model": "policy_only",
+        "enforcement_note": "This rule is enforced by convention and by validate_task heuristics, not by filesystem permissions or cryptographic signatures. A determined manual editor can append records and the file will still parse. validate_task may flag suspicious entries (for example actor == assistant, or missing adapter_id), but absence of such flags does not prove provenance.",
+        "validate_task_heuristics": [
+          "Flag any record where actor is not in the allowed enum (app, sync_tool).",
+          "Flag any record missing adapter_id when actor == sync_tool.",
+          "Flag any record whose event_at predates the file's earliest stat by more than the heartbeat freshness threshold."
+        ]
+      },
+      "skeleton_record": {
+        "sync_event_id": "{{UUIDV7}}",
+        "event_at": "{{ISO_TIMESTAMP}}",
+        "actor": "sync_tool",
+        "target_app": "castkit_codex",
+        "adapter_id": "{{ADAPTER_ID}}",
+        "operation": "import_item",
+        "operation_status": "queued",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "batch_id": "{{BATCH_ID}}",
+        "item_id": "{{ITEM_ID}}",
+        "local_path": "intake/accepted/{{CANONICAL_FILENAME}}",
+        "media_sha256": "{{SHA256}}",
+        "app_collection_id": null,
+        "app_record_id": null,
+        "request": {
+          "method": null,
+          "endpoint": null,
+          "payload_ref": null,
+          "request_id": null
+        },
+        "response": {
+          "status_code": null,
+          "app_record_id": null,
+          "payload_ref": null,
+          "response_id": null
+        },
+        "error": {
+          "error_code": null,
+          "message": null,
+          "retryable": null
+        },
+        "retry": {
+          "attempt": 0,
+          "next_retry_at": null
+        }
+      }
+    },
+    "json_schema_export_schema": {
+      "format": "directory",
+      "required_files": [
+        "schemas/media_item.schema.json",
+        "schemas/media_event.schema.json",
+        "schemas/task_state.schema.json",
+        "schemas/task_topology.schema.json",
+        "schemas/artifact_manifest.schema.json",
+        "schemas/app_sync_event.schema.json",
+        "schemas/app_adapter.schema.json"
+      ],
+      "generation": {
+        "source_spec": "image_sourcing_init_spec-idol_v00.19.json",
+        "generated_from": "schemas",
+        "overwrite_allowed": true,
+        "generated_files_are_authoritative": false,
+        "canonical_source": "image_sourcing_init_spec-idol_v00.19.json"
+      },
+      "skeleton_manifest": {
+        "schema_export_id": "{{UUIDV7}}",
+        "generated_at": "{{ISO_TIMESTAMP}}",
+        "source_spec_file": "image_sourcing_init_spec-idol_v00.19.json",
+        "source_spec_version": "v00.19",
+        "files": [
+          {
+            "path": "schemas/media_item.schema.json",
+            "schema_ref": "media_item_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/media_event.schema.json",
+            "schema_ref": "media_event_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/task_state.schema.json",
+            "schema_ref": "task_state_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/task_topology.schema.json",
+            "schema_ref": "task_topology_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/artifact_manifest.schema.json",
+            "schema_ref": "artifact_manifest_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/app_sync_event.schema.json",
+            "schema_ref": "app_sync_event_schema",
+            "status": "pending_generation"
+          },
+          {
+            "path": "schemas/app_adapter.schema.json",
+            "schema_ref": "app_adapter_schema",
+            "status": "pending_generation"
+          }
+        ]
+      }
+    },
+    "task_requirements_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "deliverable",
+        "identity",
+        "inclusion_criteria",
+        "exclusion_criteria",
+        "requirement_check_definition"
+      ],
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "task_requirements",
+        "artifact_id": "ART-TASK-REQUIREMENTS",
+        "artifact_handle": "{{TASK_ID}}/task_requirements",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "deliverable": {
+          "accepted_count_target": 0,
+          "deadline": null,
+          "status": "not_started"
+        },
+        "identity": {
+          "target_subject": "{{SUBJECT}}",
+          "group": "{{GROUP_OR_NULL}}",
+          "other_members": [],
+          "same_name_people": [],
+          "excluded_eras": []
+        },
+        "inclusion_criteria": [],
+        "exclusion_criteria": {
+          "excluded_contexts": [],
+          "excluded_source_families": []
+        },
+        "diversity_targets": {
+          "enabled": false,
+          "diversity_overflow_factor": 1.5,
+          "buckets": {
+            "pose": {},
+            "expression": {},
+            "setting": {}
+          }
+        },
+        "source_preferences": {
+          "preferred_source_families": [],
+          "blocked_source_families": []
+        },
+        "requirement_check_definition": {
+          "rid": "RID-REQ-001",
+          "pass_when_all": [
+            "Item identity matches identity.target_subject.",
+            "Item does not match any exclusion_criteria entry.",
+            "If diversity_targets.enabled is true, accepting this item does not push any bucket past diversity_overflow_factor."
+          ]
+        }
+      }
+    },
+    "start_here_schema": {
+      "format": "markdown",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "spec_version",
+        "written_at",
+        "body"
+      ],
+      "body_required_sections": [
+        "header",
+        "read_in_this_order",
+        "must_know_rules",
+        "live_status",
+        "handoffs_pointer",
+        "optional_repo_pointers"
+      ],
+      "body_required_sections_rule": "Each block_id from RID-ENTRY-001 required_content_blocks must appear as a markdown heading in body.",
+      "skeleton": {
+        "artifact_kind": "start_here",
+        "artifact_id": "ART-START-HERE",
+        "artifact_handle": "{{TASK_ID}}/start_here",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "spec_version": "v00.19",
+        "written_at": "{{ISO_TIMESTAMP}}",
+        "body": "# START HERE — assistant entrypoint\n\n- dataset_id: {{DATASET_ID}}\n- task_id: {{TASK_ID}}\n- spec_version: v00.19\n- task_root: this directory\n- written_at: {{ISO_TIMESTAMP}}\n\n## Read in this order\nResolve every name through `task_topology.yaml` per RID-TOPOLOGY-005.\n1. task_topology\n2. task_rules\n3. task_requirements\n4. task_state\n5. artifact_manifest\n6. validation_report\n7. run_state_lock\n8. media_items\n9. media_events\n\n## Must-know rules\n- task_rules.yaml is self-contained; do not require the parent init spec.\n- All paths resolve via task_topology.yaml; never hardcode paths.\n- Acquire run_state_lock before writing artifacts (RID-CONCURRENCY-001).\n- Append-only logs follow RID-JSONL-001; in-place updates require lock + temp+rename.\n- Validate before changing anything; check validation_report current state.\n- Identity and outcome live in task_requirements.yaml; behavior contract lives in task_rules.yaml.\n- Autonomously keep governance current: when instructions, rules, requirements, topology, source policy, acceptance criteria, spec pinning, or other task contract behavior changes, append the required governance records in the same locked work session.\n- Use assistant_workspace/ for scratch, notes, temporary outputs, and exploratory work.\n- Put reusable task-local helper scripts in task_tools/scripts/.\n\n## Live status\n- validation_state: {{VALIDATION_STATE}}\n- run_state_lock.active: {{LOCK_ACTIVE}}\n- counts.raw / accepted / pending / rejected / diagnostic: {{COUNTS}}\n- last 3 workflow_failure entries: {{RECENT_FAILURES_OR_NONE}}\n\n## Handoffs\nLook in `handoffs/` for any handoff_message left by a prior assistant. Optional. Missing handoffs are not a failure.\n\n## Optional repo pointers\n{{REPO_POINTERS_LIST_OR_NONE}}\n"
+      }
+    },
+    "handoff_message_schema": {
+      "format": "markdown_with_yaml_frontmatter",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "handoff_id",
+        "written_at",
+        "written_by",
+        "intended_for",
+        "summary"
+      ],
+      "enums": {
+        "intended_for": [
+          "any",
+          "operator",
+          "same_model_resumed",
+          "specific_model"
+        ]
+      },
+      "skeleton": {
+        "artifact_kind": "handoff_message",
+        "artifact_id": "ART-HANDOFF-MESSAGE",
+        "artifact_handle": "{{TASK_ID}}/handoff_message",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "handoff_id": "{{UUIDV7}}",
+        "written_at": "{{ISO_TIMESTAMP}}",
+        "written_by": "{{MODEL_OR_OPERATOR_IDENTIFIER}}",
+        "intended_for": "any",
+        "summary": "{{ONE_OR_TWO_SENTENCES}}",
+        "where_i_left_off": "{{FREE_TEXT}}",
+        "next_action_recommended": "{{FREE_TEXT}}",
+        "watch_out_for": [],
+        "references": [],
+        "notes": "{{FREE_TEXT_OR_EMPTY}}"
+      },
+      "file_layout_template": "---\nartifact_kind: handoff_message\nartifact_id: ART-HANDOFF-MESSAGE\nartifact_handle: {{TASK_ID}}/handoff_message\ndataset_id: {{DATASET_ID}}\ntask_id: {{TASK_ID}}\nhandoff_id: {{UUIDV7}}\nwritten_at: {{ISO_TIMESTAMP}}\nwritten_by: {{MODEL_OR_OPERATOR_IDENTIFIER}}\nintended_for: any\nsummary: {{ONE_OR_TWO_SENTENCES}}\n---\n\n## Where I left off\n{{FREE_TEXT}}\n\n## Next action recommended\n{{FREE_TEXT}}\n\n## Watch out for\n- {{GOTCHA_OR_REMOVE_SECTION}}\n\n## References\n- {{ARTIFACT_HANDLE_OR_PATH_OR_REMOVE_SECTION}}\n\n## Notes\n{{FREE_TEXT_OR_REMOVE_SECTION}}\n"
+    },
+    "task_rules_schema": {
+      "format": "yaml",
+      "required_fields": [
+        "schema_version",
+        "spec_version",
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "parent_init_spec",
+        "workflow_task_declaration",
+        "no_context_handoff_contract",
+        "fixed_embedded_rules",
+        "active_rules"
+      ],
+      "parent_init_spec_drift_policy": {
+        "rid": "RID-DRIFT-001",
+        "rule": "task_rules.yaml records the filename, version, and sha256 of the parent init spec it was generated from. validate_task must recompute the parent file hash and verify byte-for-byte equality of every embedded fixed rule against the parent.",
+        "mismatch_action": "Set validation_state = blocked_drift_detected and next_required_action = regenerate_task_rules_from_parent_spec.",
+        "regeneration_required_when": [
+          "parent_init_spec.sha256 differs from the current file hash.",
+          "Any RID-CONTRACT-* or RID-PURPOSE-* embedded text differs from the parent."
+        ],
+        "regeneration_must": [
+          "Be performed by tooling, not by manual edit.",
+          "Append a rule_change_event with rule_scope = parent_init_spec_resync.",
+          "Update parent_init_spec.sha256, parent_init_spec.version, and parent_init_spec.regenerated_at."
+        ]
+      },
+      "skeleton": {
+        "schema_version": 1,
+        "spec_version": "v00.19",
+        "version_token": "_v00.19",
+        "artifact_kind": "task_rules",
+        "artifact_id": "ART-TASK-RULES",
+        "artifact_handle": "{{TASK_ID}}/task_rules",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "parent_init_spec": {
+          "filename": "image_sourcing_init_spec-idol_v00.19.json",
+          "version": "v00.19",
+          "sha256": "{{PARENT_INIT_SPEC_SHA256}}",
+          "captured_at": "{{ISO_TIMESTAMP}}",
+          "regenerated_at": null
+        },
+        "workflow_task_declaration": {
+          "rid": "RID-SPEC-PURPOSE-001",
+          "kind": "image_sourcing_workflow_task",
+          "rule": "This initialized task is for neutral image sourcing workflow operations.",
+          "scope": [
+            "intake",
+            "visual_review",
+            "requirement_review",
+            "lane_state_tracking",
+            "validation",
+            "app_sync",
+            "handoff"
+          ],
+          "downstream_use_policy": "Downstream use remains intentionally unspecified."
+        },
+        "no_context_handoff_contract": {
+          "rid": "RID-TASK-SELF-CONTAINED-001",
+          "parent_init_spec_required_for_task_operation": false,
+          "rule": "This task_rules.yaml carries the fixed task contract for assistants that only read the task folder.",
+          "startup_instruction": "Before changing files, read this task_rules.yaml, then task_state.yaml, task_topology.yaml, artifact_manifest.yaml, media_items.jsonl, and media_events.jsonl.",
+          "fixed_rules_are_authoritative": true,
+          "missing_fixed_rule_policy": "If any required fixed rule RID is missing, stop task work and report validation blocker.",
+          "required_fixed_rule_rids": [
+            "RID-PURPOSE-001",
+            "RID-FILENAME-001",
+            "RID-APP-SYNC-001",
+            "RID-CONTRACT-001",
+            "RID-CONTRACT-002",
+            "RID-WORKSPACE-001",
+            "RID-ASSISTANT-WORKSPACE-001",
+            "RID-GOVERNANCE-MAINTENANCE-001",
+            "RID-TOPOLOGY-001",
+            "RID-TOPOLOGY-002",
+            "RID-TOPOLOGY-003",
+            "RID-IDSTAMP-001",
+            "RID-ARTKIND-001",
+            "RID-HANDLE-001",
+            "RID-ARTFILE-001",
+            "RID-REQ-001",
+            "RID-ENTRY-001"
+          ],
+          "handoffs_note": "RID-HANDOFF-001 is intentionally NOT in required_fixed_rule_rids; handoffs are nice-to-have, never a validation requirement.",
+          "assistant_rule": "Do not assume naming, lane, app-sync, or purpose rules from memory; use the fixed rules embedded in this task file. All artifact paths resolve through task_topology.yaml; never hardcode."
+        },
+        "fixed_embedded_rules": [
+          {
+            "rid": "RID-SPEC-PURPOSE-001",
+            "immutable_after_init": true,
+            "text": "This initialized task is for neutral image sourcing workflow operations.",
+            "kind": "image_sourcing_workflow_task",
+            "scope": [
+              "intake",
+              "visual_review",
+              "requirement_review",
+              "lane_state_tracking",
+              "validation",
+              "app_sync",
+              "handoff"
+            ],
+            "downstream_use_policy": "Downstream use remains intentionally unspecified."
+          },
+          {
+            "rid": "RID-TASK-SELF-CONTAINED-001",
+            "immutable_after_init": true,
+            "text": "This task carries its own fixed operating rules for no-context assistants.",
+            "no_context_instruction": "Operate from task_rules.yaml and sibling machine-readable artifacts. Do not require the parent init spec or chat history to follow filename, lane, purpose, validation, and app-sync rules.",
+            "required_startup_reads": [
+              "task_rules.yaml",
+              "task_state.yaml",
+              "task_topology.yaml",
+              "artifact_manifest.yaml",
+              "media_items.jsonl",
+              "media_events.jsonl"
+            ],
+            "required_embedded_policy_rids": [
+              "RID-PURPOSE-001",
+              "RID-FILENAME-001",
+              "RID-APP-SYNC-001",
+              "RID-CONTRACT-001",
+              "RID-CONTRACT-002",
+              "RID-WORKSPACE-001",
+              "RID-ASSISTANT-WORKSPACE-001",
+              "RID-GOVERNANCE-MAINTENANCE-001"
+            ],
+            "validation_checks": [
+              "task_rules.yaml contains no_context_handoff_contract.",
+              "task_rules.yaml fixed_embedded_rules contains all required embedded policy RIDs.",
+              "No task operation depends on reading the parent init spec."
+            ]
+          },
+          {
+            "rid": "RID-PURPOSE-001",
+            "immutable_after_init": true,
+            "text": "This task is an image sourcing, intake, review, validation, and app-sync task; downstream use remains intentionally unspecified."
+          },
+          {
+            "rid": "RID-CONTRACT-001",
+            "immutable_after_init": true,
+            "text": "All required artifacts must exist after init."
+          },
+          {
+            "rid": "RID-CONTRACT-002",
+            "immutable_after_init": true,
+            "text": "All required artifacts must remain parseable at all times."
+          },
+          {
+            "rid": "RID-CONTRACT-010",
+            "immutable_after_init": true,
+            "text": "App sync event history is app-owned and must not be manually edited by assistants."
+          },
+          {
+            "rid": "RID-FILENAME-001",
+            "immutable_after_init": true,
+            "text": "Canonical media filenames use the full task_id followed by dot-separated batch, item, and sha256-prefix segments.",
+            "no_context_instruction": "Use this rule when naming, renaming, importing, moving, restoring, exporting, or app-syncing any media file in this task, even if no parent spec or chat history is available.",
+            "canonical_pattern": "{task_id}.b{batch_ordinal:04d}.i{item_sequence:07d}.s{sha256_prefix}.{ext}",
+            "example": "{{TASK_ID}}.b0001.i0000024.s8f3a9c1d.jpg",
+            "separator": ".",
+            "required_components": {
+              "task_id": {
+                "source": "task_state.yaml",
+                "rule": "Use the full task_id exactly as stored; do not shorten it.",
+                "allowed_pattern": "^[a-z0-9_]+$"
+              },
+              "batch_ordinal": {
+                "source": "media_items.jsonl",
+                "segment_format": "b%04d",
+                "example": "b0001"
+              },
+              "item_sequence": {
+                "source": "media_items.jsonl",
+                "segment_format": "i%07d",
+                "example": "i0000024"
+              },
+              "sha256_prefix": {
+                "source": "media_items.jsonl",
+                "length": 8,
+                "segment_format": "s{first_8_lowercase_hex_sha256}",
+                "example": "s8f3a9c1d"
+              },
+              "ext": {
+                "source": "actual_file_extension",
+                "rule": "Use lowercase extension without a leading dot."
+              }
+            },
+            "required_media_item_fields": [
+              "task_id",
+              "batch_id",
+              "batch_ordinal",
+              "item_sequence",
+              "sha256",
+              "sha256_prefix",
+              "canonical_filename",
+              "original_filename",
+              "filename_stem",
+              "file_extension",
+              "current_path"
+            ],
+            "assistant_instructions": [
+              "When importing a file, compute sha256 before assigning canonical_filename.",
+              "Set sha256_prefix to the first 8 lowercase hex characters of sha256.",
+              "Rename copied intake files to canonical_filename before counting them as tracked.",
+              "Keep canonical_filename unchanged during lane moves; only current_path changes.",
+              "Preserve the source filename only in original_filename, not in the canonical path.",
+              "If a downloader prints a proposed canonical filename, verify it against this rule before accepting it.",
+              "If the filename and media_items.jsonl disagree, validation is blocked until reconciled."
+            ],
+            "assistant_must_not": [
+              "Do not include identity names in canonical filenames.",
+              "Do not include group names in canonical filenames.",
+              "Do not include source names or site names in canonical filenames.",
+              "Do not include downstream-purpose terms in canonical filenames.",
+              "Do not shorten, hash, or alias task_id inside canonical_filename.",
+              "Do not change canonical_filename when moving between raw, accepted, pending, rejected, or diagnostic lanes."
+            ],
+            "parse_algorithm": [
+              "Take basename and split extension at the final dot.",
+              "Split the filename stem on dots.",
+              "Expect exactly four stem segments: task_id, b####, i#######, s########.",
+              "Recover task_id from segment 1 exactly.",
+              "Recover batch_ordinal by removing leading b from segment 2 and parsing decimal.",
+              "Recover item_sequence by removing leading i from segment 3 and parsing decimal.",
+              "Recover sha256_prefix by removing leading s from segment 4."
+            ],
+            "validation_checks": [
+              "canonical_filename equals formatted pattern from task_id, batch_ordinal, item_sequence, sha256_prefix, and file_extension.",
+              "filename_stem equals canonical_filename without final extension.",
+              "sha256_prefix equals first 8 lowercase hex characters of sha256.",
+              "current_path basename equals canonical_filename.",
+              "original_filename is populated when source filename is known."
+            ]
+          },
+          {
+            "rid": "RID-WORKSPACE-001",
+            "immutable_after_init": true,
+            "text": "Each task occupies an inner task_root subfolder named exactly after the task_id, nested inside an outer operator workspace folder.",
+            "no_context_instruction": "Operate only inside this task_root. Never touch siblings of task_root inside the operator workspace folder. Refuse to init when an existing task_root with the same task_id already exists."
+          },
+          {
+            "rid": "RID-ASSISTANT-WORKSPACE-001",
+            "immutable_after_init": true,
+            "text": "assistant_workspace/ is the assistant's free work area inside task_root; task_tools/scripts/ is the place for reusable task-local helper scripts.",
+            "no_context_instruction": "Use assistant_workspace/ for scratch files, notes, temporary outputs, and exploratory work. Use task_tools/scripts/ for scripts that should travel with this task. Do not use siblings of task_root as assistant scratch space."
+          },
+          {
+            "rid": "RID-GOVERNANCE-MAINTENANCE-001",
+            "immutable_after_init": true,
+            "text": "Assistants must autonomously keep governance artifacts current as part of task work.",
+            "no_context_instruction": "When changing task rules, requirements, topology, validation state, spec pinning, source policy, acceptance criteria, or other task contract behavior, append the appropriate rule_change_events and operator_approvals records in the same locked work session. Do this without waiting for the operator to remind you. Routine media imports/reviews are recorded in media_items and media_events; governance is required when the instructions or task contract change."
+          },
+          {
+            "rid": "RID-TOPOLOGY-001",
+            "immutable_after_init": true,
+            "text": "task_topology.yaml is the single source of truth for in-task paths. Read it at startup; resolve every artifact reference through it; never hardcode paths."
+          },
+          {
+            "rid": "RID-TOPOLOGY-002",
+            "immutable_after_init": true,
+            "text": "Any artifact creation, rename, move, or deletion updates task_topology.yaml in the same locked write transaction. Filesystem and task_topology.yaml must never disagree."
+          },
+          {
+            "rid": "RID-TOPOLOGY-003",
+            "immutable_after_init": true,
+            "text": "validate_task verifies every entry in task_topology.yaml.files exists at the declared path and every folder entry exists. Mismatch sets validation_state = blocked_state_mismatch."
+          },
+          {
+            "rid": "RID-IDSTAMP-001",
+            "immutable_after_init": true,
+            "text": "Every authoritative YAML or JSON artifact carries dataset_id and task_id at its header. Every JSONL record carries dataset_id and task_id. Schema export files are exempt."
+          },
+          {
+            "rid": "RID-ARTKIND-001",
+            "immutable_after_init": true,
+            "text": "Every YAML or JSON artifact carries artifact_kind and artifact_id in its top-level header. JSONL kind is resolved through artifact_manifest.yaml."
+          },
+          {
+            "rid": "RID-HANDLE-001",
+            "immutable_after_init": true,
+            "text": "Every artifact carries artifact_handle equal to task_id + '/' + artifact_kind for cross-task reference."
+          },
+          {
+            "rid": "RID-ARTFILE-001",
+            "immutable_after_init": true,
+            "text": "Artifact filenames follow {task_id}.{artifact_kind}.{ext}. This rule applies to artifact files only, not to media files (RID-FILENAME-001) or schema export files.",
+            "no_context_instruction": "When creating any task artifact file, prefix the filename with the full task_id followed by a dot, then the artifact_kind, then a dot, then the format extension. Never abbreviate task_id."
+          },
+          {
+            "rid": "RID-REQ-001",
+            "immutable_after_init": true,
+            "text": "task_requirements.yaml holds the outcome contract: deliverable target, identity, inclusion and exclusion criteria, diversity targets, and the requirement_check definition. Identity fields live here, not in task_rules.active_rules."
+          },
+          {
+            "rid": "RID-ENTRY-001",
+            "immutable_after_init": true,
+            "text": "A single canonical start_here.md file at task_root carries the entrypoint instructions for any new assistant. init_task creates it; refresh_state regenerates it.",
+            "no_context_instruction": "If you are a new assistant entering this task, open the start_here.md file at task_root before reading anything else. It tells you what to read and in what order. The same instruction is mirrored in this fixed rule so the entrypoint is discoverable both from the file and from the embedded contract."
+          }
+        ],
+        "active_rules": {
+          "sources": {
+            "preferred_source_families": [],
+            "blocked_source_families": []
+          },
+          "visual_tolerance": {
+            "active_gate_version": "gate_v1_short1080_face90_visible_identity",
+            "notes": []
+          },
+          "duplicate_thresholds": {
+            "phash_distance_max_for_near_duplicate": 6,
+            "phash_variant_allowance": false,
+            "phash_variant_allowance_reason": null,
+            "phash_distance_unit": "Hamming distance over 64-bit perceptual hash."
+          },
+          "app_sync": {
+            "target_app": null,
+            "sync_enabled": false
+          }
+        }
+      }
+    },
+    "rule_change_event_schema": {
+      "format": "jsonl",
+      "record_type": "rule_change_event",
+      "required_fields": [
+        "rule_event_id",
+        "dataset_id",
+        "task_id",
+        "changed_at",
+        "actor",
+        "rule_scope",
+        "old_value",
+        "new_value",
+        "effective_at",
+        "reason",
+        "affected_rids",
+        "operator_approval_id"
+      ],
+      "skeleton_record": {
+        "rule_event_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "changed_at": "{{ISO_TIMESTAMP}}",
+        "actor": "assistant",
+        "rule_scope": "visual_tolerance",
+        "old_value": null,
+        "new_value": null,
+        "effective_at": "{{ISO_TIMESTAMP}}",
+        "reason": "{{REASON}}",
+        "affected_rids": [],
+        "operator_approval_id": null
+      }
+    },
+    "operator_approval_schema": {
+      "format": "jsonl",
+      "record_type": "operator_approval",
+      "required_fields": [
+        "approval_id",
+        "dataset_id",
+        "task_id",
+        "approved_at",
+        "approved_by",
+        "approval_scope",
+        "approval_text",
+        "affected_rids"
+      ],
+      "skeleton_record": {
+        "approval_id": "{{UUIDV7}}",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "approved_at": "{{ISO_TIMESTAMP}}",
+        "approved_by": "operator",
+        "approval_scope": "fixed_contract_change",
+        "approval_text": "{{OPERATOR_APPROVAL_TEXT}}",
+        "affected_rids": []
+      }
+    },
+    "validation_report_schema": {
+      "format": "json",
+      "required_fields": [
+        "artifact_kind",
+        "artifact_id",
+        "artifact_handle",
+        "dataset_id",
+        "task_id",
+        "validated_at",
+        "validation_state",
+        "checked_artifacts",
+        "errors",
+        "warnings",
+        "next_required_action"
+      ],
+      "enums": {
+        "validation_state": [
+          "valid",
+          "warning",
+          "blocked_missing_artifact",
+          "blocked_parse_error",
+          "blocked_state_mismatch",
+          "blocked_unapproved_contract_change",
+          "blocked_drift_detected",
+          "blocked_lock_held"
+        ],
+        "next_required_action": [
+          "none",
+          "initialize_missing_artifacts",
+          "reparse_artifact",
+          "reconcile_state",
+          "request_operator_approval",
+          "regenerate_task_rules_from_parent_spec",
+          "release_or_recover_lock",
+          "restore_quarantined_jsonl_lines",
+          "rerun_validation"
+        ]
+      },
+      "skeleton": {
+        "artifact_kind": "validation_report",
+        "artifact_id": "ART-VALIDATION-REPORT",
+        "artifact_handle": "{{TASK_ID}}/validation_report",
+        "dataset_id": "{{DATASET_ID}}",
+        "task_id": "{{TASK_ID}}",
+        "validated_at": "{{ISO_TIMESTAMP}}",
+        "validation_state": "blocked_missing_artifact",
+        "checked_artifacts": [],
+        "errors": [],
+        "warnings": [],
+        "next_required_action": "initialize_missing_artifacts"
+      }
+    }
+  },
+  "rid_registry": [
+    {
+      "rid": "RID-SPEC-001",
+      "type": "rule",
+      "text": "Never edit the latest released spec in place."
+    },
+    {
+      "rid": "RID-SPEC-PURPOSE-001",
+      "type": "declaration",
+      "text": "This is an image sourcing workflow initialization spec; initialized tasks are neutral image sourcing workflow tasks."
+    },
+    {
+      "rid": "RID-ARTIFACT-001",
+      "type": "requirement",
+      "text": "Every authoritative artifact must be mechanically importable without interpreting prose."
+    },
+    {
+      "rid": "RID-GATE-001",
+      "type": "requirement",
+      "text": "Accepted images must satisfy min(width, height) >= 1080."
+    },
+    {
+      "rid": "RID-LANE-RAW-001",
+      "type": "definition",
+      "text": "Raw means unreviewed acquired image."
+    },
+    {
+      "rid": "RID-LANE-ACCEPTED-001",
+      "type": "definition",
+      "text": "Accepted means visually inspected with visual_result pass and active task requirements with requirement_result pass."
+    },
+    {
+      "rid": "RID-LANE-PENDING-001",
+      "type": "definition",
+      "text": "Pending means assistant is unsure after inspection."
+    },
+    {
+      "rid": "RID-LANE-REJECTED-001",
+      "type": "definition",
+      "text": "Rejected means obvious fail after visual inspection or task tolerance."
+    },
+    {
+      "rid": "RID-TOOL-001",
+      "type": "requirement",
+      "text": "Task tools must declare inputs, outputs, and write behavior."
+    },
+    {
+      "rid": "RID-VIEW-001",
+      "type": "rule",
+      "text": "Generated Markdown views are non-authoritative and must be reproducible from structured artifacts."
+    },
+    {
+      "rid": "RID-CONTRACT-001",
+      "type": "invariant",
+      "text": "All required artifacts must exist after init."
+    },
+    {
+      "rid": "RID-CONTRACT-002",
+      "type": "invariant",
+      "text": "All required artifacts must remain parseable at all times."
+    },
+    {
+      "rid": "RID-CONTRACT-003",
+      "type": "invariant",
+      "text": "All lane moves must append media_events.jsonl."
+    },
+    {
+      "rid": "RID-CONTRACT-004",
+      "type": "invariant",
+      "text": "media_items.jsonl must reflect current lane and current path."
+    },
+    {
+      "rid": "RID-CONTRACT-005",
+      "type": "invariant",
+      "text": "Accepted count must be derived from media_items.jsonl plus intake/accepted filesystem verification."
+    },
+    {
+      "rid": "RID-CONTRACT-006",
+      "type": "invariant",
+      "text": "No rule change may rewrite history."
+    },
+    {
+      "rid": "RID-CONTRACT-007",
+      "type": "invariant",
+      "text": "Missing, stale, or unparsable artifacts block continuation."
+    },
+    {
+      "rid": "RID-CONTRACT-008",
+      "type": "invariant",
+      "text": "Handoff requires validation first."
+    },
+    {
+      "rid": "RID-CONTRACT-009",
+      "type": "invariant",
+      "text": "Dataset, task, and batch IDs must remain stable after init."
+    },
+    {
+      "rid": "RID-CONTRACT-010",
+      "type": "invariant",
+      "text": "App sync event history is app-owned and must not be manually edited by assistants."
+    },
+    {
+      "rid": "RID-CONTRACT-011",
+      "type": "invariant",
+      "text": "Fixed contract rules must stay focused on image sourcing, intake, review, validation, and app sync."
+    },
+    {
+      "rid": "RID-CONTRACT-012",
+      "type": "invariant",
+      "text": "Every initialized task_rules.yaml must embed RID-PURPOSE-001 and keep downstream use intentionally unspecified."
+    },
+    {
+      "rid": "RID-CONTRACT-013",
+      "type": "invariant",
+      "text": "Canonical media filenames must follow RID-FILENAME-001."
+    },
+    {
+      "rid": "RID-CONTRACT-014",
+      "type": "invariant",
+      "text": "Initialized task_rules.yaml must be self-contained for no-context assistants."
+    },
+    {
+      "rid": "RID-ID-001",
+      "type": "requirement",
+      "text": "Every initialized task must define stable dataset_id, task_id, and batch_id values that survive folder renames and app sync."
+    },
+    {
+      "rid": "RID-FILENAME-001",
+      "type": "requirement",
+      "text": "Canonical media filenames use full task_id plus dot-separated batch, item, and sha256-prefix segments."
+    },
+    {
+      "rid": "RID-TASK-SELF-CONTAINED-001",
+      "type": "fixed_rule",
+      "text": "Every initialized task must carry enough fixed instructions for assistants to operate from the task folder without reading the init spec."
+    },
+    {
+      "rid": "RID-SCHEMA-001",
+      "type": "requirement",
+      "text": "Generated JSON Schema exports must be derived from this YAML spec and kept non-authoritative."
+    },
+    {
+      "rid": "RID-DUPE-001",
+      "type": "requirement",
+      "text": "Exact duplicates are identified by sha256; near duplicates are tracked by phash and resolved through review rules."
+    },
+    {
+      "rid": "RID-SOURCE-003",
+      "type": "requirement",
+      "text": "Every media item must carry structured source provenance fields, even when unknown."
+    },
+    {
+      "rid": "RID-SEC-001",
+      "type": "rule",
+      "text": "Task artifacts must not contain secrets or sensitive local credentials."
+    },
+    {
+      "rid": "RID-APP-SYNC-001",
+      "type": "requirement",
+      "text": "app_sync_events.jsonl is append-only, app-owned, and not manually edited by assistants."
+    },
+    {
+      "rid": "RID-PURPOSE-001",
+      "type": "fixed_rule",
+      "text": "Initialized task artifacts must keep downstream use intentionally unspecified."
+    },
+    {
+      "rid": "RID-LESSON-001",
+      "type": "rule",
+      "text": "Lessons promoted into this spec must remain heuristic, reusable, target-agnostic, and idol-agnostic."
+    },
+    {
+      "rid": "RID-RULE-001",
+      "type": "requirement",
+      "text": "Task-specific rules live in task_rules.yaml."
+    },
+    {
+      "rid": "RID-RULE-002",
+      "type": "requirement",
+      "text": "Task-specific rule changes append rule_change_events.jsonl."
+    },
+    {
+      "rid": "RID-APPROVAL-001",
+      "type": "requirement",
+      "text": "Fixed contract changes require operator approval in operator_approvals.jsonl."
+    },
+    {
+      "rid": "RID-VALIDATION-001",
+      "type": "requirement",
+      "text": "validate_task must write validation_report.json."
+    },
+    {
+      "rid": "RID-GATE-007",
+      "type": "requirement",
+      "text": "Accepted count is computed from media_items plus intake/accepted filesystem verification."
+    },
+    {
+      "rid": "RID-GOALS-001",
+      "type": "declaration",
+      "text": "Spec-level goals statement complementing non_goals."
+    },
+    {
+      "rid": "RID-VERSIONTOKEN-001",
+      "type": "rule",
+      "text": "version_token duplicates spec_version intentionally for grep-friendly parsers."
+    },
+    {
+      "rid": "RID-SPEC-STATUS-001",
+      "type": "rule",
+      "text": "spec_status promotion criteria from draft to released."
+    },
+    {
+      "rid": "RID-MIGRATION-001",
+      "type": "rule",
+      "text": "In-flight tasks remain pinned to their initialized spec_version unless migrated through approval."
+    },
+    {
+      "rid": "RID-TIME-001",
+      "type": "requirement",
+      "text": "All ISO_TIMESTAMP fields are RFC 3339 UTC with trailing Z."
+    },
+    {
+      "rid": "RID-UUID-001",
+      "type": "requirement",
+      "text": "Event and log id fields use UUIDv7; static ids may use UUIDv4 or ULID."
+    },
+    {
+      "rid": "RID-PATH-001",
+      "type": "requirement",
+      "text": "All artifact paths are disk-agnostic relative paths under the task folder root."
+    },
+    {
+      "rid": "RID-EXT-001",
+      "type": "requirement",
+      "text": "Media file extensions are normalized to lowercase, no leading dot, on import."
+    },
+    {
+      "rid": "RID-CONCURRENCY-001",
+      "type": "requirement",
+      "text": "All artifact writes coordinate through run_state.lock.json with documented acquisition, heartbeat, and recovery."
+    },
+    {
+      "rid": "RID-JSONL-001",
+      "type": "requirement",
+      "text": "JSONL artifacts use UTF-8, LF terminators, single-write line append, and tolerant per-line read."
+    },
+    {
+      "rid": "RID-DRIFT-001",
+      "type": "requirement",
+      "text": "task_rules.yaml records parent_init_spec sha256 and validate_task verifies embedded fixed rules byte-for-byte."
+    },
+    {
+      "rid": "RID-WORKSPACE-001",
+      "type": "rule",
+      "text": "Each task occupies an inner task_root subfolder named exactly after the task_id, nested inside an outer operator workspace folder."
+    },
+    {
+      "rid": "RID-ASSISTANT-WORKSPACE-001",
+      "type": "rule",
+      "text": "assistant_workspace/ is the assistant free-work area inside task_root, and task_tools/scripts/ is the task-local helper script folder."
+    },
+    {
+      "rid": "RID-GOVERNANCE-MAINTENANCE-001",
+      "type": "rule",
+      "text": "Assistants autonomously maintain governance logs when task rules, requirements, topology, validation policy, source policy, acceptance criteria, spec pinning, or other task contract behavior changes."
+    },
+    {
+      "rid": "RID-TOPOLOGY-001",
+      "type": "invariant",
+      "text": "task_topology.yaml is the single source of truth for in-task paths."
+    },
+    {
+      "rid": "RID-TOPOLOGY-002",
+      "type": "invariant",
+      "text": "Artifact creation, rename, move, or deletion updates task_topology.yaml in the same locked write."
+    },
+    {
+      "rid": "RID-TOPOLOGY-003",
+      "type": "requirement",
+      "text": "validate_task verifies task_topology.yaml entries match filesystem state."
+    },
+    {
+      "rid": "RID-TOPOLOGY-004",
+      "type": "invariant",
+      "text": "task_topology.yaml, task_state.yaml, task_rules.yaml, and task_requirements.yaml live at task_root and cannot be relocated."
+    },
+    {
+      "rid": "RID-TOPOLOGY-005",
+      "type": "rule",
+      "text": "required_artifacts, artifact_manifest, and tool_contracts use logical names that resolve through task_topology.yaml."
+    },
+    {
+      "rid": "RID-REQ-001",
+      "type": "requirement",
+      "text": "task_requirements.yaml is the outcome contract; identity fields move out of task_rules.active_rules."
+    },
+    {
+      "rid": "RID-IDSTAMP-001",
+      "type": "requirement",
+      "text": "Every authoritative artifact carries dataset_id and task_id at its header; JSONL records carry them per record."
+    },
+    {
+      "rid": "RID-ARTKIND-001",
+      "type": "requirement",
+      "text": "Every YAML or JSON artifact carries artifact_kind and artifact_id; JSONL kind resolves via artifact_manifest."
+    },
+    {
+      "rid": "RID-HANDLE-001",
+      "type": "requirement",
+      "text": "Every artifact carries artifact_handle = task_id + '/' + artifact_kind for cross-task reference."
+    },
+    {
+      "rid": "RID-ARTFILE-001",
+      "type": "requirement",
+      "text": "Artifact filenames follow {task_id}.{artifact_kind}.{ext}."
+    },
+    {
+      "rid": "RID-REGISTRY-001",
+      "type": "rule",
+      "text": "Cross-task registry catalogs all initialized tasks; generated, never authoritative."
+    },
+    {
+      "rid": "RID-REGISTRY-002",
+      "type": "requirement",
+      "text": "registry.yaml index schema fields."
+    },
+    {
+      "rid": "RID-REGISTRY-003",
+      "type": "requirement",
+      "text": "tasks.jsonl record schema fields."
+    },
+    {
+      "rid": "RID-REGISTRY-004",
+      "type": "requirement",
+      "text": "artifacts.jsonl record schema fields."
+    },
+    {
+      "rid": "RID-REGISTRY-005",
+      "type": "requirement",
+      "text": "subjects.jsonl record schema fields."
+    },
+    {
+      "rid": "RID-REGISTRY-006",
+      "type": "rule",
+      "text": "artifact_handle is the registry primary key; task_id is the task primary key; subject_slug is the subject primary key."
+    },
+    {
+      "rid": "RID-REGISTRY-007",
+      "type": "requirement",
+      "text": "Registry refresher walks scan_roots and rebuilds via temp-then-rename."
+    },
+    {
+      "rid": "RID-REGISTRY-008",
+      "type": "rule",
+      "text": "Apps treat the registry as a cache and refresh past freshness_threshold_seconds."
+    },
+    {
+      "rid": "RID-ENTRY-001",
+      "type": "requirement",
+      "text": "Every task carries a single canonical start_here.md entrypoint at task_root, generated by init_task and refreshed by refresh_state."
+    },
+    {
+      "rid": "RID-HANDOFF-001",
+      "type": "rule",
+      "text": "handoffs/ folder holds optional handoff_message files for operator-driven assistant switches; missing handoffs are not a validation failure."
+    },
+    {
+      "rid": "RID-SPECFILE-001",
+      "type": "rule",
+      "text": "Canonical spec is a single JSON file; no prose, no twin format, no markdown wrapper."
+    },
+    {
+      "rid": "RID-PLACEHOLDER-001",
+      "type": "requirement",
+      "text": "Every {{NAME}} placeholder used in skeletons has a defined computation rule in placeholder_catalog."
+    },
+    {
+      "rid": "RID-INITALG-001",
+      "type": "requirement",
+      "text": "init_task.py executes the init_algorithm steps in declared order with rollback on failure."
+    }
+  ],
+  "tool_contracts": {
+    "resolution_rule": "All inputs, outputs, creates, updates, and appends fields use logical names that resolve through task_topology.yaml per RID-TOPOLOGY-005. Tools must read task_topology.yaml at startup and translate logical names to relative paths under task_root.",
+    "init_task": {
+      "rid": "RID-TOOL-001",
+      "purpose": "Create the inner task_root subfolder, the folder topology, and initialize empty machine-readable artifacts with task_id-prefixed filenames per RID-ARTFILE-001.",
+      "preferred_command": "python init_task.py --spec image_sourcing_init_spec-idol_v00.19.json --operator-workspace-root {{OPERATOR_WORKSPACE_ROOT}}",
+      "inputs": [
+        "image_sourcing_init_spec-idol_v00.19.json",
+        "task_request.json"
+      ],
+      "two_phase_request_template": {
+        "default_request_path": "task_request.json next to the parent init spec",
+        "missing_request_behavior": "Write a self-explanatory editable request template, print TARGET FILE TO EDIT with the concrete request-file path, and exit without creating a task_root.",
+        "existing_request_behavior": "Read task_request.json, validate project_code and task_id against RID-ID-001, overlay task criteria into task_requirements, then create the task_root.",
+        "portability_rule": "init_task.py and this JSON spec are repo-neutral. They can be copied into any folder/project on Windows, macOS, or Linux with Python available. If --spec is relative, init_task.py first resolves it next to init_task.py, then falls back to the current working directory. The default request file is resolved next to the selected --spec file; relative --request paths also resolve next to that selected spec. The generated task_root is created under --operator-workspace-root.",
+        "llm_instruction": "Future assistants must put task-specific project abbreviation, task_id, subject, target count, inclusion criteria, and exclusion criteria in task_request.json, not in the neutral init spec.",
+        "required_request_fields": [
+          "project_code",
+          "task_id"
+        ],
+        "request_fields_consumed": [
+          "project_code",
+          "task_id",
+          "task_ordinal",
+          "dataset_ordinal",
+          "batch_ordinal",
+          "subject",
+          "subject_slug",
+          "accepted_count_target",
+          "identity",
+          "inclusion_criteria",
+          "exclusion_criteria",
+          "diversity_targets",
+          "source_preferences"
+        ]
+      },
+      "creates_task_root": "{{OPERATOR_WORKSPACE_ROOT}}/{{TASK_ID}}/",
+      "creates_logical": [
+        "task_topology",
+        "task_state",
+        "task_rules",
+        "task_requirements",
+        "start_here",
+        "artifact_manifest",
+        "validation_report",
+        "run_state_lock",
+        "media_items",
+        "media_events",
+        "source_expansion_matrix",
+        "workflow_failure_log",
+        "insights_log",
+        "rule_change_events",
+        "operator_approvals",
+        "app_adapter",
+        "app_sync_events",
+        "schemas"
+      ],
+      "creates_folders": [
+        "state",
+        "logs",
+        "governance",
+        "app",
+        "schemas",
+        "intake/raw",
+        "intake/accepted",
+        "intake/pending",
+        "intake/rejected",
+        "intake/rejected/identity",
+        "intake/rejected/quality",
+        "intake/rejected/corrupt",
+        "intake/rejected/duplicate",
+        "intake/rejected/source_mismatch",
+        "intake/rejected/below_gate",
+        "intake/diagnostic",
+        "intake/thumbnails",
+        "review/batches",
+        "contact_sheets/sheets",
+        "contact_sheets/manifests",
+        "contact_sheets/selections",
+        "handoffs",
+        "runs",
+        "task_tools",
+        "task_tools/scripts",
+        "assistant_workspace",
+        "assistant_workspace/scratch",
+        "assistant_workspace/notes",
+        "assistant_workspace/outputs"
+      ],
+      "refuses_when": [
+        "Inner task_root with the same task_id already exists at the operator_workspace_root (RID-WORKSPACE-001).",
+        "Operator workspace root does not exist or is identical to the proposed task_root."
+      ],
+      "destructive": false
+    },
+    "validate_task": {
+      "rid": "RID-TOOL-001",
+      "purpose": "Parse and validate all machine-readable artifacts against this spec, including drift detection against the parent init spec, topology authority checks, and registry awareness.",
+      "preferred_command": "python task_tools/validate_task.py --task-root {{TASK_ROOT}} --parent-init-spec image_sourcing_init_spec-idol_v00.19.json",
+      "inputs_logical": [
+        "task_topology",
+        "task_state",
+        "task_rules",
+        "task_requirements",
+        "start_here",
+        "artifact_manifest",
+        "validation_report",
+        "run_state_lock",
+        "media_items",
+        "media_events",
+        "source_expansion_matrix",
+        "workflow_failure_log",
+        "insights_log",
+        "rule_change_events",
+        "operator_approvals",
+        "app_adapter",
+        "app_sync_events",
+        "schemas"
+      ],
+      "inputs_external": [
+        "image_sourcing_init_spec-idol_v00.19.json"
+      ],
+      "inputs_optional": [
+        "handoffs/{{TASK_ID}}.handoff.{{ISO_TIMESTAMP_COMPACT}}.md"
+      ],
+      "additional_checks": [
+        {
+          "rid": "RID-WORKSPACE-001",
+          "check": "task_root basename equals task_state.task_id; task_root parent exists and is the operator_workspace_root."
+        },
+        {
+          "rid": "RID-TOPOLOGY-001",
+          "check": "Every required logical_name in artifact_manifest has a corresponding entry in task_topology.files."
+        },
+        {
+          "rid": "RID-TOPOLOGY-003",
+          "check": "Every entry in task_topology.files exists on disk relative to task_root; every entry in task_topology.folders exists relative to task_root."
+        },
+        {
+          "rid": "RID-IDSTAMP-001",
+          "check": "Every authoritative YAML or JSON artifact contains dataset_id and task_id; every JSONL record contains dataset_id and task_id."
+        },
+        {
+          "rid": "RID-ARTKIND-001",
+          "check": "Every YAML or JSON artifact contains artifact_kind and artifact_id matching the registry."
+        },
+        {
+          "rid": "RID-HANDLE-001",
+          "check": "Every YAML or JSON artifact contains artifact_handle equal to task_id + '/' + artifact_kind."
+        },
+        {
+          "rid": "RID-ARTFILE-001",
+          "check": "Every artifact filename listed in task_topology.files matches {task_id}.{artifact_kind}.{ext}."
+        },
+        {
+          "rid": "RID-REQ-001",
+          "check": "task_requirements exists; task_rules.active_rules no longer contains identity fields."
+        },
+        {
+          "rid": "RID-DRIFT-001",
+          "check": "Recompute sha256 of parent init spec and compare against task_rules.parent_init_spec.sha256."
+        },
+        {
+          "rid": "RID-CONCURRENCY-001",
+          "check": "If run_state_lock shows active == true, verify last_heartbeat_at is fresh; otherwise emit blocked_lock_held with stale_lock_recovered failure record."
+        },
+        {
+          "rid": "RID-JSONL-001",
+          "check": "Per-line parse all JSONL artifacts; quarantine bad lines into runs/{{TASK_ID}}.jsonl_quarantine_<artifact>.jsonl."
+        },
+        {
+          "rid": "RID-PATH-001",
+          "check": "Reject any stored path containing drive letters, UNC prefixes, leading slash, backslashes, or escaping task_root."
+        },
+        {
+          "rid": "RID-ENTRY-001",
+          "check": "start_here exists at task_root with the expected filename; body contains all required headings."
+        },
+        {
+          "rid": "RID-HANDOFF-001",
+          "check": "handoffs/ exists; any file inside matching the handoff filename pattern parses cleanly. Missing handoffs are not a failure; bad handoffs emit warnings only."
+        }
+      ],
+      "outputs_logical": [
+        "validation_report"
+      ],
+      "destructive": false
+    },
+    "export_json_schemas": {
+      "rid": "RID-SCHEMA-001",
+      "purpose": "Generate app-consumable JSON Schema files from the canonical YAML spec.",
+      "preferred_command": "python task_tools/export_json_schemas.py --spec image_sourcing_init_spec-idol_v00.19.json --task-root {{TASK_ROOT}}",
+      "inputs": [
+        "image_sourcing_init_spec-idol_v00.19.json"
+      ],
+      "creates_or_updates": [
+        "schemas/media_item.schema.json",
+        "schemas/media_event.schema.json",
+        "schemas/task_state.schema.json",
+        "schemas/task_topology.schema.json",
+        "schemas/artifact_manifest.schema.json",
+        "schemas/app_sync_event.schema.json",
+        "schemas/app_adapter.schema.json",
+        "schemas/task_rules.schema.json",
+        "schemas/workflow_failure.schema.json",
+        "schemas/insight.schema.json",
+        "schemas/source_expansion_event.schema.json",
+        "schemas/reject_manifest.schema.json",
+        "schemas/restore_manifest.schema.json",
+        "schemas/rule_change_event.schema.json",
+        "schemas/operator_approval.schema.json",
+        "schemas/validation_report.schema.json",
+        "schemas/run_state_lock.schema.json"
+      ],
+      "destructive": false
+    },
+    "refresh_state": {
+      "rid": "RID-TOOL-001",
+      "purpose": "Recompute lane counts and active run status from filesystem plus structured artifacts; regenerate start_here so the entrypoint reflects current live status.",
+      "preferred_command": "python task_tools/refresh_state.py --task-root {{TASK_ROOT}}",
+      "inputs_logical": [
+        "task_topology",
+        "task_state",
+        "task_rules",
+        "task_requirements",
+        "validation_report",
+        "run_state_lock",
+        "media_items",
+        "workflow_failure_log"
+      ],
+      "updates_logical": [
+        "task_state",
+        "start_here"
+      ],
+      "destructive": false
+    },
+    "move_media": {
+      "rid": "RID-TOOL-001",
+      "purpose": "Move media between lanes and append media_events records.",
+      "preferred_command": "python task_tools/move_media.py --task-root {{TASK_ROOT}} --manifest {{MANIFEST_FILENAME}}",
+      "inputs_logical": [
+        "media_items",
+        "media_events"
+      ],
+      "inputs_per_operation": [
+        "runs/{{TASK_ID}}.reject_<timestamp>_<reason>.json",
+        "runs/{{TASK_ID}}.restore_<timestamp>_<reason>.json"
+      ],
+      "updates_logical": [
+        "media_items",
+        "media_events"
+      ],
+      "updates_filesystem": [
+        "intake_lanes"
+      ],
+      "destructive": false,
+      "note": "Moves are state transitions, not deletion."
+    },
+    "sync_app_adapter": {
+      "rid": "RID-APP-SYNC-001",
+      "purpose": "Sync neutral mirrored intake metadata to CastKit Codex or OpenRepose when an adapter is defined.",
+      "preferred_command": "python task_tools/sync_app_adapter.py --task-root {{TASK_ROOT}} --target-app {{APP_ID}}",
+      "inputs_logical": [
+        "app_adapter",
+        "media_items",
+        "media_events",
+        "app_sync_events"
+      ],
+      "updates_logical": [
+        "media_items",
+        "app_adapter"
+      ],
+      "appends_logical": [
+        "app_sync_events"
+      ],
+      "assistant_manual_write_allowed": {
+        "app_sync_events": false
+      },
+      "destructive": false
+    },
+    "refresh_registry": {
+      "rid": "RID-REGISTRY-007",
+      "purpose": "Walk the configured scan_roots, identify task_root candidates by matching the task_id naming convention, parse each task's task_state and artifact_manifest, and rebuild registry.yaml, tasks.jsonl, artifacts.jsonl, and optional subjects.jsonl.",
+      "preferred_command": "python task_tools/refresh_registry.py --registry-root {{REGISTRY_ROOT}} --scan-root {{SCAN_ROOT}}",
+      "inputs_external": [
+        "{{SCAN_ROOT}}/**/{{TASK_ID}}/{{TASK_ID}}.task_state.yaml",
+        "{{SCAN_ROOT}}/**/{{TASK_ID}}/state/{{TASK_ID}}.artifact_manifest.yaml"
+      ],
+      "creates_or_updates": [
+        "{{REGISTRY_ROOT}}/registry.yaml",
+        "{{REGISTRY_ROOT}}/tasks.jsonl",
+        "{{REGISTRY_ROOT}}/artifacts.jsonl",
+        "{{REGISTRY_ROOT}}/subjects.jsonl"
+      ],
+      "write_protocol": "temp_then_rename",
+      "destructive": false,
+      "note": "Registry never writes inside any task_root."
+    }
+  },
+  "generated_views": {
+    "policy_rid": "RID-VIEW-001",
+    "authoritative": false,
+    "views": [
+      {
+        "path": "START_HERE.md",
+        "format": "markdown",
+        "generated_from": [
+          "task_state.yaml",
+          "run_state.lock.json",
+          "workflow_failure_log.jsonl",
+          "insights_log.jsonl"
+        ],
+        "purpose": "Human handoff summary."
+      },
+      {
+        "path": "INDEX.md",
+        "format": "markdown",
+        "generated_from": [
+          "task_state.yaml",
+          "task_topology.yaml",
+          "artifact_manifest.yaml",
+          "media_items.jsonl",
+          "source_expansion_matrix.jsonl"
+        ],
+        "purpose": "Human-readable task index."
+      },
+      {
+        "path": "progress_tracker.md",
+        "format": "markdown",
+        "generated_from": [
+          "task_state.yaml"
+        ],
+        "purpose": "Human-readable progress table."
+      }
+    ]
+  },
+  "workflow_phases_resolution_rule": "All required_outputs, appends, and updates fields below use logical names per RID-TOPOLOGY-005.",
+  "workflow_phases": [
+    {
+      "id": "initialize_task",
+      "order": 1,
+      "required_outputs_logical": [
+        "task_topology",
+        "task_state",
+        "task_rules",
+        "task_requirements",
+        "start_here",
+        "artifact_manifest",
+        "validation_report",
+        "run_state_lock",
+        "media_items",
+        "media_events",
+        "source_expansion_matrix",
+        "workflow_failure_log",
+        "insights_log",
+        "rule_change_events",
+        "operator_approvals",
+        "app_adapter",
+        "app_sync_events",
+        "schemas"
+      ],
+      "required_folders": [
+        "state",
+        "logs",
+        "governance",
+        "app",
+        "intake",
+        "review",
+        "contact_sheets",
+        "handoffs",
+        "runs",
+        "task_tools",
+        "task_tools/scripts",
+        "assistant_workspace",
+        "assistant_workspace/scratch",
+        "assistant_workspace/notes",
+        "assistant_workspace/outputs"
+      ]
+    },
+    {
+      "id": "collect_raw",
+      "order": 2,
+      "writes_lane": "raw",
+      "appends_logical": [
+        "media_items",
+        "media_events",
+        "source_expansion_matrix"
+      ],
+      "required_checks": [
+        "RID-ID-001",
+        "RID-SOURCE-003",
+        "RID-DUPE-001"
+      ]
+    },
+    {
+      "id": "visual_review",
+      "order": 3,
+      "allowed_transitions": [
+        "raw_to_accepted_after_visual_and_requirement_pass",
+        "raw_to_pending",
+        "raw_to_rejected",
+        "pending_to_accepted_after_visual_and_requirement_pass",
+        "pending_to_rejected"
+      ],
+      "appends_logical": [
+        "media_events"
+      ]
+    },
+    {
+      "id": "app_sync",
+      "order": 4,
+      "target_apps": [
+        "castkit_codex",
+        "openrepose"
+      ],
+      "updates_logical": [
+        "media_items",
+        "app_adapter"
+      ],
+      "appends_logical": [
+        "app_sync_events"
+      ],
+      "required_checks": [
+        "RID-APP-SYNC-001"
+      ]
+    },
+    {
+      "id": "handoff",
+      "order": 5,
+      "required_checks": [
+        "RID-CONTRACT-008",
+        "RID-VALIDATION-001"
+      ],
+      "required_outputs_logical": [
+        "task_state",
+        "validation_report",
+        "workflow_failure_log",
+        "insights_log"
+      ]
+    }
+  ],
+  "app_integration": {
+    "neutral_mirror_status": "required",
+    "adapters_defined": false,
+    "target_apps": {
+      "castkit_codex": {
+        "likely_primary": true,
+        "expected_role": "image_storage_view_sort_accept_reject_database_cross_project_reuse",
+        "required_future_adapter_fields": [
+          "app_collection_id",
+          "app_record_id",
+          "app_import_status",
+          "app_last_synced_at",
+          "app_sync_event_id"
+        ]
+      },
+      "openrepose": {
+        "likely_conditional": true,
+        "expected_role": "openpose_artifact_storage_and_comfyui_workflow_bridge",
+        "required_future_adapter_fields": [
+          "pose_artifact_id",
+          "openpose_package_id",
+          "workflow_link_id",
+          "app_sync_event_id"
+        ]
+      }
+    },
+    "sync_event_log": {
+      "path": "app_sync_events.jsonl",
+      "owner": "app_or_sync_tool",
+      "assistant_manual_write_allowed": false,
+      "rule_rid": "RID-APP-SYNC-001"
+    }
+  },
+  "spec_file_format_policy": {
+    "rid": "RID-SPECFILE-001",
+    "description": "Canonical spec is a single JSON file. No prose, no twin format, no fenced markdown wrapper.",
+    "rule": "The init spec is distributed as a single UTF-8 encoded JSON file with no byte order mark and LF line endings. The file must be parseable by stdlib json.load in any language without preprocessing. The spec carries no free-form prose; clarifying text lives in description fields.",
+    "embedded_after_init_in": [
+      "task_rules"
+    ],
+    "rationale": "Keeps per-read LLM token cost low and eliminates the prose-data desync drift vector.",
+    "validation_checks": [
+      "File parses cleanly with stdlib json.load.",
+      "File is UTF-8 without BOM.",
+      "File uses LF line endings.",
+      "Top-level object contains spec_version, version_token, spec_file, schemas, rid_registry, tool_contracts."
+    ]
+  },
+  "placeholder_catalog": {
+    "rid": "RID-PLACEHOLDER-001",
+    "description": "Every {{NAME}} placeholder used anywhere in the spec, with its computation rule.",
+    "rule": "init_task.py must substitute every placeholder per its computation rule before writing artifacts.",
+    "placeholders": {
+      "PROJECT_CODE": {
+        "rule": "Operator-supplied or default cwb_isrc; must match canonical_ids.id_fields.project_code.format.",
+        "computed_when": "init_task arg or default"
+      },
+      "DATASET_ORDINAL_4": {
+        "rule": "Zero-padded 4-digit ordinal of the dataset within project_code; operator-supplied or computed by walking existing datasets.",
+        "computed_when": "init_task"
+      },
+      "TASK_ORDINAL_4": {
+        "rule": "Zero-padded 4-digit ordinal of the task within project_code; operator-supplied or computed by walking existing task_ids.",
+        "computed_when": "init_task"
+      },
+      "BATCH_ORDINAL_4": {
+        "rule": "Zero-padded 4-digit ordinal of the batch within task; defaults to 0001 at init.",
+        "computed_when": "init_task"
+      },
+      "ULID": {
+        "rule": "Crockford base32 ULID, 26 characters, time-prefixed; see ulid-spec.",
+        "computed_when": "init_task"
+      },
+      "DATASET_ID": {
+        "rule": "dataset_{PROJECT_CODE}_{DATASET_ORDINAL_4}_{ULID}",
+        "computed_when": "init_task",
+        "depends_on": [
+          "PROJECT_CODE",
+          "DATASET_ORDINAL_4",
+          "ULID"
+        ]
+      },
+      "TASK_ID": {
+        "rule": "task_{PROJECT_CODE}_{TASK_ORDINAL_4}_{ULID}",
+        "computed_when": "init_task",
+        "depends_on": [
+          "PROJECT_CODE",
+          "TASK_ORDINAL_4",
+          "ULID"
+        ]
+      },
+      "BATCH_ID": {
+        "rule": "batch_{PROJECT_CODE}_{TASK_ORDINAL_4}_{BATCH_ORDINAL_4}_{ULID}",
+        "computed_when": "init_task",
+        "depends_on": [
+          "PROJECT_CODE",
+          "TASK_ORDINAL_4",
+          "BATCH_ORDINAL_4",
+          "ULID"
+        ]
+      },
+      "ISO_TIMESTAMP": {
+        "rule": "RFC 3339 UTC with trailing Z, e.g. 2026-05-05T13:24:55Z; see RID-TIME-001.",
+        "computed_when": "at_use"
+      },
+      "ISO_TIMESTAMP_COMPACT": {
+        "rule": "RFC 3339 UTC with colons replaced by hyphens, e.g. 2026-05-05T13-24-55Z; see RID-HANDOFF-001.",
+        "computed_when": "at_use"
+      },
+      "UUIDV7": {
+        "rule": "UUIDv7 per RID-UUID-001. If runtime lacks native UUIDv7, vendor a 30-line implementation.",
+        "computed_when": "at_use"
+      },
+      "UUID": {
+        "rule": "Legacy placeholder retained for backward compatibility; treat as UUIDv7 in new code.",
+        "computed_when": "at_use"
+      },
+      "PARENT_INIT_SPEC_SHA256": {
+        "rule": "Hex sha256 of the parent init spec file at init time, computed over the file bytes.",
+        "computed_when": "init_task"
+      },
+      "SUBJECT": {
+        "rule": "Operator-supplied target subject identifier; lives in task_requirements.identity.target_subject.",
+        "computed_when": "operator_input"
+      },
+      "GROUP": {
+        "rule": "Operator-supplied group identifier or null.",
+        "computed_when": "operator_input"
+      },
+      "GROUP_OR_NULL": {
+        "rule": "Same as GROUP.",
+        "computed_when": "operator_input"
+      },
+      "SUBJECT_SLUG": {
+        "rule": "Operator-supplied lowercase slug derived from subject; used in review/_reference_{SUBJECT_SLUG}/.",
+        "computed_when": "operator_input"
+      },
+      "TASK_ROOT": {
+        "rule": "Absolute filesystem path to the inner task_id subfolder; computed from operator_workspace_root + TASK_ID.",
+        "computed_when": "init_task"
+      },
+      "TASK_FOLDER": {
+        "rule": "Legacy alias for TASK_ROOT; deprecated as of v00.17 but kept for any remaining references.",
+        "computed_when": "init_task"
+      },
+      "OPERATOR_WORKSPACE_ROOT": {
+        "rule": "Absolute filesystem path to the outer operator nickname folder; CLI arg.",
+        "computed_when": "init_task_arg"
+      },
+      "REGISTRY_ROOT": {
+        "rule": "Absolute filesystem path to the cross-task registry root; CLI arg for refresh_registry only.",
+        "computed_when": "refresh_registry_arg"
+      },
+      "REGISTRY_RELATIVE_SCAN_ROOT": {
+        "rule": "Path to scan, relative to REGISTRY_ROOT; CLI arg for refresh_registry.",
+        "computed_when": "refresh_registry_arg"
+      },
+      "REGISTRY_RELATIVE_PATH_TO_TASK_ROOT": {
+        "rule": "Path to a task_root relative to REGISTRY_ROOT; computed by refresh_registry.",
+        "computed_when": "refresh_registry"
+      },
+      "REGISTRY_RELATIVE_PATH_TO_WORKSPACE_ROOT": {
+        "rule": "Path to an operator_workspace_root relative to REGISTRY_ROOT; computed by refresh_registry.",
+        "computed_when": "refresh_registry"
+      },
+      "REGISTRY_RELATIVE_PATH_TO_ARTIFACT": {
+        "rule": "Path to a single artifact file relative to REGISTRY_ROOT; computed by refresh_registry.",
+        "computed_when": "refresh_registry"
+      },
+      "RUN_ID": {
+        "rule": "UUIDv7 generated at the start of a run; recorded in run_state_lock.run_id.",
+        "computed_when": "at_run_start"
+      },
+      "RUN_ID_OR_NULL": {
+        "rule": "RUN_ID or null when no run is active.",
+        "computed_when": "at_run_start"
+      },
+      "ITEM_ID": {
+        "rule": "Per-media-item id; UUIDv4 or sha256-derived; see media_item_schema.",
+        "computed_when": "media_import"
+      },
+      "SHA256": {
+        "rule": "Lowercase hex sha256 of the media file bytes.",
+        "computed_when": "media_import"
+      },
+      "SHA256_PREFIX": {
+        "rule": "First 8 lowercase hex characters of SHA256.",
+        "computed_when": "media_import",
+        "depends_on": [
+          "SHA256"
+        ]
+      },
+      "PHASH": {
+        "rule": "64-bit perceptual hash of the media file; tool-specific.",
+        "computed_when": "media_import"
+      },
+      "CANONICAL_FILENAME": {
+        "rule": "Per RID-FILENAME-001; {task_id}.b{batch_ordinal:04d}.i{item_sequence:07d}.s{sha256_prefix}.{ext}.",
+        "computed_when": "media_import"
+      },
+      "SOURCE_ORIGINAL_FILENAME": {
+        "rule": "Source filename as observed at download time; preserved in original_filename.",
+        "computed_when": "media_import"
+      },
+      "SOURCE_FAMILY": {
+        "rule": "Enum value from source_provenance.enums.source_family.",
+        "computed_when": "operator_or_collector_input"
+      },
+      "WORKFLOW_PHASE": {
+        "rule": "Enum value from workflow_failure_schema.enums.phase.",
+        "computed_when": "at_use"
+      },
+      "FAILURE_TYPE": {
+        "rule": "Enum value from workflow_failure_schema.enums.failure_type.",
+        "computed_when": "at_use"
+      },
+      "OBSERVED_SYMPTOM": {
+        "rule": "Free-text symptom string.",
+        "computed_when": "at_use"
+      },
+      "KNOWN_OR_UNKNOWN_ROOT_CAUSE": {
+        "rule": "Free-text root cause string.",
+        "computed_when": "at_use"
+      },
+      "TASK_IMPACT": {
+        "rule": "Free-text impact string.",
+        "computed_when": "at_use"
+      },
+      "ACTION_TAKEN": {
+        "rule": "Free-text action string.",
+        "computed_when": "at_use"
+      },
+      "REUSABLE_OBSERVATION": {
+        "rule": "Free-text observation string.",
+        "computed_when": "at_use"
+      },
+      "EVIDENCE_REFERENCE": {
+        "rule": "Free-text evidence string.",
+        "computed_when": "at_use"
+      },
+      "REASON": {
+        "rule": "Free-text reason string.",
+        "computed_when": "at_use"
+      },
+      "OPERATOR_APPROVAL_TEXT": {
+        "rule": "Free-text operator approval string.",
+        "computed_when": "operator_input"
+      },
+      "MANIFEST_NAME": {
+        "rule": "Caller-supplied manifest filename without extension.",
+        "computed_when": "tool_arg"
+      },
+      "MODEL_OR_OPERATOR_IDENTIFIER": {
+        "rule": "Free-text identifier for the model or operator writing a handoff.",
+        "computed_when": "at_use"
+      },
+      "ONE_OR_TWO_SENTENCES": {
+        "rule": "Free-text summary string.",
+        "computed_when": "at_use"
+      },
+      "FREE_TEXT": {
+        "rule": "Free-text string.",
+        "computed_when": "at_use"
+      },
+      "FREE_TEXT_OR_EMPTY": {
+        "rule": "Free-text string or empty string.",
+        "computed_when": "at_use"
+      },
+      "FREE_TEXT_OR_REMOVE_SECTION": {
+        "rule": "Free-text string; section omitted if empty.",
+        "computed_when": "at_use"
+      },
+      "GOTCHA_OR_REMOVE_SECTION": {
+        "rule": "Free-text gotcha string; section omitted if empty.",
+        "computed_when": "at_use"
+      },
+      "ARTIFACT_HANDLE_OR_PATH_OR_REMOVE_SECTION": {
+        "rule": "Artifact handle (per RID-HANDLE-001) or relative path; section omitted if empty.",
+        "computed_when": "at_use"
+      },
+      "ADAPTER_ID": {
+        "rule": "Free-text adapter identifier; per app_adapter.yaml.",
+        "computed_when": "sync_app_adapter"
+      },
+      "VALIDATION_STATE": {
+        "rule": "Current validation_report.validation_state value; rendered into start_here.",
+        "computed_when": "refresh_state"
+      },
+      "LOCK_ACTIVE": {
+        "rule": "Current run_state_lock.active value; rendered into start_here.",
+        "computed_when": "refresh_state"
+      },
+      "COUNTS": {
+        "rule": "Current task_state.counts rendered as comma-joined values; rendered into start_here.",
+        "computed_when": "refresh_state"
+      },
+      "RECENT_FAILURES_OR_NONE": {
+        "rule": "Last 3 workflow_failure_log entries summarized, or 'none' if log empty.",
+        "computed_when": "refresh_state"
+      },
+      "REPO_POINTERS_LIST_OR_NONE": {
+        "rule": "Bullet list rendered from task_state.repo_pointers (operator-configured), or 'none'.",
+        "computed_when": "refresh_state"
+      }
+    }
+  },
+  "init_algorithm": {
+    "rid": "RID-INITALG-001",
+    "description": "Ordered, dependency-respecting steps that init_task.py performs to produce a valid task_root, with a two-phase request-template bootstrap for LLM/operator input.",
+    "rule": "init_task.py must execute these steps in the listed order. If the default task_request.json is missing, init_task.py writes a self-explanatory request template and exits before creating task_root. Once a request exists, each step is idempotent within a single run. Failure at any step before lock release must trigger rollback (delete partially created task_root) before exiting non-zero.",
+    "preconditions": [
+      "operator_workspace_root exists and is writable.",
+      "operator_workspace_root is not itself a task_root (no task_state.yaml or task_state.json at its top).",
+      "No subfolder named {TASK_ID} already exists inside operator_workspace_root.",
+      "Parent init spec file exists and is readable.",
+      "Task-specific values live in task_request.json or explicit CLI args, never in the neutral parent init spec."
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "id": "parse_spec",
+        "action": "Load the parent init spec file with stdlib json.load.",
+        "writes": [],
+        "produces": [
+          "spec_dict"
+        ]
+      },
+      {
+        "order": 2,
+        "id": "resolve_or_write_request_and_compute_parent_hash",
+        "action": "Resolve the parent spec portably: relative --spec first resolves next to init_task.py, then falls back to the current working directory. If no explicit request path is supplied and task_request.json is missing next to the selected parent spec, write a self-explanatory editable request template and exit 0 before creating task_root. Relative --request paths resolve next to the selected parent spec. Otherwise load the request file, validate required request values, and compute hex sha256 of the parent init spec file bytes.",
+        "writes": [
+          "task_request.json when missing"
+        ],
+        "produces": [
+          "request_dict",
+          "PARENT_INIT_SPEC_SHA256"
+        ]
+      },
+      {
+        "order": 3,
+        "id": "resolve_ids",
+        "action": "Resolve PROJECT_CODE, DATASET_ORDINAL_4, TASK_ORDINAL_4 from task_request.json or CLI args; validate an explicit TASK_ID against RID-ID-001 or generate one; set BATCH_ORDINAL_4 from request or default 0001 and generate BATCH_ID.",
+        "writes": [],
+        "produces": [
+          "PROJECT_CODE",
+          "DATASET_ID",
+          "TASK_ID",
+          "BATCH_ID"
+        ]
+      },
+      {
+        "order": 4,
+        "id": "create_task_root",
+        "action": "Create operator_workspace_root/{TASK_ID}/ atomically. Refuse if it already exists.",
+        "writes": [
+          "task_root directory"
+        ],
+        "produces": [
+          "TASK_ROOT"
+        ]
+      },
+      {
+        "order": 5,
+        "id": "acquire_lock",
+        "action": "Create state/{TASK_ID}.run_state_lock.json with active=true via O_CREAT|O_EXCL semantics. Refuse if already exists.",
+        "writes": [
+          "run_state_lock"
+        ],
+        "produces": [
+          "lock_held"
+        ],
+        "depends_on_step": 4,
+        "rollback_target_for_later_failures": true
+      },
+      {
+        "order": 6,
+        "id": "create_folders",
+        "action": "Create every folder listed in tool_contracts.init_task.creates_folders, relative to TASK_ROOT.",
+        "writes": [
+          "folder_topology"
+        ]
+      },
+      {
+        "order": 7,
+        "id": "write_task_topology",
+        "action": "Render task_topology_schema.skeleton with placeholder substitution; write atomically (temp file then rename) to {TASK_ID}.task_topology.yaml inside TASK_ROOT.",
+        "writes": [
+          "task_topology"
+        ],
+        "note": "Despite the .yaml extension preserved from skeleton path, the artifact body is JSON when canonical_format is json. See spec_file_format_policy on whether to switch artifact files to .json or keep .yaml; init_task.py honors the file extension declared in task_topology.files."
+      },
+      {
+        "order": 8,
+        "id": "write_task_state",
+        "action": "Render task_state_schema.skeleton with placeholder substitution; write atomically.",
+        "writes": [
+          "task_state"
+        ]
+      },
+      {
+        "order": 9,
+        "id": "write_task_rules",
+        "action": "Render task_rules_schema.skeleton with placeholder substitution including PARENT_INIT_SPEC_SHA256.",
+        "writes": [
+          "task_rules"
+        ]
+      },
+      {
+        "order": 10,
+        "id": "write_task_requirements",
+        "action": "Render task_requirements_schema.skeleton with placeholder substitution.",
+        "writes": [
+          "task_requirements"
+        ]
+      },
+      {
+        "order": 11,
+        "id": "write_artifact_manifest",
+        "action": "Render artifact_manifest_schema.skeleton with placeholder substitution.",
+        "writes": [
+          "artifact_manifest"
+        ]
+      },
+      {
+        "order": 12,
+        "id": "write_app_adapter",
+        "action": "Render app_adapter_schema.skeleton with placeholder substitution.",
+        "writes": [
+          "app_adapter"
+        ]
+      },
+      {
+        "order": 13,
+        "id": "create_empty_jsonl_logs",
+        "action": "Touch all required JSONL log files as empty UTF-8 files with no BOM and no content.",
+        "writes": [
+          "media_items",
+          "media_events",
+          "app_sync_events",
+          "source_expansion_matrix",
+          "workflow_failure_log",
+          "insights_log",
+          "rule_change_events",
+          "operator_approvals"
+        ]
+      },
+      {
+        "order": 14,
+        "id": "export_json_schemas",
+        "action": "Generate JSON Schema 2020-12 files for every schema_ref listed in json_schema_exports.generated_files; write to schemas/.",
+        "writes": [
+          "schemas/*"
+        ]
+      },
+      {
+        "order": 15,
+        "id": "render_start_here",
+        "action": "Render start_here_schema.skeleton.body with placeholder substitution including current task_state values; write to {TASK_ID}.start_here.md at TASK_ROOT.",
+        "writes": [
+          "start_here"
+        ]
+      },
+      {
+        "order": 16,
+        "id": "write_initial_validation_report",
+        "action": "Run validate_task logic; write validation_report with current state.",
+        "writes": [
+          "validation_report"
+        ]
+      },
+      {
+        "order": 17,
+        "id": "release_lock",
+        "action": "Update run_state_lock with active=false, finished_at, exit_code=0; write atomically.",
+        "writes": [
+          "run_state_lock"
+        ]
+      }
+    ],
+    "rollback_protocol": {
+      "trigger": "Any step before release_lock raises an exception or returns non-zero.",
+      "action": "Recursively delete TASK_ROOT and exit non-zero. Do not leave partial state.",
+      "exception": "If TASK_ROOT was not created yet (failure before step 4), no rollback needed."
+    }
+  }
+}
