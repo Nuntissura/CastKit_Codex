@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-06.wp-0099';
+const MANUAL_VERSION = '2026-05-06.wp-0100';
 
 const featureGroups = [
   {
@@ -258,6 +258,33 @@ const featureGroups = [
     ],
   },
   {
+    id: 'image-sourcing-ingestion',
+    title: 'Image sourcing workflow registry, ingestion adapter, per-character scripts',
+    wp: ['WP-0094', 'WP-0100'],
+    summary:
+      'CKC holds the canonical store of image-sourcing workflow specs (v00.19 today, future versions later) and bridges operator-managed task folders into the library. The adapter ingests accepted/pending/rejected lanes per the v00.19 contract, links each image to a character sheet AND a sheet version, dedupes across re-imports of the same character, and copies the task task_tools/scripts/ helpers into a per-character script store. Identity decoupling is enforced: imported image filenames inside libraryRoot are content-hash addressed; the character name never appears in any path or sync-event payload.',
+    commands: [
+      'listWorkflowSpecs',
+      'getWorkflowSpec',
+      'getLatestWorkflowSpec',
+      'listCharacterScripts',
+      'getCharacterScript',
+      'addCharacterScript',
+      'removeCharacterScript',
+      'listIngestionBatches',
+      'getIngestionBatch',
+      'listIngestionRejections',
+    ],
+    roadmap: [
+      'ingestImageSourcingTask (WP-0100 slice 2; the multi-version dispatcher that walks intake/<lane>/, imports with provenance, writes app_sync_events.jsonl, and copies task_tools/scripts/)',
+    ],
+    notes: [
+      'Workflow specs live under CKC_GOV/references/external_app_data/specs/. Operator drops new spec versions there; CKC reads on demand.',
+      'Per-character scripts dedupe by (character_id, script_bytes_hash); identical bytes from multiple tasks collapse to one row.',
+      'Ingestion batches preserve a verbatim snapshot of task_requirements.yaml so done-criteria are audit-recoverable.',
+    ],
+  },
+  {
     id: 'image-intake-sorter',
     title: 'Image intake sorter',
     wp: ['WP-0094'],
@@ -490,6 +517,69 @@ const commandReference = [
     target: 'backend',
     description: 'Classify an intake image in folder-only or linked CKC profile mode.',
     example: { sourcePath: 'C:/intake_batch/a.png', status: 'pending', mode: 'linked', characterId: 'char_001' },
+  },
+  // WP-0100: workflow spec registry (read-only, fs-backed)
+  {
+    id: 'listWorkflowSpecs',
+    target: 'backend',
+    description: 'List every workflow spec under CKC_GOV/references/external_app_data/specs/. Returns specId, specVersion, specStatus, fileName, filePath per spec, sorted by specId then version.',
+    example: {},
+  },
+  {
+    id: 'getWorkflowSpec',
+    target: 'backend',
+    description: 'Return the parsed JSON content of a specific workflow spec by id and version.',
+    example: { specId: 'idol_image_sourcing_init_spec', version: 'v00.19' },
+  },
+  {
+    id: 'getLatestWorkflowSpec',
+    target: 'backend',
+    description: 'Return the highest-version workflow spec for a given specId (parses version tokens like v00.19 numerically).',
+    example: { specId: 'idol_image_sourcing_init_spec' },
+  },
+  // WP-0100: per-character image-sourcing scripts
+  {
+    id: 'listCharacterScripts',
+    target: 'backend',
+    description: 'List image-sourcing helper scripts attached to a character (collectors, selectors, validators).',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'getCharacterScript',
+    target: 'backend',
+    description: 'Return one character script row with decoded file content (UTF-8) when the file exists on disk.',
+    example: { scriptId: 'script_abc' },
+  },
+  {
+    id: 'addCharacterScript',
+    target: 'backend',
+    description: 'Attach a script to a character. Files copied to libraryRoot/characters/<id>/scripts/. Dedup by (characterId, sha256(scriptContent)) — identical bytes from multiple tasks collapse to one row.',
+    example: { characterId: 'char_001', scriptName: 'collector.py', scriptContent: '...', role: 'collector', sourceTaskId: 'task_cwb_isrc_0006_01KQVAP2YN4KKNT5AABWEFQF3J' },
+  },
+  {
+    id: 'removeCharacterScript',
+    target: 'backend',
+    description: 'Delete a character script row and its on-disk file.',
+    example: { scriptId: 'script_abc' },
+  },
+  // WP-0100: ingestion audit (read-only here; writes happen inside the slice-2 adapter)
+  {
+    id: 'listIngestionBatches',
+    target: 'backend',
+    description: 'List ingestion batches (one per ingestImageSourcingTask invocation), optionally filtered by character.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'getIngestionBatch',
+    target: 'backend',
+    description: 'Return one ingestion batch row including the verbatim task_requirements.yaml snapshot captured at ingest time.',
+    example: { batchId: 'batch_abc' },
+  },
+  {
+    id: 'listIngestionRejections',
+    target: 'backend',
+    description: 'List rejected items ingested as audit-only rows from a v00.19 task rejected lane.',
+    example: { characterId: 'char_001' },
   },
   {
     id: 'createCharacter',

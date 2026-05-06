@@ -5,7 +5,7 @@ const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 
 const { randomId, sha256Hex } = require('./crypto');
-const { openDb, initSchema, run, get, all, isPostgresDb } = require('./db');
+const { openDb, initSchema, run, get, all, isPostgresDb, dbNotReady } = require('./db');
 const { parseTemplate } = require('./templateParser');
 const {
   parseSheetText,
@@ -251,6 +251,7 @@ class CKCLibrary {
       exportsDir: path.join(base, 'exports'),
       extrasDir: path.join(base, 'extras'),
       packsDir: path.join(base, 'packs'),
+      scriptsDir: path.join(base, 'scripts'),
     };
   }
 
@@ -7671,6 +7672,305 @@ class CKCLibrary {
       spinoffId: row ? row.spinoff_id : null,
       name: presetName,
     };
+  }
+
+  // ===== WP-0100: per-character image-sourcing scripts =====
+
+  async addCharacterScript({ characterId, scriptName, scriptContent, role, sourceTaskId, notes } = {}) {
+    if (!this.db) dbNotReady('addCharacterScript');
+    const cid = String(characterId || '').trim();
+    if (!cid) throw new Error('characterId is required');
+    const name = String(scriptName || '').trim();
+    if (!name) throw new Error('scriptName is required');
+    if (scriptContent === undefined || scriptContent === null) throw new Error('scriptContent is required');
+
+    const buf = Buffer.isBuffer(scriptContent) ? scriptContent : Buffer.from(String(scriptContent), 'utf8');
+    const hash = sha256Hex(buf);
+
+    const existing = await get(
+      this.db,
+      'SELECT script_id, relative_path, name, role, source_task_id, imported_at, notes, script_bytes_hash FROM CharacterScript WHERE character_id = ? AND script_bytes_hash = ?',
+      [cid, hash]
+    );
+    if (existing) {
+      return {
+        ok: true,
+        deduped: true,
+        scriptId: existing.script_id,
+        characterId: cid,
+        relativePath: existing.relative_path,
+        name: existing.name,
+        role: existing.role,
+        sourceTaskId: existing.source_task_id,
+        scriptBytesHash: existing.script_bytes_hash,
+      };
+    }
+
+    const paths = this.getCharacterPaths(cid);
+    ensureDir(paths.scriptsDir);
+
+    const scriptId = randomId('script_');
+    const ext = path.extname(name) || '';
+    const baseName = path.basename(name, ext);
+    const safeBase = sanitizeFileName(baseName, 'script') || 'script';
+    const safeExt = ext ? sanitizeFileName(ext.replace(/^\./, ''), '') : '';
+    const fileName = `${scriptId}__${safeBase}${safeExt ? '.' + safeExt : ''}`;
+    const relPath = path.join('scripts', fileName).replaceAll('\\', '/');
+    const absPath = path.join(paths.scriptsDir, fileName);
+    fs.writeFileSync(absPath, buf);
+
+    const roleText = String(role || '').trim();
+    const sourceTaskText = sourceTaskId == null ? null : String(sourceTaskId).trim() || null;
+    const notesText = notes == null ? null : String(notes);
+
+    await run(
+      this.db,
+      `INSERT INTO CharacterScript(script_id, character_id, relative_path, name, role, source_task_id, script_bytes_hash, notes)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+      [scriptId, cid, relPath, name, roleText, sourceTaskText, hash, notesText]
+    );
+
+    return {
+      ok: true,
+      deduped: false,
+      scriptId,
+      characterId: cid,
+      relativePath: relPath,
+      name,
+      role: roleText,
+      sourceTaskId: sourceTaskText,
+      scriptBytesHash: hash,
+    };
+  }
+
+  async listCharacterScripts({ characterId } = {}) {
+    if (!this.db) dbNotReady('listCharacterScripts');
+    const cid = String(characterId || '').trim();
+    if (!cid) throw new Error('characterId is required');
+    const rows = await all(
+      this.db,
+      `SELECT script_id, character_id, relative_path, name, role, source_task_id, script_bytes_hash, imported_at, notes
+       FROM CharacterScript WHERE character_id = ? ORDER BY imported_at DESC, script_id DESC`,
+      [cid]
+    );
+    return rows.map((r) => ({
+      scriptId: r.script_id,
+      characterId: r.character_id,
+      relativePath: r.relative_path,
+      name: r.name,
+      role: r.role || '',
+      sourceTaskId: r.source_task_id ?? null,
+      scriptBytesHash: r.script_bytes_hash,
+      importedAt: r.imported_at,
+      notes: r.notes ?? null,
+    }));
+  }
+
+  async getCharacterScript({ scriptId } = {}) {
+    if (!this.db) dbNotReady('getCharacterScript');
+    const sid = String(scriptId || '').trim();
+    if (!sid) throw new Error('scriptId is required');
+    const row = await get(
+      this.db,
+      `SELECT script_id, character_id, relative_path, name, role, source_task_id, script_bytes_hash, imported_at, notes
+       FROM CharacterScript WHERE script_id = ?`,
+      [sid]
+    );
+    if (!row) throw new Error(`No script found for scriptId=${sid}`);
+    const paths = this.getCharacterPaths(row.character_id);
+    const absPath = path.join(paths.base, row.relative_path);
+    const exists = fs.existsSync(absPath);
+    const content = exists ? fs.readFileSync(absPath, 'utf8') : null;
+    return {
+      ok: true,
+      scriptId: row.script_id,
+      characterId: row.character_id,
+      relativePath: row.relative_path,
+      name: row.name,
+      role: row.role || '',
+      sourceTaskId: row.source_task_id ?? null,
+      scriptBytesHash: row.script_bytes_hash,
+      importedAt: row.imported_at,
+      notes: row.notes ?? null,
+      content,
+      fileExists: exists,
+    };
+  }
+
+  async removeCharacterScript({ scriptId } = {}) {
+    if (!this.db) dbNotReady('removeCharacterScript');
+    const sid = String(scriptId || '').trim();
+    if (!sid) throw new Error('scriptId is required');
+    const row = await get(
+      this.db,
+      `SELECT script_id, character_id, relative_path FROM CharacterScript WHERE script_id = ?`,
+      [sid]
+    );
+    if (!row) throw new Error(`No script found for scriptId=${sid}`);
+    const paths = this.getCharacterPaths(row.character_id);
+    const absPath = path.join(paths.base, row.relative_path);
+    try {
+      if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
+    } catch {
+      // file removal is best-effort; the DB row is the source of truth
+    }
+    await run(this.db, `DELETE FROM CharacterScript WHERE script_id = ?`, [sid]);
+    return { ok: true, scriptId: sid };
+  }
+
+  // ===== WP-0100: ingestion batches + rejections (audit) =====
+
+  async createIngestionBatch({ characterId, sheetVersionId, datasetId, taskId, specVersion, lane, requirementsSnapshot } = {}) {
+    if (!this.db) dbNotReady('createIngestionBatch');
+    const cid = String(characterId || '').trim();
+    if (!cid) throw new Error('characterId is required');
+    const laneText = String(lane || '').trim();
+    if (!laneText) throw new Error('lane is required');
+    const batchId = randomId('batch_');
+    const snapshot = typeof requirementsSnapshot === 'string'
+      ? requirementsSnapshot
+      : (requirementsSnapshot ? JSON.stringify(requirementsSnapshot) : '');
+    await run(
+      this.db,
+      `INSERT INTO IngestionBatch(batch_id, character_id, sheet_version_id, dataset_id, task_id, spec_version, lane, requirements_snapshot)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        batchId,
+        cid,
+        sheetVersionId == null ? null : String(sheetVersionId),
+        datasetId == null ? null : String(datasetId),
+        taskId == null ? null : String(taskId),
+        specVersion == null ? null : String(specVersion),
+        laneText,
+        snapshot,
+      ]
+    );
+    return { ok: true, batchId, characterId: cid };
+  }
+
+  async finishIngestionBatch({ batchId, importedCount, skippedCount, error } = {}) {
+    if (!this.db) dbNotReady('finishIngestionBatch');
+    const bid = String(batchId || '').trim();
+    if (!bid) throw new Error('batchId is required');
+    await run(
+      this.db,
+      `UPDATE IngestionBatch
+       SET finished_at = CURRENT_TIMESTAMP,
+           imported_count = ?,
+           skipped_count = ?,
+           error = ?
+       WHERE batch_id = ?`,
+      [
+        Number.isFinite(importedCount) ? Math.floor(importedCount) : 0,
+        Number.isFinite(skippedCount) ? Math.floor(skippedCount) : 0,
+        error == null ? null : String(error),
+        bid,
+      ]
+    );
+    return { ok: true, batchId: bid };
+  }
+
+  async listIngestionBatches({ characterId } = {}) {
+    if (!this.db) dbNotReady('listIngestionBatches');
+    const params = [];
+    let sql = `SELECT batch_id, character_id, sheet_version_id, dataset_id, task_id, spec_version, lane, started_at, finished_at, imported_count, skipped_count, error
+               FROM IngestionBatch`;
+    const cid = characterId == null ? '' : String(characterId).trim();
+    if (cid) {
+      sql += ` WHERE character_id = ?`;
+      params.push(cid);
+    }
+    sql += ` ORDER BY started_at DESC, batch_id DESC`;
+    const rows = await all(this.db, sql, params);
+    return rows.map((r) => ({
+      batchId: r.batch_id,
+      characterId: r.character_id,
+      sheetVersionId: r.sheet_version_id ?? null,
+      datasetId: r.dataset_id ?? null,
+      taskId: r.task_id ?? null,
+      specVersion: r.spec_version ?? null,
+      lane: r.lane,
+      startedAt: r.started_at,
+      finishedAt: r.finished_at ?? null,
+      importedCount: Number(r.imported_count) || 0,
+      skippedCount: Number(r.skipped_count) || 0,
+      error: r.error ?? null,
+    }));
+  }
+
+  async getIngestionBatch({ batchId } = {}) {
+    if (!this.db) dbNotReady('getIngestionBatch');
+    const bid = String(batchId || '').trim();
+    if (!bid) throw new Error('batchId is required');
+    const r = await get(
+      this.db,
+      `SELECT batch_id, character_id, sheet_version_id, dataset_id, task_id, spec_version, lane, requirements_snapshot, started_at, finished_at, imported_count, skipped_count, error
+       FROM IngestionBatch WHERE batch_id = ?`,
+      [bid]
+    );
+    if (!r) throw new Error(`No ingestion batch found for batchId=${bid}`);
+    return {
+      ok: true,
+      batchId: r.batch_id,
+      characterId: r.character_id,
+      sheetVersionId: r.sheet_version_id ?? null,
+      datasetId: r.dataset_id ?? null,
+      taskId: r.task_id ?? null,
+      specVersion: r.spec_version ?? null,
+      lane: r.lane,
+      requirementsSnapshot: r.requirements_snapshot ?? '',
+      startedAt: r.started_at,
+      finishedAt: r.finished_at ?? null,
+      importedCount: Number(r.imported_count) || 0,
+      skippedCount: Number(r.skipped_count) || 0,
+      error: r.error ?? null,
+    };
+  }
+
+  async createIngestionRejection({ batchId, characterId, sourceUrl, sourcePath, rejectionReason } = {}) {
+    if (!this.db) dbNotReady('createIngestionRejection');
+    const bid = String(batchId || '').trim();
+    if (!bid) throw new Error('batchId is required');
+    const cid = String(characterId || '').trim();
+    if (!cid) throw new Error('characterId is required');
+    const rid = randomId('rej_');
+    await run(
+      this.db,
+      `INSERT INTO IngestionRejection(rejection_id, batch_id, character_id, source_url, source_path, rejection_reason)
+       VALUES(?, ?, ?, ?, ?, ?)`,
+      [
+        rid,
+        bid,
+        cid,
+        sourceUrl == null ? null : String(sourceUrl),
+        sourcePath == null ? null : String(sourcePath),
+        String(rejectionReason ?? ''),
+      ]
+    );
+    return { ok: true, rejectionId: rid };
+  }
+
+  async listIngestionRejections({ characterId, batchId } = {}) {
+    if (!this.db) dbNotReady('listIngestionRejections');
+    const conds = [];
+    const params = [];
+    const cid = characterId == null ? '' : String(characterId).trim();
+    const bid = batchId == null ? '' : String(batchId).trim();
+    if (cid) { conds.push('character_id = ?'); params.push(cid); }
+    if (bid) { conds.push('batch_id = ?'); params.push(bid); }
+    let sql = `SELECT rejection_id, batch_id, character_id, source_url, source_path, rejection_reason, created_at FROM IngestionRejection`;
+    if (conds.length) sql += ` WHERE ` + conds.join(' AND ');
+    sql += ` ORDER BY created_at DESC, rejection_id DESC`;
+    const rows = await all(this.db, sql, params);
+    return rows.map((r) => ({
+      rejectionId: r.rejection_id,
+      batchId: r.batch_id,
+      characterId: r.character_id,
+      sourceUrl: r.source_url ?? null,
+      sourcePath: r.source_path ?? null,
+      rejectionReason: r.rejection_reason ?? '',
+      createdAt: r.created_at,
+    }));
   }
 }
 

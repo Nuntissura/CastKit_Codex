@@ -9,6 +9,7 @@ const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup'
 const { getAutomationManual } = require('./backend/automationManual');
 const { AutomationControlPlane } = require('./backend/automationControl');
 const { getAutomationCommandMap } = require('./backend/automationCommandMap');
+const workflowSpecRegistry = require('./backend/workflowSpecRegistry');
 const {
     isBackgroundMode: isBackgroundModePure,
     assertBackgroundSafe: assertBackgroundSafePure,
@@ -550,6 +551,22 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'listTemplates') return lib.listTemplates();
     if (name === 'listAllTags') return lib.listAllTags();
     if (name === 'globalSearch') return lib.globalSearch(p);
+
+    // WP-0100: workflow spec registry (fs-backed, no DB)
+    if (name === 'listWorkflowSpecs') return workflowSpecRegistry.listWorkflowSpecs(p);
+    if (name === 'getWorkflowSpec') return workflowSpecRegistry.getWorkflowSpec(p);
+    if (name === 'getLatestWorkflowSpec') return workflowSpecRegistry.getLatestWorkflowSpec(p);
+
+    // WP-0100: per-character image-sourcing scripts
+    if (name === 'listCharacterScripts') return lib.listCharacterScripts(p);
+    if (name === 'getCharacterScript') return lib.getCharacterScript(p);
+    if (name === 'addCharacterScript') return lib.addCharacterScript(p);
+    if (name === 'removeCharacterScript') return lib.removeCharacterScript(p);
+
+    // WP-0100: ingestion audit reads (writes happen inside the slice-2 adapter)
+    if (name === 'listIngestionBatches') return lib.listIngestionBatches(p);
+    if (name === 'getIngestionBatch') return lib.getIngestionBatch(p);
+    if (name === 'listIngestionRejections') return lib.listIngestionRejections(p);
 
     throw new Error(`Unsupported backend automation command: ${name}`);
 }

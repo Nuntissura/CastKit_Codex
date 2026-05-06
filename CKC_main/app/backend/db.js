@@ -429,6 +429,85 @@ async function ensureSchemaUpgrades(db) {
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_review_status ON ImageAsset(character_id, review_status)');
 
+  // WP-0100: image-sourcing provenance + sheet-version linkage. All
+  // nullable so existing rows stay valid; new ingestion paths fill them.
+  await ensureColumn(db, 'ImageAsset', 'source_dataset_id', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'source_task_id', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'source_run_id', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'source_contact_sheet_ref', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'sheet_version_id', 'TEXT');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_source_selection ON ImageAsset(character_id, source_dataset_id, source_task_id, source_contact_sheet_ref)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_source_url ON ImageAsset(character_id, source_url)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_sheet_version ON ImageAsset(sheet_version_id)');
+
+  // WP-0100: per-character helper scripts (image-sourcing collectors,
+  // selectors, validators) ingested from a task's task_tools/scripts/.
+  // Files live under libraryRoot/characters/<character_id>/scripts/;
+  // this table is the index. Dedup by (character_id, script_bytes_hash).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS CharacterScript (
+      script_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT '',
+      source_task_id TEXT,
+      script_bytes_hash TEXT NOT NULL,
+      imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_character_script_character ON CharacterScript(character_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_character_script_dedupe ON CharacterScript(character_id, script_bytes_hash);
+  `
+  );
+
+  // WP-0100: ingestion audit. One IngestionBatch row per
+  // ingestImageSourcingTask invocation; one IngestionRejection row per
+  // item in a task's rejected lane (audit only, no ImageAsset row).
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS IngestionBatch (
+      batch_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      sheet_version_id TEXT,
+      dataset_id TEXT,
+      task_id TEXT,
+      spec_version TEXT,
+      lane TEXT NOT NULL,
+      requirements_snapshot TEXT NOT NULL DEFAULT '',
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      finished_at DATETIME,
+      imported_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ingestion_batch_character ON IngestionBatch(character_id);
+    CREATE INDEX IF NOT EXISTS idx_ingestion_batch_task ON IngestionBatch(dataset_id, task_id);
+
+    CREATE TABLE IF NOT EXISTS IngestionRejection (
+      rejection_id TEXT PRIMARY KEY,
+      batch_id TEXT NOT NULL,
+      character_id TEXT NOT NULL,
+      source_url TEXT,
+      source_path TEXT,
+      rejection_reason TEXT NOT NULL DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(batch_id) REFERENCES IngestionBatch(batch_id) ON DELETE CASCADE,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ingestion_rejection_batch ON IngestionRejection(batch_id);
+    CREATE INDEX IF NOT EXISTS idx_ingestion_rejection_character ON IngestionRejection(character_id);
+  `
+  );
+
   // Field values: speed up cross-character lookups (value suggestions, exports, etc.).
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_field_value_field_id ON FieldValue(field_id)');
 
@@ -1222,4 +1301,5 @@ module.exports = {
   isPostgresDb,
   translatePostgresSql,
   POSTGRES_TABLE_ORDER,
+  dbNotReady,
 };

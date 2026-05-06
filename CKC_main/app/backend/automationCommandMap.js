@@ -48,6 +48,17 @@ function getAutomationCommandMap() {
             'setImagesMetaBatch',
             'listAllTags',
             'globalSearch',
+            // WP-0100: image-sourcing workflow registry + per-character scripts + ingestion audit
+            'listWorkflowSpecs',
+            'getWorkflowSpec',
+            'getLatestWorkflowSpec',
+            'listCharacterScripts',
+            'getCharacterScript',
+            'addCharacterScript',
+            'removeCharacterScript',
+            'listIngestionBatches',
+            'getIngestionBatch',
+            'listIngestionRejections',
         ],
     };
 }
