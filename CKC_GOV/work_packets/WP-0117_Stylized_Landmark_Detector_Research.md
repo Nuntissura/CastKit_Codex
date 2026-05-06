@@ -127,7 +127,7 @@ This WP runs the benchmark to either justify a router/cascade architecture or pi
 3. **Detector wrappers** — thin Python adapters (one per shortlist row) that take a PIL image and return `{ found: bool, points70: number[][], bbox: [x,y,w,h], confidence: number }`. The benchmark runs these in isolation against the corpus.
 4. **Benchmark harness** — produces a CSV per detector × style slice with NME, detection recall, per-region NME, and a failure-taxonomy column. Pinned via a CI test that re-runs on the corpus on every change.
 5. **Report deliverable** — `CKC_GOV/research/wp-0117_stylized_landmark_report.md` with metrics tables, failure-mode plates (per-detector × per-slice example images), and a recommendation: either (a) router + remap cascade with named per-style detectors, or (b) single-detector swap if one wins outright.
-6. **Follow-up WP draft** — if (a), draft the cascade WP (likely WP-0118 or later); if (b), draft the swap WP. Either way, the implementation is OUT of WP-0117.
+6. **Follow-up WP draft** — if (a), draft the cascade WP (likely WP-0119 or later); if (b), draft the swap WP. Either way, the implementation is OUT of WP-0117.
 
 ### Out
 - All product-code changes. Pure research and report.
