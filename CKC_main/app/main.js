@@ -525,11 +525,68 @@ async function runBackendAutomationCommand(command, params) {
     throw new Error(`Unsupported backend automation command: ${name}`);
 }
 
+// Allowed mouse button labels for sendInputEvent.
+const SYNTHETIC_MOUSE_BUTTONS = new Set(['left', 'right', 'middle']);
+// Allowed event types for keyboard synthetic input.
+const SYNTHETIC_KEY_TYPES = new Set(['keyDown', 'keyUp', 'char']);
+// Allowed event types for mouse synthetic input.
+const SYNTHETIC_MOUSE_TYPES = new Set([
+    'mouseDown',
+    'mouseUp',
+    'mouseEnter',
+    'mouseLeave',
+    'mouseMove',
+    'contextMenu',
+]);
+
+function sanitizeSyntheticModifiers(input) {
+    if (!Array.isArray(input)) return [];
+    const allowed = new Set(['shift', 'control', 'alt', 'meta', 'isKeypad', 'isAutoRepeat', 'leftButtonDown', 'middleButtonDown', 'rightButtonDown', 'capsLock', 'numLock', 'left', 'right']);
+    return input.filter((m) => typeof m === 'string' && allowed.has(m));
+}
+
+// Window-scoped synthetic input. Routes only through
+// mainWindow.webContents.sendInputEvent — no OS-level keyboard or mouse
+// libraries, no focus stealing, no cursor movement. The test
+// automation_input_injection_invariants.test.js pins this contract.
+function runSyntheticKey(params) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
+    const p = params && typeof params === 'object' ? params : {};
+    const type = String(p.type || 'char');
+    if (!SYNTHETIC_KEY_TYPES.has(type)) throw new Error(`injectKey: type must be one of keyDown/keyUp/char (got ${type})`);
+    const keyCode = String(p.keyCode || p.key || '');
+    if (!keyCode) throw new Error('injectKey: keyCode (or key) is required');
+    const modifiers = sanitizeSyntheticModifiers(p.modifiers);
+    mainWindow.webContents.sendInputEvent({ type, keyCode, modifiers });
+    return { ok: true, type, keyCode, modifiers };
+}
+
+function runSyntheticMouse(params) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
+    const p = params && typeof params === 'object' ? params : {};
+    const type = String(p.type || 'mouseMove');
+    if (!SYNTHETIC_MOUSE_TYPES.has(type)) throw new Error(`injectMouse: type must be a mouse event type (got ${type})`);
+    const x = Number.isFinite(p.x) ? Math.max(0, Math.floor(p.x)) : 0;
+    const y = Number.isFinite(p.y) ? Math.max(0, Math.floor(p.y)) : 0;
+    const button = SYNTHETIC_MOUSE_BUTTONS.has(p.button) ? p.button : 'left';
+    const clickCount = Number.isFinite(p.clickCount) ? Math.max(1, Math.min(3, Math.floor(p.clickCount))) : 1;
+    const modifiers = sanitizeSyntheticModifiers(p.modifiers);
+    mainWindow.webContents.sendInputEvent({ type, x, y, button, clickCount, modifiers });
+    return { ok: true, type, x, y, button, clickCount, modifiers };
+}
+
 function runRendererAutomationCommand(command, params = {}, timeoutMs = 15000) {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available.');
-    const id = `auto_${automationCommandSeq++}_${Date.now()}`;
     const name = String(command || '').trim();
     if (!name) throw new Error('command is required');
+
+    // Low-level synthetic input is fulfilled in the main process via
+    // sendInputEvent; no renderer round-trip needed. clickElement and
+    // typeText still round-trip because they need DOM access.
+    if (name === 'injectKey') return Promise.resolve(runSyntheticKey(params));
+    if (name === 'injectMouse') return Promise.resolve(runSyntheticMouse(params));
+
+    const id = `auto_${automationCommandSeq++}_${Date.now()}`;
 
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {

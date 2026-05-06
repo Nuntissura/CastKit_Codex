@@ -201,6 +201,20 @@ const featureGroups = [
     ],
   },
   {
+    id: 'automation-synthetic-input',
+    title: 'Window-scoped synthetic input (debugging)',
+    wp: ['WP-0099'],
+    summary:
+      'Synthetic keyboard, mouse, click, and text input targeted only at the CKC main BrowserWindow. Routed exclusively through Electron mainWindow.webContents.sendInputEvent and renderer-side DOM dispatchEvent — never through OS-level input APIs. Use this for UI-only flows that have no backend path, reproducing UI bugs, visual debugging of renderer interactions, and end-to-end smokes. For routine character data work prefer the deterministic backend commands (saveCharacter, setImagesMetaBatch).',
+    commands: ['injectKey', 'injectMouse', 'clickElement', 'typeText'],
+    notes: [
+      'Acquire the renderer-input lease before issuing synthetic input.',
+      'No OS keyboard/mouse libraries (robotjs, nut.js, node-key-sender, AutoHotkey, Windows SendInput) are used or allowed; a CI test pins this.',
+      'In background mode (CKC_AUTOMATION_BACKGROUND=1) injection succeeds against the hidden offscreen renderer without un-hiding or focusing the window.',
+      'typeText uses the native value setter on input/textarea so React onChange handlers run; for contenteditable it sets innerText and dispatches input.',
+    ],
+  },
+  {
     id: 'automation-control-plane',
     title: 'LLM session, lease, and capture control plane',
     wp: ['WP-0093', 'WP-0095', 'WP-0099'],
@@ -403,6 +417,30 @@ const commandReference = [
     target: 'renderer',
     description: 'Return a richer read-only snapshot of App-level renderer state: route, init status, selection ids, drawer/overlay flags, exports context, pending doc/focus/tag-filter intents. Sheet field values are not yet included; for stored character data call backend getCharacter.',
     example: {},
+  },
+  {
+    id: 'injectKey',
+    target: 'renderer',
+    description: 'Synthetic keyboard event into the CKC main BrowserWindow only, routed through webContents.sendInputEvent. type is keyDown | keyUp | char. modifiers is a subset of shift/control/alt/meta. No OS-level input API is used.',
+    example: { type: 'char', keyCode: 'a', modifiers: [] },
+  },
+  {
+    id: 'injectMouse',
+    target: 'renderer',
+    description: 'Synthetic mouse event into the CKC main BrowserWindow only, routed through webContents.sendInputEvent. type is one of mouseDown/mouseUp/mouseMove/mouseEnter/mouseLeave/contextMenu. button is left/right/middle.',
+    example: { type: 'mouseMove', x: 200, y: 150, button: 'left' },
+  },
+  {
+    id: 'clickElement',
+    target: 'renderer',
+    description: 'Dispatch a click MouseEvent on the first DOM element matching selector. Renderer-side; does not move the cursor.',
+    example: { selector: 'button[data-action="save"]' },
+  },
+  {
+    id: 'typeText',
+    target: 'renderer',
+    description: 'Set text on an input/textarea/contenteditable using the native value setter so React onChange handlers fire. Pass selector or omit to target document.activeElement.',
+    example: { selector: 'input[name="display_name"]', text: 'Aria' },
   },
   // backend commands (dispatched via automationRunCommand({ target: "backend" }))
   {

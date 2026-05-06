@@ -258,6 +258,36 @@ function MainApp() {
               globalSearch: isGlobalSearchOpen,
             },
           };
+        } else if (command === 'clickElement') {
+          const selector = typeof params.selector === 'string' ? params.selector : '';
+          if (!selector) throw new Error('clickElement: selector is required');
+          const el = document.querySelector(selector) as HTMLElement | null;
+          if (!el) throw new Error(`clickElement: no element matches selector ${selector}`);
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          result = { ok: true, selector, tag: el.tagName.toLowerCase() };
+        } else if (command === 'typeText') {
+          const text = typeof params.text === 'string' ? params.text : '';
+          const selector = typeof params.selector === 'string' ? params.selector : '';
+          let el: HTMLElement | null = selector
+            ? (document.querySelector(selector) as HTMLElement | null)
+            : (document.activeElement as HTMLElement | null);
+          if (!el) throw new Error(`typeText: no element matches selector ${selector || '(activeElement)'}`);
+          if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !(el as HTMLElement).isContentEditable) {
+            throw new Error(`typeText: element ${el.tagName.toLowerCase()} is not an input, textarea, or contenteditable`);
+          }
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            // Native value setter so React/onChange listeners pick up the change.
+            const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (!setter) throw new Error('typeText: cannot resolve native value setter');
+            setter.call(el, String(text));
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            // contenteditable
+            (el as HTMLElement).innerText = String(text);
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: String(text), inputType: 'insertText' }));
+          }
+          result = { ok: true, selector: selector || null, length: text.length };
         } else if (command === 'getRendererUIState') {
           result = {
             route: page,

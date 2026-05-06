@@ -26,6 +26,10 @@ function getAutomationCommandMap() {
             'closeOverlays',
             'getRendererState',
             'getRendererUIState',
+            'injectKey',
+            'injectMouse',
+            'clickElement',
+            'typeText',
         ],
         backend: [
             'listCharacters',
