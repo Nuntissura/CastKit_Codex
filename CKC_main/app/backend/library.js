@@ -7674,6 +7674,47 @@ class CKCLibrary {
     };
   }
 
+  // ===== Diagnostics (used by automationGetState) =====
+  // Lightweight DB health check + counts. `quick: true` skips heavier
+  // tallies. Pre-existing WP-0093 surface that the library never
+  // implemented; added here so automationGetState stops returning
+  // "lib.getDiagnostics is not a function".
+  async getDiagnostics({ quick = false } = {}) {
+    if (!this.db) dbNotReady('getDiagnostics');
+    const out = { ok: true };
+    out.dbProvider = isPostgresDb(this.db) ? 'postgres' : 'sqlite';
+    try {
+      const characters = await get(this.db, `SELECT COUNT(*) AS c FROM Character WHERE deleted_at IS NULL`);
+      out.characterCount = Number(characters?.c || 0);
+    } catch (err) {
+      out.characterCount = null;
+      out.characterCountError = err instanceof Error ? err.message : String(err);
+    }
+    try {
+      const images = await get(this.db, `SELECT COUNT(*) AS c FROM ImageAsset`);
+      out.imageCount = Number(images?.c || 0);
+    } catch (err) {
+      out.imageCount = null;
+      out.imageCountError = err instanceof Error ? err.message : String(err);
+    }
+    if (!quick) {
+      try {
+        const scripts = await get(this.db, `SELECT COUNT(*) AS c FROM CharacterScript`);
+        out.characterScriptCount = Number(scripts?.c || 0);
+      } catch (err) {
+        out.characterScriptCount = null;
+      }
+      try {
+        const batches = await get(this.db, `SELECT COUNT(*) AS c FROM IngestionBatch`);
+        out.ingestionBatchCount = Number(batches?.c || 0);
+      } catch (err) {
+        out.ingestionBatchCount = null;
+      }
+    }
+    out.libraryRoot = this.libraryRoot;
+    return out;
+  }
+
   // ===== WP-0100: per-character image-sourcing scripts =====
 
   async addCharacterScript({ characterId, scriptName, scriptContent, role, sourceTaskId, notes } = {}) {

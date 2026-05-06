@@ -1156,6 +1156,14 @@ async function initPostgresSchema(db) {
 async function initSchema(db) {
   if (isPostgresDb(db)) {
     await initPostgresSchema(db);
+    // Run the same migration helper for Postgres as SQLite. exec() and
+    // ensureColumn() both translate types/queries for Postgres, so
+    // additive column/table migrations land on both providers.
+    // Without this, every column or table added via
+    // ensureSchemaUpgrades (e.g. WP-0100 CharacterScript /
+    // IngestionBatch / IngestionRejection) is missing on a real
+    // Postgres deployment.
+    await ensureSchemaUpgrades(db);
     return;
   }
 
