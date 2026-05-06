@@ -227,6 +227,25 @@ Set these env vars before running npm/electron builds:
 - For Electron-only behavior, use CKC automation captures, Electron/Chrome DevTools Protocol inspection, or screenshots as the fallback visual evidence path.
 - Do not rely only on process status, successful builds, or logs for UI-facing work. Verify the rendered app visually and check renderer console/runtime errors before calling app/UI work done.
 
+### Agent must drive the app when testing (binding)
+The agent (LLM/operator helper running in the repo) is required to interact with the running CKC app rather than reason about behavior from code alone whenever testing, verifying, or demonstrating a feature, fix, or workflow.
+
+- Launch dev mode with the Chrome DevTools Protocol exposed so the agent can drive the renderer end-to-end. Recommended invocation:
+  ```powershell
+  cd "<CKC_ROOT>\\CKC_main"
+  $env:CKC_POSTGRES_URL="postgres://castkit_codex:castkit_codex@127.0.0.1:55432/castkit_codex"
+  $env:CKC_DB_PROVIDER="postgres"
+  npx vite --port 5173
+  # in a second shell, once Vite is ready:
+  npx electron . --remote-debugging-port=9222
+  ```
+- The agent connects to the CDP port (default 9222), evaluates JS in the renderer (`window.ckc.automation*`), captures screenshots via `window.ckc.automationCaptureToFile`, and reads console logs via the CDP `Runtime.consoleAPICalled` event.
+- For programmatic verification the agent uses the wired automation surface defined in `CKC_main/app/backend/automationCommandMap.js` (e.g. `automationRunCommand`, `getRendererUIState`, `ingestImageSourcingTask` dry-runs, `addCharacterScript`, etc.) — never assume code works without exercising it.
+- For UI verification the agent uses `automationCaptureToFile` (writes PNG + JSON sidecar under `CKC_GOV/targets/CKC/automation_captures/`) and inspects the resulting image. Process status, build success, and unit-test passes are not substitutes for a capture.
+- When background-mode invariants are being checked, launch with `CKC_AUTOMATION_BACKGROUND=1`. The captures still work because the renderer paints offscreen.
+- Tests that exercise the app (smoke flows, regression checks) should be scripted through the automation surface so they replay deterministically and produce captures the operator can inspect.
+- This rule binds every WP that touches the app: it is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
+
 ### Versioning + release policy (MUST)
 - Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
 - Publish official builds as **GitHub Release assets** (immutable, off-machine backup).
