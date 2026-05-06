@@ -25,3 +25,7 @@ CKC_refs/screenshots/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local state (per-repo settings/permissions; never commit)
+.claude/
+CKC_main/.claude/
