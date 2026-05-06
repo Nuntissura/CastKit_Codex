@@ -1,4 +1,22 @@
-const MANUAL_VERSION = '2026-05-04.wp-0095';
+// In-app LLM/operator manual.
+//
+// CODE-TRUTH RULE (per CKC_GOV/PROJECT_CODEX.md "Code-truth and
+// documentation consistency"): every entry in featureGroups[].commands
+// and commandReference[].id MUST resolve to a wired automation command
+// (TOP_LEVEL_AUTOMATION_IPC or getAutomationCommandMap), or be prefixed
+// `script:` to point at a governance script under CKC_GOV/scripts/.
+// Aspirational items belong in featureGroups[].roadmap, never in
+// commands. The self-consistency test at
+// `test/automation_manual_consistency.test.js` enforces this rule.
+
+const {
+  getAutomationCommandMap,
+  TOP_LEVEL_AUTOMATION_IPC,
+  getAllWiredAutomationCommands,
+  classifyAutomationCommand,
+} = require('./automationCommandMap');
+
+const MANUAL_VERSION = '2026-05-06.wp-0099';
 
 const featureGroups = [
   {
@@ -7,7 +25,13 @@ const featureGroups = [
     wp: ['WP-0001', 'WP-0008', 'WP-0009', 'WP-0020', 'WP-0021', 'WP-0091', 'WP-0092'],
     summary:
       'CKC is governed from CKC_GOV and product code lives in CKC_main. PostgreSQL is the current/default database provider; libraryRoot still holds images, exports, templates, and per-character files.',
-    commands: ['automationGetState', 'automationGetManual', 'postgres_up.ps1', 'postgres_dump.ps1', 'postgres_restore.ps1'],
+    commands: [
+      'automationGetState',
+      'automationGetManual',
+      'script:postgres_up.ps1',
+      'script:postgres_dump.ps1',
+      'script:postgres_restore.ps1',
+    ],
     notes: [
       'Do not mirror governance into CKC_main/docs.',
       'Do not introduce spaces in generated file or folder names.',
@@ -20,7 +44,14 @@ const featureGroups = [
     wp: ['WP-0003', 'WP-0012', 'WP-0029', 'WP-0030', 'WP-0031', 'WP-0032', 'WP-0033', 'WP-0037', 'WP-0046'],
     summary:
       'The main UI is a 2-panel portfolio viewer with images and sheet side-by-side. Character IDs are system-managed public IDs while internal IDs remain stable folder/DB keys.',
-    commands: ['openLibrary', 'openCharacter', 'getCharacter', 'listCharacters', 'selectImage'],
+    commands: ['openLibrary', 'openCharacter', 'getCharacter', 'listCharacters', 'selectImage', 'getRendererState'],
+    roadmap: [
+      'saveCharacter (WP-0099 next slice)',
+      'createCharacter (WP-0099 next slice)',
+      'softDeleteCharacters (WP-0099 next slice)',
+      'restoreCharacters (WP-0099 next slice)',
+      'getRendererUIState (WP-0099 next slice; richer renderer state with live sheet field values)',
+    ],
     notes: [
       'The sheet editor preserves template field order and user-entered text.',
       'Use explicit characterId values for automation; never drive navigation through mouse clicks.',
@@ -53,15 +84,13 @@ const featureGroups = [
     ],
     summary:
       'Image assets support ratings, favorite, notes, tags, source provenance, palettes, dHash similarity, duplicate review, batch metadata edits, AI tag suggestions, and inbox/clipboard/URL import.',
-    commands: [
-      'importImages',
-      'setImageMeta',
-      'setImagesMetaBatch',
-      'listGlobalCarouselImages',
-      'findSimilarImages',
-      'scanInbox',
-      'importFromUrl',
-      'importClipboardImage',
+    commands: ['importImages', 'setImageMeta', 'listGlobalCarouselImages', 'listPendingImages'],
+    roadmap: [
+      'setImagesMetaBatch (WP-0099 next slice; backend handler exists in preload but is not in the automation channel)',
+      'findSimilarImages (preload-only today; not exposed to automation)',
+      'scanInbox (preload-only today; not exposed to automation)',
+      'importFromUrl (preload-only today; not exposed to automation)',
+      'importClipboardImage (preload-only today; not exposed to automation)',
     ],
     notes: [
       'Rating hotkeys are UI-only; automation should call metadata commands.',
@@ -96,8 +125,17 @@ const featureGroups = [
       'WP-0083',
     ],
     summary:
-      'Docs mode provides DB-first notes/stories/moodboards, backlinks, corkboard/outliner, vector moodboard tools, layers/folders, export options, and global search.',
-    commands: ['listDocs', 'getDoc', 'upsertDoc', 'deleteDoc', 'globalSearch', 'resolveLinkToken', 'listBacklinks'],
+      'Docs mode provides DB-first notes/stories/moodboards, backlinks, corkboard/outliner, vector moodboard tools, layers/folders, export options, and global search. None of these are wired into the automation channel today; LLMs needing them must either go through the preload bridge directly or wait for a follow-up WP.',
+    commands: [],
+    roadmap: [
+      'listDocs (preload-only today)',
+      'getDoc (preload-only today)',
+      'upsertDoc (preload-only today)',
+      'deleteDoc (preload-only today)',
+      'globalSearch (preload-only today)',
+      'resolveLinkToken (preload-only today)',
+      'listBacklinks (preload-only today)',
+    ],
     notes: [
       'Docs mode is intentionally part of the character workflow and should not force the user out of image viewing.',
       'Moodboard content is structured JSON; preserve user text inside layers.',
@@ -109,8 +147,16 @@ const featureGroups = [
     title: 'Exports, packs, release builds, and backup/restore',
     wp: ['WP-0006', 'WP-0017', 'WP-0027', 'WP-0034', 'WP-0036', 'WP-0063', 'WP-0073', 'WP-0086', 'WP-0087'],
     summary:
-      'CKC exports field packs, templates, image sets, moodboards, share packs, backup snapshots, static web portfolios, and release artifacts outside the source tree.',
-    commands: ['exportEmptyTemplate', 'exportTemplateFieldPack', 'exportImageSet', 'exportSharePack', 'exportWebPortfolio', 'startLibraryBackup'],
+      'CKC exports field packs, templates, image sets, moodboards, share packs, backup snapshots, static web portfolios, and release artifacts outside the source tree. Automation can navigate to the Export hub but cannot trigger exports through automationRunCommand today.',
+    commands: ['openExports'],
+    roadmap: [
+      'exportEmptyTemplate (preload-only today)',
+      'exportTemplateFieldPack (preload-only today)',
+      'exportImageSet (preload-only today)',
+      'exportSharePack (preload-only today)',
+      'exportWebPortfolio (preload-only today)',
+      'startLibraryBackup (preload-only today)',
+    ],
     notes: [
       'Build artifacts belong under CKC_GOV/targets and must not be committed.',
       'Release builds are tagged SemVer assets.',
@@ -122,16 +168,17 @@ const featureGroups = [
     title: 'Collections, relationships, reference windows, command palette',
     wp: ['WP-0060', 'WP-0068', 'WP-0069', 'WP-0070', 'WP-0072', 'WP-0090'],
     summary:
-      'CKC supports pop-out reference windows, opacity/click-through modes, collections/playlists, character relations, command palette actions, and batch character operations.',
-    commands: [
-      'openReferenceWindow',
-      'setReferenceWindowOptions',
-      'listCollections',
-      'createCollection',
-      'listCharacterRelations',
-      'createCharacterRelation',
-      'batchUpdateCharacterField',
-      'batchUpdateCharacterTags',
+      'CKC supports pop-out reference windows, opacity/click-through modes, collections/playlists, character relations, command palette actions, and batch character operations. None of these are wired into the automation channel today.',
+    commands: [],
+    roadmap: [
+      'openReferenceWindow (preload-only today)',
+      'setReferenceWindowOptions (preload-only today)',
+      'listCollections (preload-only today)',
+      'createCollection (preload-only today)',
+      'listCharacterRelations (preload-only today)',
+      'createCharacterRelation (preload-only today)',
+      'batchUpdateCharacterField (preload-only today)',
+      'batchUpdateCharacterTags (preload-only today)',
     ],
     notes: [
       'Reference windows are separate renderer windows; automation capture should still use explicit capture APIs.',
@@ -139,12 +186,42 @@ const featureGroups = [
     ],
   },
   {
+    id: 'automation-control-plane',
+    title: 'LLM session, lease, and capture control plane',
+    wp: ['WP-0093', 'WP-0095', 'WP-0099'],
+    summary:
+      'Multi-agent LLM sessions, leases, command logs, and non-focus-stealing screenshot captures. These are the primitives every automation flow depends on.',
+    commands: [
+      'automationCreateSession',
+      'automationHeartbeat',
+      'automationEndSession',
+      'automationListSessions',
+      'automationAcquireLease',
+      'automationReleaseLease',
+      'automationListLog',
+      'automationRunCommand',
+      'automationCapture',
+      'automationCaptureToFile',
+      'automationSetRendererState',
+    ],
+    notes: [
+      'Acquire renderer-navigation before navigation commands; renderer-input before synthetic-input commands.',
+      'automationCaptureToFile writes a PNG + JSON sidecar without foregrounding the window.',
+      'Always end the session when finished so leases and logs close out cleanly.',
+    ],
+  },
+  {
     id: 'local-models-and-ai',
     title: 'Local model and AI-assisted workflows',
-    wp: ['WP-0039', 'WP-0041', 'WP-0084', 'WP-0093', 'WP-0095'],
+    wp: ['WP-0039', 'WP-0041', 'WP-0084'],
     summary:
-      'CKC remains provider-agnostic while supporting OpenAI-compatible local model calls, AI-assisted image tagging, and background-safe LLM app automation.',
-    commands: ['llmChat', 'suggestImageTags', 'startAiTaggingJob', 'automationRunCommand', 'automationCaptureToFile'],
+      'CKC remains provider-agnostic while supporting OpenAI-compatible local model calls and AI-assisted image tagging. The chat and tagging primitives are not wired into the automation channel today; LLMs route through automationRunCommand for app behavior and rely on their own provider for inference.',
+    commands: ['automationRunCommand', 'automationCaptureToFile'],
+    roadmap: [
+      'llmChat (preload-only today)',
+      'suggestImageTags (preload-only today)',
+      'startAiTaggingJob (preload-only today)',
+    ],
     notes: [
       'Core repo operation must not require a specific LLM provider.',
       'LLM agents must use explicit automation commands, not OS-level input injection.',
@@ -166,54 +243,194 @@ const featureGroups = [
   },
 ];
 
+// One entry per wired automation command. Target labels match
+// classifyAutomationCommand() output. Every name here must resolve via
+// classifyAutomationCommand(); the consistency test enforces this both
+// directions (no missing wired commands, no aspirational ids).
 const commandReference = [
+  // top-level + control overlap (LLMs typically call these directly via window.ckc.*)
   {
     id: 'automationGetManual',
-    target: 'main',
+    target: 'top-level/control',
     description: 'Return this manual as JSON, markdown, or index.',
     example: { format: 'json' },
   },
   {
     id: 'automationCreateSession',
-    target: 'main',
+    target: 'top-level/control',
     description: 'Create a named background LLM session.',
     example: { agentName: 'agent-a', purpose: 'visual smoke test' },
   },
   {
     id: 'automationHeartbeat',
-    target: 'main',
+    target: 'top-level/control',
     description: 'Refresh session liveness and attach optional agent state.',
     example: { sessionId: 'llm_...', state: { phase: 'inspecting' } },
   },
   {
+    id: 'automationEndSession',
+    target: 'top-level/control',
+    description: 'End an active session and release any held leases.',
+    example: { sessionId: 'llm_...', reason: 'done' },
+  },
+  {
+    id: 'automationListSessions',
+    target: 'top-level/control',
+    description: 'List active sessions and their leases.',
+    example: {},
+  },
+  {
     id: 'automationAcquireLease',
-    target: 'main',
-    description: 'Acquire a named lease before running conflicting commands.',
+    target: 'top-level/control',
+    description: 'Acquire a named lease before running conflicting commands (e.g. renderer-navigation, renderer-input).',
     example: { sessionId: 'llm_...', leaseName: 'renderer-navigation', ttlMs: 30000 },
   },
   {
-    id: 'automationRunCommand',
-    target: 'main',
-    description: 'Run a renderer or backend command without OS input.',
-    example: { sessionId: 'llm_...', target: 'renderer', command: 'openLibrary', params: {} },
+    id: 'automationReleaseLease',
+    target: 'top-level/control',
+    description: 'Release a previously acquired lease.',
+    example: { sessionId: 'llm_...', leaseName: 'renderer-navigation' },
+  },
+  {
+    id: 'automationListLog',
+    target: 'top-level/control',
+    description: 'Return recent control-plane log entries (sessions, leases, commands, captures).',
+    example: { limit: 50 },
   },
   {
     id: 'automationCaptureToFile',
-    target: 'main',
-    description: 'Capture the current app renderer to a PNG under CKC_GOV/targets without foregrounding the window.',
+    target: 'top-level/control',
+    description: 'Capture the renderer to a PNG + JSON sidecar under CKC_GOV/targets/CKC/automation_captures (dev) or libraryRoot/automation_captures (packaged) without foregrounding.',
     example: { sessionId: 'llm_...', label: 'library-start' },
+  },
+  // top-level only (meta-helpers; not in commandMap.control)
+  {
+    id: 'automationGetState',
+    target: 'top-level',
+    description: 'Inspect app state: config path, libraryRoot, DB provider, renderer route, diagnostics, and the full commandMap of dispatchable commands.',
+    example: {},
+  },
+  {
+    id: 'automationRunCommand',
+    target: 'top-level',
+    description: 'Dispatcher for renderer and backend commands. Provide target ("renderer" | "backend") and the command name.',
+    example: { sessionId: 'llm_...', target: 'renderer', command: 'openLibrary', params: {} },
+  },
+  {
+    id: 'automationCapture',
+    target: 'top-level',
+    description: 'Capture the renderer to in-memory PNG bytes or a data URL (no file write). Use automationCaptureToFile for persisted captures.',
+    example: { format: 'dataUrl' },
+  },
+  {
+    id: 'automationSetRendererState',
+    target: 'top-level',
+    description: 'Renderer-side helper to push current navigation/state into the control plane. Usually called by the renderer, but exposed for symmetry.',
+    example: { route: 'character', selectedCharacterId: 'char_001' },
+  },
+  // renderer commands (dispatched via automationRunCommand({ target: "renderer" }))
+  {
+    id: 'openLibrary',
+    target: 'renderer',
+    description: 'Navigate to the library page.',
+    example: {},
+  },
+  {
+    id: 'openCharacter',
+    target: 'renderer',
+    description: 'Open a character sheet by id.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'openExports',
+    target: 'renderer',
+    description: 'Open the Export hub. Returns the LLM to the prior page on close.',
+    example: {},
+  },
+  {
+    id: 'openIntake',
+    target: 'renderer',
+    description: 'Open the image intake sorter page.',
+    example: {},
+  },
+  {
+    id: 'selectImage',
+    target: 'renderer',
+    description: 'Select an image inside the active character page.',
+    example: { imageId: 'img_001', characterId: 'char_001' },
+  },
+  {
+    id: 'openGlobalSearch',
+    target: 'renderer',
+    description: 'Open the global search overlay (Ctrl+Shift+F equivalent).',
+    example: {},
+  },
+  {
+    id: 'toggleMenu',
+    target: 'renderer',
+    description: 'Toggle the menu drawer.',
+    example: {},
+  },
+  {
+    id: 'closeOverlays',
+    target: 'renderer',
+    description: 'Close any open drawers, command palette, or global search overlay.',
+    example: {},
+  },
+  {
+    id: 'getRendererState',
+    target: 'renderer',
+    description: 'Return a small read-only snapshot: route, selected character/image ids, drawer mode, overlay flags.',
+    example: {},
+  },
+  // backend commands (dispatched via automationRunCommand({ target: "backend" }))
+  {
+    id: 'listCharacters',
+    target: 'backend',
+    description: 'List characters with optional filtering and pagination.',
+    example: { limit: 50 },
+  },
+  {
+    id: 'getCharacter',
+    target: 'backend',
+    description: 'Return a single character (sheet + image refs) by id.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'listGlobalCarouselImages',
+    target: 'backend',
+    description: 'List images flagged as carousel/frontpage across the library.',
+    example: {},
+  },
+  {
+    id: 'listPendingImages',
+    target: 'backend',
+    description: 'List images in pending review (review_status=pending).',
+    example: {},
+  },
+  {
+    id: 'importImages',
+    target: 'backend',
+    description: 'Import image files into the library (assign to a character or to the inbox).',
+    example: { paths: ['C:/in/a.png'], characterId: 'char_001' },
+  },
+  {
+    id: 'setImageMeta',
+    target: 'backend',
+    description: 'Patch image metadata (rating, favorite, notes, tags, etc.).',
+    example: { imageId: 'img_001', field: 'rating', value: 4 },
   },
   {
     id: 'scanIntakeFolder',
     target: 'backend',
-    description: 'Scan a folder for intake images and planned status paths.',
-    example: { sourceDir: 'C:\\intake_batch' },
+    description: 'Scan a folder for intake images and return planned status paths.',
+    example: { sourceDir: 'C:/intake_batch' },
   },
   {
     id: 'classifyIntakeImage',
     target: 'backend',
     description: 'Classify an intake image in folder-only or linked CKC profile mode.',
-    example: { sourcePath: 'C:\\intake_batch\\a.png', status: 'pending', mode: 'linked', characterId: 'char_...' },
+    example: { sourcePath: 'C:/intake_batch/a.png', status: 'pending', mode: 'linked', characterId: 'char_001' },
   },
 ];
 
@@ -223,6 +440,7 @@ function getManualIndex() {
     title: group.title,
     wp: group.wp,
     commands: group.commands,
+    roadmap: group.roadmap || [],
   }));
 }
 
@@ -249,6 +467,9 @@ function getManualJson() {
     index: getManualIndex(),
     featureGroups,
     commandReference,
+    wiredAutomationCommands: getAllWiredAutomationCommands(),
+    commandMap: getAutomationCommandMap(),
+    topLevelIpc: TOP_LEVEL_AUTOMATION_IPC.slice(),
   };
 }
 
@@ -277,7 +498,16 @@ function manualToMarkdown(manual = getManualJson()) {
     lines.push('');
     lines.push(group.summary);
     lines.push('');
-    lines.push(`Commands: ${group.commands.map((x) => `\`${x}\``).join(', ')}`);
+    if (group.commands.length) {
+      lines.push(`Wired commands: ${group.commands.map((x) => `\`${x}\``).join(', ')}`);
+    } else {
+      lines.push('Wired commands: (none in the automation channel today)');
+    }
+    if (group.roadmap && group.roadmap.length) {
+      lines.push('');
+      lines.push('Roadmap (not yet wired):');
+      for (const item of group.roadmap) lines.push(`- ${item}`);
+    }
     lines.push('');
     for (const note of group.notes) lines.push(`- ${note}`);
     lines.push('');
@@ -311,4 +541,7 @@ module.exports = {
   getAutomationManual,
   getManualJson,
   manualToMarkdown,
+  // exposed for the consistency test
+  featureGroups,
+  commandReference,
 };

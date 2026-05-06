@@ -8,6 +8,7 @@ const { openAiChatCompletions } = require('./backend/llm');
 const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup');
 const { getAutomationManual } = require('./backend/automationManual');
 const { AutomationControlPlane } = require('./backend/automationControl');
+const { getAutomationCommandMap } = require('./backend/automationCommandMap');
 
 const CONFIG_FILE = 'ckc-config.json';
 
@@ -436,43 +437,6 @@ function sanitizeAutomationState(state) {
         visibleControls: raw.visibleControls && typeof raw.visibleControls === 'object' ? raw.visibleControls : {},
         errors: Array.isArray(raw.errors) ? raw.errors.map((x) => String(x)) : [],
         updatedAt: new Date().toISOString(),
-    };
-}
-
-function getAutomationCommandMap() {
-    return {
-        control: [
-            'automationGetManual',
-            'automationCreateSession',
-            'automationHeartbeat',
-            'automationEndSession',
-            'automationListSessions',
-            'automationAcquireLease',
-            'automationReleaseLease',
-            'automationListLog',
-            'automationCaptureToFile',
-        ],
-        renderer: [
-            'openLibrary',
-            'openCharacter',
-            'openExports',
-            'openIntake',
-            'selectImage',
-            'openGlobalSearch',
-            'toggleMenu',
-            'closeOverlays',
-            'getRendererState',
-        ],
-        backend: [
-            'listCharacters',
-            'getCharacter',
-            'listGlobalCarouselImages',
-            'listPendingImages',
-            'importImages',
-            'setImageMeta',
-            'scanIntakeFolder',
-            'classifyIntakeImage',
-        ],
     };
 }
 
