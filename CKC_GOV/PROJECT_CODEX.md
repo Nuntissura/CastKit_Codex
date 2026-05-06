@@ -268,6 +268,18 @@ The image-sourcing **init_task.py** reference implementation and the **spec_init
 - The init_task.py file is `stdlib-only` by design and must stay portable. Adding a runtime dep, an env-var assumption, or a hardcoded path is a contract violation.
 - This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above. Tasks initialized in downstream image-sourcing repos remain pinned to the spec_version they were initialized under (per the spec's own `migration_policy`); CKC is responsible for keeping the corresponding handler maintained for as long as any in-flight or archived task references that version.
 
+### OpenRepose absorption (binding)
+
+The OpenRepose project at `D:\Projects\LLM projects\OpenRepose` is **defunct** as of 2026-05-06. CKC is now the canonical home for pose / openpose / ComfyUI workflow features.
+
+- The OpenRepose repo is **preserved read-only** for historical reference. Do not modify, push, or import it as a dependency from CKC.
+- Pose / openpose / ComfyUI features that derive design intent from OpenRepose must include the file path + line citation in the WP. The implementation must be a clean recreation in CKC's stack (TS / React / Electron / PG), not a code copy.
+- WP-0107 lands the schema + tab shells; WP-0108 lands the pose pipeline; WP-0109 lands the ComfyUI bridge. After WP-0109 ships, the OpenRepose repo is officially obsolete.
+- **Naming policy.** "OpenRepose" is a historical-citation term only. It must NOT appear in CKC product code identifiers, in-app manual prose, DB schema, test names, test fixture paths, or UI strings. Active features use generic, self-describing names: `Pose` tab, `Rig`, `ComfyUI bridge`, `Workflow` tab, `openpose export`. The name is allowed in implementation comments only when citing a specific OpenRepose file/line as the source of a design choice (e.g. `// Body 18 taxonomy from OpenRepose openpose_schema.py:62-100`).
+- Carry-over WPs (those derived from OpenRepose's planned-but-unimplemented work) are titled by their feature, not their origin. The OpenRepose WP-id is recorded in a one-line citation inside the WP body for traceability.
+
+This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above.
+
 ### Schema and ingestion forward/backward-compatibility (binding)
 CKC's database, on-disk artifacts, and ingestion contracts must evolve so that data captured under any prior version remains usable indefinitely. The collected image runs under v00.19 (current count: 5 runs × ~15k+ images each, ~75k+ total) and every character sheet, FieldValue row, ImageAsset row, and template instance written before today is canonical history; no future WP may break their readability, identity, or recoverability.
 
