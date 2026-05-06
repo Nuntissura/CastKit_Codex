@@ -186,9 +186,23 @@ These helpers are not committed — they live under `.tmp/` (operator's local-on
 - C4: ✅ all pass.
 - D: ✅ all pass; stealth contract verified end-to-end via `lifecycle.secondInstance` + `stealth.skip` log events.
 - E1, E2, E3 (dry-run only), E4: ✅ all pass.
-- F1: bugs noted — F1.3 enum+other:descriptor validator misclassification, F1.7 block-list no-input-control gap.
-- F2: bug noted — F2.2 UI Save click via CDP doesn't reliably reach React 19 onClick.
-- F3, F4, F5: not yet exercised in this pass — slated for the next sheet-test pass.
-- G, H: G partially via Aeri creation; H via tagging.
+- F1.1 string ✅, F1.2 enum ✅ (with the noisy `Non-canonical enum value (allowed)` warning on every non-matching value, even for `<string | unset>` fields where any string is technically allowed).
+- F1.3 enum+other:descriptor — **OPEN BUG**: validator misclassifies, rejects single-word valid enum values like `curvy`/`graceful` with "Descriptor must be 2-12 words". Saves with `allowSaveWithErrors: true`.
+- F1.5 score_10 — **OPEN BUG**: validator emits `Non-canonical enum value` warning instead of range-checking 0..10. `11/10` is accepted as a warning, not an error. The codebase has no actual score_10 range enforcement.
+- F1.6 paragraph ✅ byte-exact, newlines + Unicode preserved.
+- F1.7 block-list — **OPEN GAP**: rendered as a single textarea with placeholder `<list of XYZ_Block | optional>`; the operator must hand-type structured JSON-ish content. Block schema descriptor lines render as empty `ckc-field-*` divs (~417 of 896). No inline block-list editor.
+- F2.2 UI Save click via CDP — **OPEN BUG**: neither `el.click()` nor the wired `clickElement` automation command reliably triggers React 19's onClick on the Save button (button text never transitions Save → Saving… → Saved). Backend `window.ckc.saveCharacter(...)` is the reliable path for tests. Investigate adding a React-aware click variant to the WP-0099 `clickElement` impl.
+- F3 template integrity ✅ — F3.1 (no Field IDs dropped), F3.2 (order preserved), F3.3 (byte-exact roundtrip) all confirmed via getCharacter + raw psql verification.
+- F4 cross-character preset reuse — **PRE-EXISTING BUG, FIXED THIS PASS** (commit `89c0aa7`): `listFieldValueSuggestions` returned `[]` for every fieldId on Postgres because the SQL used `value_text AS valueText` (camelCase alias) and Postgres lowercases unquoted aliases — JS read of `r.valueText` was always `undefined`. SQLite preserved alias case so this never surfaced in tests. Same pattern broke `listTagStats` character-count branch (`r.tagText` undefined). Fixed both. Verified after fix: Aeri's Real_Name/Primary_Role/Ethnic_Background now surface correctly in suggestions.
+- F5.1 empty save ✅, F5.2 ≥10k chars byte-exact ✅, F5.3 Unicode + emoji byte-exact ✅, F5.4 template-syntax-looking value `<string | unset>` stored verbatim ✅.
+- G partially via Aeri creation (G1 ✅, G2 ✅ CHAR-NNNNNN, G4 ✅ icon set + visible in library list); G3 (soft delete/restore/purge) not exercised this pass.
+- H1 ✅ (via `imageId: img.id` after the API gap was identified), H2 ✅ batch tag updates, H3 not exercised, H4 not exercised, H5 not exercised.
 - I: ✅ stealth confirmed; operator-mode capture occlusion gap noted.
 - J: ✅ J1, J2 confirmed at v0.2.9.
+
+### Sources of bugs found this pass — all pre-existing, fixed during inspection:
+1. WP-0092 era: `initSchema` → no `ensureSchemaUpgrades` for Postgres — fixed in commit `2846ddd`.
+2. WP-0093 era: `lib.getDiagnostics` never implemented — fixed in commit `2846ddd`.
+3. WP-0032 era: `listFieldValueSuggestions` + `listTagStats` Postgres camelCase-alias bug — fixed in commit `89c0aa7`.
+
+These bugs all worked-by-luck on SQLite tests (which preserve alias case + ran the SQLite migration path), but broke production Postgres deployments. The pattern strongly suggests an audit pass: every SQL query in `library.js` should be checked for camelCase aliases, and every column/table addition should be verified against `ensureSchemaUpgrades` running for Postgres (now ensured by the slice-1 fix).
