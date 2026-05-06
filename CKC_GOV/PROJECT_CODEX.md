@@ -76,6 +76,17 @@ Daily workflow (MUST):
 - **Code-truth.** Code is the source of truth. The Task Board, work packets, spec, and in-app manual describe code that exists; they do not authorize code that does not. When a Task Board row, manual entry, or spec section references a code-defined surface (a command, an IPC channel, a field, a schema, a configuration key, a CLI flag), that reference MUST be backed by code — verify against the code before relying on it.
 - **Self-consistency tests are required for any doc that catalogs a code-defined surface.** If a markdown file, JSON manual, or generated reference lists commands / IPC names / fields / schemas / config keys, a test in `CKC_main/test/` MUST fail when the doc drifts from the code. The test is the enforcement; reviewers are not. Rule of thumb: if a future change to the code could silently invalidate the doc, you owe the repo a consistency test before merging the doc.
 
+## Identity decoupling
+This rule binds every WP that touches storage, exports, packaging, or any CKC-generated artifact.
+
+- The **character sheet is the only CKC artifact that carries identity** — the character's name, distinguishing traits, persona, public Character ID, and any other recognizable identity bytes belong on the sheet and on the sheet alone.
+- Every other CKC artifact MUST NOT bake identity into filenames, paths, embedded metadata, captions, or any other surface a stranger could read. Concretely: image files inside `libraryRoot`, image database rows, exports, share packs, web portfolios, moodboard PNGs, backup snapshots, and any auto-generated artifact name — none of these may encode the character's name.
+- Images and other media are linked to a character sheet (and to a character sheet **version**) through database relations only. The image-as-bytes carries no identity; the link carries it.
+- When importing or generating images, generated filenames inside `libraryRoot` are content/hash-addressed (or sequence-numbered), never `aria_red_dress_001.jpg`. The operator's source filename is preserved in DB metadata if useful but is not the on-disk name.
+- Exports and share packs default to anonymized filenames. When identity is wanted in an export, bundle the character sheet in alongside the media; do not name the media after the character.
+- This rule does NOT change the operating stance on explicit content. Descriptors, archetypes, casting tags, and free-text notes inside the sheet stay raw, explicit, and unfiltered per "Operating stance & scope" above. The constraint here is on **where identity lives** (one canonical place) and on **structural / generated names** — not on what the operator types into a sheet field.
+- Free-text fields (notes, tags, sheet field values) are operator-controlled and never sanitized by CKC. The no-censorship rule applies there.
+
 ## Code-truth and documentation consistency
 This rule binds every WP and every governance change.
 
