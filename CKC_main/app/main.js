@@ -9,6 +9,11 @@ const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup'
 const { getAutomationManual } = require('./backend/automationManual');
 const { AutomationControlPlane } = require('./backend/automationControl');
 const { getAutomationCommandMap } = require('./backend/automationCommandMap');
+const {
+    isBackgroundMode: isBackgroundModePure,
+    assertBackgroundSafe: assertBackgroundSafePure,
+    STEALTH_DIALOG_STUB,
+} = require('./backend/automationStealth');
 
 const CONFIG_FILE = 'ckc-config.json';
 
@@ -209,6 +214,30 @@ let libraryRestoreActiveJobId = null;
 let aiTagJobs = new Map();
 let aiTagActiveJobId = null;
 const automationControl = new AutomationControlPlane();
+
+// Bind the pure stealth helpers to process.env / appConfig /
+// automationControl. Use these everywhere a code path is about to
+// change visibility, focus, taskbar, or attention surfaces.
+function isBackgroundMode() {
+    return isBackgroundModePure(process.env, appConfig);
+}
+function assertBackgroundSafe(action, callsite) {
+    return assertBackgroundSafePure(process.env, appConfig, action, callsite, automationControl);
+}
+async function safeShowMessageBox(opts, callsite) {
+    if (!assertBackgroundSafe('dialog.showMessageBox', callsite)) {
+        return STEALTH_DIALOG_STUB;
+    }
+    return dialog.showMessageBox(mainWindow, opts);
+}
+function safeRaiseMainWindow(callsite) {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    if (!assertBackgroundSafe('mainWindow.raise', callsite)) return false;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return true;
+}
 let automationRendererState = {
     route: 'library',
     selectedCharacterId: null,
@@ -263,7 +292,7 @@ async function ensureLibraryRootAvailable() {
             !String(appConfig?.portableLibraryChoice || '').trim()
         ) {
             const res = mainWindow
-                ? await dialog.showMessageBox(mainWindow, {
+                ? await safeShowMessageBox({
                     type: 'question',
                     message: 'Portable build: choose where your data lives',
                     detail:
@@ -274,7 +303,7 @@ async function ensureLibraryRootAvailable() {
                     defaultId: 0,
                     cancelId: 3,
                     noLink: true,
-                })
+                }, 'ensureLibraryRootAvailable.portableChoice')
                 : null;
 
             const choice = res ? res.response : 1;
@@ -332,7 +361,7 @@ async function ensureLibraryRootAvailable() {
     const createLabel = portableDir ? `Create new next to portable .exe` : 'Create new at default location';
     const createDetail = portableDir ? defaultRoot : defaultRoot;
 
-    const res = await dialog.showMessageBox(mainWindow, {
+    const res = await safeShowMessageBox({
         type: 'warning',
         message: 'CastKit Codex library folder not found.',
         detail: `Configured libraryRoot:\n${missing}\n\nChoose an existing library root folder, or create a new one.\n\nDefault:\n${createDetail}`,
@@ -340,7 +369,7 @@ async function ensureLibraryRootAvailable() {
         defaultId: 0,
         cancelId: 2,
         noLink: true,
-    });
+    }, 'ensureLibraryRootAvailable.libraryNotFound');
 
     if (res.response === 2) {
         app.quit();
@@ -1144,6 +1173,12 @@ function sendReferenceWindowState() {
 }
 
 function createReferenceWindow() {
+    // Reference window is a visible secondary window that can also be
+    // setAlwaysOnTop. Both behaviors break the background stealth
+    // contract, so refuse to create it in background mode.
+    if (!assertBackgroundSafe('createReferenceWindow', 'createReferenceWindow')) {
+        return null;
+    }
     const prefs = getReferenceWindowPrefs();
 
     referenceWindow = new BrowserWindow({
@@ -1204,6 +1239,11 @@ function registerReferenceWindowShortcuts() {
         globalShortcut.unregister('CommandOrControl+Alt+T');
     } catch {
         // ignore
+    }
+    // Background mode forbids OS-level keyboard hooks because they can
+    // intercept the operator's real keystrokes globally.
+    if (!assertBackgroundSafe('globalShortcut.register', 'registerReferenceWindowShortcuts')) {
+        return;
     }
     try {
         globalShortcut.register('CommandOrControl+Alt+T', () => {
@@ -1367,14 +1407,16 @@ function registerIpcHandlers() {
 
     ipcMain.handle('ckc:openReferenceWindow', async () => {
         if (referenceWindow && !referenceWindow.isDestroyed()) {
-            referenceWindow.show();
-            referenceWindow.focus();
+            if (assertBackgroundSafe('referenceWindow.show+focus', 'openReferenceWindow.existing')) {
+                referenceWindow.show();
+                referenceWindow.focus();
+            }
             sendReferenceSelection();
             sendReferenceWindowState();
-            return { ok: true };
+            return { ok: true, raised: !isBackgroundMode() };
         }
-        createReferenceWindow();
-        return { ok: true };
+        const created = createReferenceWindow();
+        return { ok: true, created: !!created };
     });
 
     ipcMain.handle('ckc:closeReferenceWindow', async () => {
@@ -2342,14 +2384,14 @@ function registerIpcHandlers() {
 
         const duplicates = first.duplicates || [];
         if (duplicates.length > 0) {
-            const res = await dialog.showMessageBox(mainWindow, {
+            const res = await safeShowMessageBox({
                 type: 'warning',
                 message: `Detected ${duplicates.length} duplicate image(s).`,
                 detail: 'Skip duplicates is safest. Keep both will import additional copies with deterministic renaming.',
                 buttons: ['Keep both', 'Skip duplicates'],
                 defaultId: 1,
                 cancelId: 1,
-            });
+            }, 'importImageFiles.duplicateConfirm');
             if (res.response === 0) {
                 const dupPaths = duplicates.map(d => d.srcPath).filter(Boolean);
                 const second = await lib.importImages({ characterId, filePaths: dupPaths, duplicatePolicy: 'keepBoth' });
@@ -2422,6 +2464,35 @@ function registerIpcHandlers() {
     });
 }
 
+// Single-instance lock. A second launch:
+//  - In operator mode: raises and focuses the running mainWindow
+//    (typical desktop behavior). Routed through safeRaiseMainWindow
+//    which short-circuits in background mode.
+//  - In background mode: logs the second-instance event and exits
+//    silently without raising the running instance.
+const __ckcSingleInstance = app.requestSingleInstanceLock();
+if (!__ckcSingleInstance) {
+    try {
+        console.warn('[stealth] another CKC instance is running; this process exits without raising the first.');
+    } catch {
+        // ignore
+    }
+    app.quit();
+    process.exit(0);
+}
+app.on('second-instance', () => {
+    try {
+        automationControl.logEvent({
+            sessionId: null,
+            type: 'lifecycle.secondInstance',
+            details: { backgroundMode: isBackgroundMode() },
+        });
+    } catch {
+        // ignore
+    }
+    safeRaiseMainWindow('app.second-instance');
+});
+
 app.whenReady().then(async () => {
     const loaded = loadConfig();
     appConfigPath = loaded.configPath;
@@ -2438,14 +2509,14 @@ app.whenReady().then(async () => {
         await ensureLibrary();
     } catch (err) {
         try {
-            await dialog.showMessageBox(mainWindow, {
+            await safeShowMessageBox({
                 type: 'error',
                 message: 'Failed to initialize CastKit Codex library.',
                 detail: String(err?.message || err || 'Unknown error'),
                 buttons: ['Quit'],
                 defaultId: 0,
                 noLink: true,
-            });
+            }, 'whenReady.libraryInitFailure');
         } finally {
             app.quit();
         }
