@@ -105,7 +105,7 @@ This rule binds every WP and every governance change.
 Path: `<CKC_ROOT>\\CKC_main`
 
 Expected structure:
-- `app/` — Electron main process + backend (SQLite, exports, IPC)
+- `app/` — Electron main process + backend (PostgreSQL-first DB boundary, exports, IPC)
 - `src/` — React renderer (UI)
 - `scripts/` — build/packaging helpers
 
@@ -201,7 +201,14 @@ Set these env vars before running npm/electron builds:
   ```powershell
   powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_restore.ps1" -DumpPath "<dump-file>" -ConnectionString $env:CKC_POSTGRES_URL
   ```
-- SQLite is legacy/test fallback only. Do not create migration work unless the operator explicitly says a live SQLite library must be preserved.
+- SQLite is legacy/fallback only. Do not create migration work unless the operator explicitly says a live SQLite library must be preserved.
+- **PostgreSQL-first testing rule.** PostgreSQL is the first target for tests. Any test that touches `CKCLibrary`, migrations, persistence, automation sessions, IPC-backed backend commands, reset/backup behavior, workflow replay, ingestion, or multi-agent/concurrent operation MUST run against PostgreSQL first. SQLite-only passing tests are not sufficient evidence for CKC behavior because CKC is operated by multiple LLM/operator agents and depends on PostgreSQL concurrency, transactions, locking, and dialect behavior.
+- SQLite tests are allowed only when they are explicitly scoped as:
+  - legacy fixture compatibility,
+  - old-library import/migration reads,
+  - pure fallback-boundary coverage,
+  - or temporary transitional tests named as such in the WP.
+- New WPs must not add fresh SQLite-only backend coverage for product behavior. If PostgreSQL is unavailable, report the environment blocker rather than silently certifying product behavior through SQLite.
 
 ### Background LLM automation
 - CKC exposes an internal manual and control plane through Electron IPC/preload, not a public network API.
