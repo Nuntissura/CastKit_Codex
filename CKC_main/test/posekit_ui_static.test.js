@@ -27,6 +27,11 @@ test('pose and workflow routes are wired for renderer automation and drawer navi
   assert.match(commandMap, /'updateRigPose'/);
   assert.match(commandMap, /'setRigHeadPose'/);
   assert.match(commandMap, /'exportOpenposePng'/);
+  assert.match(commandMap, /'listOpenRigs'/);
+  assert.match(commandMap, /'openRigWorkspace'/);
+  assert.match(commandMap, /'setActiveRig'/);
+  assert.match(commandMap, /'closeRigWorkspace'/);
+  assert.match(commandMap, /'reorderOpenRigWorkspaces'/);
   assert.match(commandMap, /'createIdentityProfile'/);
   assert.match(commandMap, /'listIdentityProfiles'/);
   assert.match(commandMap, /'getWorkflowHistory'/);
@@ -53,6 +58,10 @@ test('pose and workflow tabs use ARIA tab semantics and stable automation select
   assert.match(pose, /data-action="pose-identity-panel"/);
   assert.match(pose, /data-action="pose-replay-comfyui"/);
   assert.match(pose, /data-action="pose-openpose-preview"/);
+  assert.match(pose, /data-action="pose-workspace-tabs"/);
+  assert.match(pose, /data-action="pose-workspace-tab"/);
+  assert.match(pose, /data-action="pose-close-workspace-tab"/);
+  assert.match(pose, /onWorkspaceTabKey/);
   assert.match(pose, /data-action="pose-hands-detected"/);
   assert.match(pose, /data-action="pose-hand-visibility-controls"/);
   assert.match(pose, /data-action="pose-toggle-left-hand"/);

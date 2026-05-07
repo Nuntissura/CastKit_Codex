@@ -4,7 +4,7 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
 }
 
 .toolbar {
@@ -121,6 +121,8 @@
 .primaryButton:hover,
 .iconButton:hover,
 .smallButton:hover,
+.workspaceTab:hover,
+.workspaceClose:hover,
 .tab:hover,
 .subtab:hover,
 .rigItem:hover,
@@ -134,6 +136,71 @@
 .smallButton:disabled {
   opacity: 0.48;
   cursor: not-allowed;
+}
+
+.workspaceTabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 18px 8px 64px;
+  border-bottom: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.workspaceTabShell {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(94px, 180px) 28px;
+  align-items: stretch;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.workspaceTabShell[data-active='1'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.workspaceTab {
+  min-width: 0;
+  border: 0;
+  border-right: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-primary);
+  padding: 7px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.workspaceTab span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceClose {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dirtyDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-color);
+}
+
+.workspaceTabsEmpty {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
 }
 
 .workspace {

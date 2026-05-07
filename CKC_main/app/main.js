@@ -679,6 +679,11 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'setRigPortrait') return lib.setRigPortrait(p);
     if (name === 'updateRigPose') return lib.updateRigPose(p);
     if (name === 'exportOpenposePng') return lib.exportOpenposePng(p);
+    if (name === 'listOpenRigs') return lib.listOpenRigs(p);
+    if (name === 'openRigWorkspace') return lib.openRigWorkspace(p);
+    if (name === 'setActiveRig') return lib.setActiveRig(p);
+    if (name === 'closeRigWorkspace') return lib.closeRigWorkspace(p);
+    if (name === 'reorderOpenRigWorkspaces') return lib.reorderOpenRigWorkspaces(p);
     if (name === 'listIdentityProfiles') return lib.listIdentityProfiles(p);
     if (name === 'getIdentityProfile') return lib.getIdentityProfile(p);
     if (name === 'createIdentityProfile') return lib.createIdentityProfile(p);
@@ -2117,6 +2122,31 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:exportOpenposePng', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.exportOpenposePng(params || {});
+    });
+
+    ipcMain.handle('ckc:listOpenRigs', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listOpenRigs(params || {});
+    });
+
+    ipcMain.handle('ckc:openRigWorkspace', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.openRigWorkspace(params || {});
+    });
+
+    ipcMain.handle('ckc:setActiveRig', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setActiveRig(params || {});
+    });
+
+    ipcMain.handle('ckc:closeRigWorkspace', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.closeRigWorkspace(params || {});
+    });
+
+    ipcMain.handle('ckc:reorderOpenRigWorkspaces', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.reorderOpenRigWorkspaces(params || {});
     });
 
     ipcMain.handle('ckc:listIdentityProfiles', async (_evt, params) => {

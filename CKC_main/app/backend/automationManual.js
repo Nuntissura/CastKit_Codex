@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0113-hand-keypoints';
+const MANUAL_VERSION = '2026-05-07.wp-0115-rig-workspaces';
 
 const featureGroups = [
   {
@@ -124,7 +124,7 @@ const featureGroups = [
   {
     id: 'pose-rig-workflow',
     title: 'Pose, rigs, workflow prompts, and story beats',
-    wp: ['WP-0107', 'WP-0108', 'WP-0109', 'WP-0110', 'WP-0111', 'WP-0113'],
+    wp: ['WP-0107', 'WP-0108', 'WP-0109', 'WP-0110', 'WP-0111', 'WP-0113', 'WP-0115'],
     summary:
       'The Pose and Workflow tabs share CKC characters, images, tags, notes, prompts, story beats, rigs, identity profiles, and ComfyUI workflow lineage through the same database and automation pipeline.',
     commands: [
@@ -138,6 +138,11 @@ const featureGroups = [
       'setRigPortrait',
       'updateRigPose',
       'exportOpenposePng',
+      'listOpenRigs',
+      'openRigWorkspace',
+      'setActiveRig',
+      'closeRigWorkspace',
+      'reorderOpenRigWorkspaces',
       'listIdentityProfiles',
       'getIdentityProfile',
       'createIdentityProfile',
@@ -162,6 +167,7 @@ const featureGroups = [
       'Use openPose/openWorkflow for renderer navigation; use backend rig/prompt/beat commands for deterministic data setup.',
       'PoseKit detection, yaw/pitch/roll head-pose transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Head pose uses intrinsic YXZ order and persists as a quaternion in rig calibration JSON. Local MediaPipe pose + face + hand model assets are bundled for body-18, face-70, and hand-21 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
       'Hand detection fills hand_left_keypoints_2d and hand_right_keypoints_2d with canonical OpenPose 21-point arrays when MediaPipe HandLandmarker passes confidence gating. The Pose tab shows hands 0/2, renders hand bones in 2D/3D, and exposes left/right hand visibility toggles in Tools / Markers.',
+      'Multi-rig workspaces are session-scoped. Use openRigWorkspace/setActiveRig/closeRigWorkspace/reorderOpenRigWorkspaces to manage Pose tab rig tabs; closing a workspace never deletes the Rig row or image assets.',
       'Identity profiles store a 512x512 content-hash face reference under images/identity plus deterministic face-70 measurements and replay bridge metadata. Workflow replay can inject a selected profile into CastKitCodexBridge identity inputs when the workflow exposes them.',
       'CKC starts a localhost-only intake endpoint for ComfyUI bridge payloads. automationGetState reports the bound intakePort and whether a token is required.',
       'Prompt and story-beat CRUD is live now and scoped by character when characterId is provided.',
@@ -780,6 +786,36 @@ const commandReference = [
     target: 'backend',
     description: 'Persist a renderer-produced openpose PNG data URL/base64 payload under the character folder using a content-hash filename and link it to the rig.',
     example: { rigId: 'rig_abc', pngBase64: 'data:image/png;base64,...', width: 1024, height: 1024 },
+  },
+  {
+    id: 'listOpenRigs',
+    target: 'backend',
+    description: 'List session-scoped open Pose rig workspaces, optionally filtered to one character. Returns activeRigId plus ordered tab rows; no database rows are created.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'openRigWorkspace',
+    target: 'backend',
+    description: 'Open a rig in the session workspace tab list and activate it by default. Durable rig data stays in the Rig table; this command only updates running-session workspace state.',
+    example: { rigId: 'rig_abc' },
+  },
+  {
+    id: 'setActiveRig',
+    target: 'backend',
+    description: 'Activate a rig workspace. If the rig exists but is not already open, CKC opens it first.',
+    example: { rigId: 'rig_abc' },
+  },
+  {
+    id: 'closeRigWorkspace',
+    target: 'backend',
+    description: 'Close a rig workspace tab without deleting the Rig row, portrait image, openpose export, or workflow history.',
+    example: { rigId: 'rig_abc' },
+  },
+  {
+    id: 'reorderOpenRigWorkspaces',
+    target: 'backend',
+    description: 'Reorder currently-open rig workspace tabs. The provided rigIds must already be open; omitted open tabs are appended after the requested order.',
+    example: { rigIds: ['rig_b', 'rig_a'] },
   },
   {
     id: 'listIdentityProfiles',

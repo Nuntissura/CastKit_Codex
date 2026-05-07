@@ -169,6 +169,25 @@ type CKCRig = {
   updatedAt: string;
 };
 
+type CKCRigWorkspace = {
+  rigId: string;
+  characterId: string;
+  portraitImageId: string;
+  label: string;
+  status: string;
+  order: number;
+  active: boolean;
+  dirty: boolean;
+  transientState: Record<string, unknown>;
+  updatedAt: string;
+};
+
+type CKCRigWorkspaceList = {
+  ok: true;
+  activeRigId: string | null;
+  rigs: CKCRigWorkspace[];
+};
+
 type CKCIdentityProfile = {
   profileId: string;
   characterId: string;
@@ -875,6 +894,11 @@ interface Window {
       width?: number;
       height?: number;
     }) => Promise<{ ok: true; imageId: string; relativePath: string; fileHash: string; deduped: boolean }>;
+    listOpenRigs: (params?: { characterId?: string | null } | null) => Promise<CKCRigWorkspaceList>;
+    openRigWorkspace: (params: { rigId: string; activate?: boolean; transientState?: Record<string, unknown> | null }) => Promise<CKCRigWorkspaceList>;
+    setActiveRig: (params: { rigId: string }) => Promise<CKCRigWorkspaceList>;
+    closeRigWorkspace: (params: { rigId: string }) => Promise<CKCRigWorkspaceList>;
+    reorderOpenRigWorkspaces: (params: { rigIds: string[] }) => Promise<CKCRigWorkspaceList>;
     listIdentityProfiles: (params?: { characterId?: string | null; includeDeleted?: boolean } | null) => Promise<CKCIdentityProfile[]>;
     getIdentityProfile: (params: { profileId: string; includeDeleted?: boolean }) => Promise<CKCIdentityProfile | null>;
     createIdentityProfile: (params: {

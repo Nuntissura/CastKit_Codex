@@ -320,6 +320,9 @@ class CKCLibrary {
 
     this._ftsEnsurePromise = null;
     this._ftsAvailable = null;
+    this.openRigWorkspaces = [];
+    this.activeRigWorkspaceId = null;
+    this.rigWorkspaceState = new Map();
   }
 
   getPaths() {
@@ -4260,6 +4263,116 @@ class CKCLibrary {
       [id]
     );
     return this._rigRow(row);
+  }
+
+  _rigWorkspaceRow(rig, orderIndex = 0) {
+    if (!rig) return null;
+    const state = this.rigWorkspaceState.get(rig.rigId) || {};
+    return {
+      rigId: rig.rigId,
+      characterId: rig.characterId,
+      portraitImageId: rig.portraitImageId,
+      label: rig.label || '',
+      status: rig.status || 'draft',
+      order: orderIndex,
+      active: this.activeRigWorkspaceId === rig.rigId,
+      dirty: !!state.dirty,
+      transientState: state.transientState && typeof state.transientState === 'object' ? state.transientState : {},
+      updatedAt: rig.updatedAt,
+    };
+  }
+
+  async listOpenRigs({ characterId } = {}) {
+    const cid = String(characterId ?? '').trim();
+    const nextOpen = [];
+    const rows = [];
+    for (const rigId of this.openRigWorkspaces) {
+      const rig = await this.getRig({ rigId });
+      if (!rig) {
+        this.rigWorkspaceState.delete(rigId);
+        continue;
+      }
+      nextOpen.push(rigId);
+      if (!cid || rig.characterId === cid) rows.push(this._rigWorkspaceRow(rig, rows.length));
+    }
+    this.openRigWorkspaces = nextOpen;
+    if (this.activeRigWorkspaceId && !this.openRigWorkspaces.includes(this.activeRigWorkspaceId)) {
+      this.activeRigWorkspaceId = this.openRigWorkspaces[0] || null;
+    }
+    const activeInRows = rows.find((row) => row.rigId === this.activeRigWorkspaceId);
+    return {
+      ok: true,
+      activeRigId: activeInRows?.rigId || rows[0]?.rigId || null,
+      rigs: rows.map((row) => ({
+        ...row,
+        active: row.rigId === (activeInRows?.rigId || rows[0]?.rigId || null),
+      })),
+    };
+  }
+
+  async openRigWorkspace({ rigId, activate = true, transientState = null } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const rig = await this.getRig({ rigId: id });
+    if (!rig) throw new Error('Rig not found');
+    if (!this.openRigWorkspaces.includes(id)) this.openRigWorkspaces.push(id);
+    if (transientState && typeof transientState === 'object') {
+      this.rigWorkspaceState.set(id, {
+        ...(this.rigWorkspaceState.get(id) || {}),
+        transientState,
+      });
+    } else if (!this.rigWorkspaceState.has(id)) {
+      this.rigWorkspaceState.set(id, { transientState: {} });
+    }
+    if (activate !== false) this.activeRigWorkspaceId = id;
+    await this._audit('posekit.rigWorkspace.open', rig.characterId, { rigId: id, active: this.activeRigWorkspaceId === id });
+    return this.listOpenRigs({ characterId: rig.characterId });
+  }
+
+  async setActiveRig({ rigId } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const rig = await this.getRig({ rigId: id });
+    if (!rig) throw new Error('Rig not found');
+    if (!this.openRigWorkspaces.includes(id)) this.openRigWorkspaces.push(id);
+    if (!this.rigWorkspaceState.has(id)) this.rigWorkspaceState.set(id, { transientState: {} });
+    this.activeRigWorkspaceId = id;
+    await this._audit('posekit.rigWorkspace.activate', rig.characterId, { rigId: id });
+    return this.listOpenRigs({ characterId: rig.characterId });
+  }
+
+  async closeRigWorkspace({ rigId } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const rig = await this.getRig({ rigId: id });
+    const beforeIndex = this.openRigWorkspaces.indexOf(id);
+    this.openRigWorkspaces = this.openRigWorkspaces.filter((item) => item !== id);
+    this.rigWorkspaceState.delete(id);
+    if (this.activeRigWorkspaceId === id) {
+      this.activeRigWorkspaceId = this.openRigWorkspaces[Math.min(beforeIndex, this.openRigWorkspaces.length - 1)] || this.openRigWorkspaces[0] || null;
+    }
+    if (rig) await this._audit('posekit.rigWorkspace.close', rig.characterId, { rigId: id });
+    return this.listOpenRigs({ characterId: rig?.characterId || null });
+  }
+
+  async reorderOpenRigWorkspaces({ rigIds } = {}) {
+    const requested = Array.isArray(rigIds) ? rigIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+    const seen = new Set();
+    const next = [];
+    for (const id of requested) {
+      if (seen.has(id)) continue;
+      if (!this.openRigWorkspaces.includes(id)) throw new Error(`Rig workspace is not open: ${id}`);
+      seen.add(id);
+      next.push(id);
+    }
+    for (const id of this.openRigWorkspaces) {
+      if (!seen.has(id)) next.push(id);
+    }
+    this.openRigWorkspaces = next;
+    if (this.activeRigWorkspaceId && !this.openRigWorkspaces.includes(this.activeRigWorkspaceId)) {
+      this.activeRigWorkspaceId = this.openRigWorkspaces[0] || null;
+    }
+    return this.listOpenRigs({});
   }
 
   async createRig({ characterId, portraitImageId, poseJson, calibrationJson, label = '', status = 'draft' } = {}) {

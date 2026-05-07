@@ -27,6 +27,17 @@ type PoseViewProps = {
 type Calibration = ReturnType<typeof createDefaultCalibration>;
 type HeadPose = ReturnType<typeof createHeadPose>;
 
+const RIGHT_TABS: RightTab[] = ['inspector', 'tools', 'library', 'identity', 'log'];
+const TOOL_TABS: ToolTab[] = ['calibration', 'markers', 'reframer'];
+
+function isRightTabValue(value: unknown): value is RightTab {
+  return RIGHT_TABS.includes(value as RightTab);
+}
+
+function isToolTabValue(value: unknown): value is ToolTab {
+  return TOOL_TABS.includes(value as ToolTab);
+}
+
 function imageUrl(imageId: string | null | undefined): string {
   const id = String(imageId ?? '').trim();
   return id ? `ckc://image/${encodeURIComponent(id)}` : '';
@@ -91,6 +102,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
   const [character, setCharacter] = React.useState<CKCCharacter | null>(null);
   const [selectedImageId, setSelectedImageId] = React.useState<string | null>(initialImageId);
   const [rigs, setRigs] = React.useState<CKCRig[]>([]);
+  const [openRigWorkspaces, setOpenRigWorkspaces] = React.useState<CKCRigWorkspace[]>([]);
   const [identityProfiles, setIdentityProfiles] = React.useState<CKCIdentityProfile[]>([]);
   const [selectedRigId, setSelectedRigId] = React.useState<string | null>(null);
   const [latestWorkflow, setLatestWorkflow] = React.useState<CKCWorkflowHistoryItem | null>(null);
@@ -108,7 +120,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
   const previewCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   const selectedRig = React.useMemo(
-    () => rigs.find((rig) => rig.rigId === selectedRigId) ?? rigs[0] ?? null,
+    () => (selectedRigId ? rigs.find((rig) => rig.rigId === selectedRigId) ?? null : null),
     [rigs, selectedRigId]
   );
 
@@ -139,28 +151,48 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     }
   }, [characterId, onSelectCharacter]);
 
+  function currentWorkspaceTransientState(): Record<string, unknown> {
+    return { rightTab, toolTab };
+  }
+
+  function applyWorkspaceTransientState(state: unknown) {
+    const next = state && typeof state === 'object' ? (state as { rightTab?: unknown; toolTab?: unknown }) : {};
+    if (isRightTabValue(next.rightTab)) setRightTab(next.rightTab);
+    if (isToolTabValue(next.toolTab)) setToolTab(next.toolTab);
+  }
+
   const refreshCharacter = React.useCallback(async () => {
     const id = String(characterId ?? '').trim();
     if (!id) {
       setCharacter(null);
       setRigs([]);
+      setOpenRigWorkspaces([]);
       setIdentityProfiles([]);
       setSelectedRigId(null);
       setDraftRig(null);
       return;
     }
 
-    const [detail, rigList, profileList] = await Promise.all([
+    const [detail, rigList, profileList, workspaceList] = await Promise.all([
       window.ckc.getCharacter(id),
       window.ckc.listRigs({ characterId: id }),
       window.ckc.listIdentityProfiles({ characterId: id }),
+      window.ckc.listOpenRigs({ characterId: id }),
     ]);
     setCharacter(detail);
     setRigs(Array.isArray(rigList) ? rigList : []);
     setIdentityProfiles(Array.isArray(profileList) ? profileList : []);
+    let workspaces = Array.isArray(workspaceList?.rigs) ? workspaceList.rigs : [];
+    if (!workspaces.length && Array.isArray(rigList) && rigList.length) {
+      const opened = await window.ckc.openRigWorkspace({ rigId: rigList[0].rigId });
+      workspaces = Array.isArray(opened?.rigs) ? opened.rigs.filter((rig) => rig.characterId === id) : [];
+    }
+    setOpenRigWorkspaces(workspaces);
+    const preferredRigId = workspaceList?.activeRigId || workspaces[0]?.rigId || rigList[0]?.rigId || null;
+    applyWorkspaceTransientState(workspaces.find((rig) => rig.rigId === preferredRigId)?.transientState);
     setSelectedRigId((current) => {
-      if (current && rigList.some((rig) => rig.rigId === current)) return current;
-      return rigList[0]?.rigId ?? null;
+      if (current && workspaces.some((rig) => rig.rigId === current)) return current;
+      return preferredRigId;
     });
     setSelectedImageId((current) => {
       if (current && detail?.images?.some((image) => image.id === current)) return current;
@@ -210,6 +242,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     setHeadPose(nextHeadPose);
     setCalibration(safeCalibration(selectedRig?.calibration, nextHeadPose, toolTab));
     setCalibrationDirty(false);
+    if (selectedRig?.portraitImageId) setSelectedImageId(selectedRig.portraitImageId);
   }, [selectedRig?.rigId]);
 
   React.useEffect(() => {
@@ -254,6 +287,8 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
         label: selectedImage.notes ? selectedImage.notes.slice(0, 48) : `Rig ${rigs.length + 1}`,
         calibrationJson: calibration,
       });
+      const workspace = await window.ckc.openRigWorkspace({ rigId: result.rigId });
+      setOpenRigWorkspaces(Array.isArray(workspace?.rigs) ? workspace.rigs.filter((rig) => rig.characterId === cid) : []);
       setSelectedRigId(result.rigId);
       setStatus(`Rig saved ${formatDate(new Date().toISOString())}`);
       await refreshCharacter();
@@ -295,8 +330,12 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
           status: detection.fallback ? 'fallback' : 'ready',
         });
         rigId = created.rigId;
+        const workspace = await window.ckc.openRigWorkspace({ rigId });
+        setOpenRigWorkspaces(Array.isArray(workspace?.rigs) ? workspace.rigs.filter((rig) => rig.characterId === cid) : []);
       } else {
         await window.ckc.updateRigPose({ rigId, poseJson: detection.rig, status: detection.fallback ? 'fallback' : 'ready' });
+        const workspace = await window.ckc.openRigWorkspace({ rigId });
+        setOpenRigWorkspaces(Array.isArray(workspace?.rigs) ? workspace.rigs.filter((rig) => rig.characterId === cid) : []);
       }
       setSelectedRigId(rigId);
       setRightTab('inspector');
@@ -328,6 +367,81 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     } finally {
       setBusy(false);
     }
+  }
+
+  async function persistDirtyCalibration() {
+    if (!selectedRig || !calibrationDirty) return;
+    await window.ckc.updateRigCalibration({ rigId: selectedRig.rigId, calibrationJson: calibration });
+    setCalibrationDirty(false);
+  }
+
+  async function activateRigWorkspace(rigId: string) {
+    const id = String(rigId || '').trim();
+    if (!id || id === selectedRigId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (selectedRigId && openRigWorkspaces.some((rig) => rig.rigId === selectedRigId)) {
+        await window.ckc.openRigWorkspace({ rigId: selectedRigId, activate: false, transientState: currentWorkspaceTransientState() });
+      }
+      await persistDirtyCalibration();
+      const workspace = await window.ckc.setActiveRig({ rigId: id });
+      const next = Array.isArray(workspace?.rigs) ? workspace.rigs.filter((rig) => rig.characterId === characterId) : [];
+      setOpenRigWorkspaces(next);
+      setSelectedRigId(id);
+      applyWorkspaceTransientState(next.find((rig) => rig.rigId === id)?.transientState);
+      const nextRig = rigs.find((rig) => rig.rigId === id);
+      if (nextRig?.portraitImageId) setSelectedImageId(nextRig.portraitImageId);
+      setDraftRig(null);
+      setStatus(`Active rig ${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function closeRigWorkspace(rigId: string) {
+    const id = String(rigId || '').trim();
+    if (!id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (selectedRig?.rigId === id) await persistDirtyCalibration();
+      const workspace = await window.ckc.closeRigWorkspace({ rigId: id });
+      const next = Array.isArray(workspace?.rigs) ? workspace.rigs.filter((rig) => rig.characterId === characterId) : [];
+      setOpenRigWorkspaces(next);
+      const activeId = workspace?.activeRigId && next.some((rig) => rig.rigId === workspace.activeRigId) ? workspace.activeRigId : next[0]?.rigId || null;
+      setSelectedRigId(activeId);
+      applyWorkspaceTransientState(next.find((rig) => rig.rigId === activeId)?.transientState);
+      const nextRig = rigs.find((rig) => rig.rigId === activeId);
+      if (nextRig?.portraitImageId) setSelectedImageId(nextRig.portraitImageId);
+      setDraftRig(null);
+      setStatus(`Closed rig ${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onWorkspaceTabKey(event: React.KeyboardEvent<HTMLButtonElement>, rigId: string) {
+    const ids = openRigWorkspaces.map((rig) => rig.rigId);
+    const current = ids.indexOf(rigId);
+    if (current < 0) return;
+    let next = current;
+    if (event.key === 'ArrowRight') next = (current + 1) % ids.length;
+    else if (event.key === 'ArrowLeft') next = (current - 1 + ids.length) % ids.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = ids.length - 1;
+    else if (event.key === 'Delete') {
+      event.preventDefault();
+      void closeRigWorkspace(rigId);
+      return;
+    } else return;
+    event.preventDefault();
+    void activateRigWorkspace(ids[next]);
+    requestAnimationFrame(() => document.getElementById(`pose-workspace-tab-${ids[next]}`)?.focus());
   }
 
   async function exportOpenpose() {
@@ -519,6 +633,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
               setCharacterId(next);
               onSelectCharacter?.(next);
               setSelectedRigId(null);
+              setOpenRigWorkspaces([]);
               setDraftRig(null);
               setError(null);
             }}
@@ -589,7 +704,52 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
         </button>
       </header>
 
-      <div className={styles.workspace}>
+      <div className={styles.workspaceTabs} role="tablist" aria-label="Open rig workspaces" data-action="pose-workspace-tabs">
+        {openRigWorkspaces.length ? (
+          openRigWorkspaces.map((workspace) => {
+            const rig = rigs.find((item) => item.rigId === workspace.rigId);
+            const isActive = selectedRigId === workspace.rigId;
+            const isDirty = isActive && calibrationDirty;
+            return (
+              <div key={workspace.rigId} className={styles.workspaceTabShell} data-active={isActive ? '1' : '0'} data-dirty={isDirty ? '1' : '0'}>
+                <button
+                  id={`pose-workspace-tab-${workspace.rigId}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls="pose-workspace-panel"
+                  tabIndex={isActive ? 0 : -1}
+                  className={styles.workspaceTab}
+                  data-action="pose-workspace-tab"
+                  data-rig-id={workspace.rigId}
+                  onClick={() => void activateRigWorkspace(workspace.rigId)}
+                  onKeyDown={(event) => onWorkspaceTabKey(event, workspace.rigId)}
+                >
+                  <span>{rig?.label || workspace.label || workspace.rigId.slice(0, 10)}</span>
+                  {isDirty ? <span className={styles.dirtyDot} aria-label="Unsaved calibration" /> : null}
+                </button>
+                <button
+                  type="button"
+                  className={styles.workspaceClose}
+                  aria-label={`Close ${rig?.label || workspace.rigId}`}
+                  data-action="pose-close-workspace-tab"
+                  data-rig-id={workspace.rigId}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void closeRigWorkspace(workspace.rigId);
+                  }}
+                >
+                  x
+                </button>
+              </div>
+            );
+          })
+        ) : (
+          <span className={styles.workspaceTabsEmpty}>No open rigs</span>
+        )}
+      </div>
+
+      <div className={styles.workspace} id="pose-workspace-panel" role="tabpanel" aria-labelledby={selectedRigId ? `pose-workspace-tab-${selectedRigId}` : undefined}>
         <div className={styles.leftPage}>
           <div className={styles.imageStage} data-action="pose-image-stage">
             {selectedImage ? (
@@ -790,12 +950,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
                       className={styles.rigItem}
                       data-selected={selectedRig?.rigId === rig.rigId ? '1' : '0'}
                       data-rig-id={rig.rigId}
-                      onClick={() => {
-                        setSelectedRigId(rig.rigId);
-                        setSelectedImageId(rig.portraitImageId);
-                        setDraftRig(null);
-                        setError(null);
-                      }}
+                      onClick={() => void activateRigWorkspace(rig.rigId)}
                     >
                       <strong>{rig.label || rig.rigId}</strong>
                       <span>{formatDate(rig.updatedAt)}</span>
