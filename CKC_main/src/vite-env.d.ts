@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 
+declare module '@mediapipe/tasks-vision/vision_wasm_module_internal.js' {
+  const ModuleFactory: unknown;
+  export default ModuleFactory;
+}
+
 type CKCCharacterListItem = {
   id: string;
   publicId: string | null;
@@ -148,6 +153,58 @@ type CKCCharacter = {
     sourceNote: string;
     addedAt: string;
   }>;
+};
+
+type CKCRig = {
+  rigId: string;
+  characterId: string;
+  portraitImageId: string;
+  label: string;
+  pose: unknown;
+  poseJson: string;
+  calibration: unknown;
+  calibrationJson: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CKCPrompt = {
+  promptId: string;
+  characterId: string | null;
+  kind: string;
+  title: string;
+  text: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CKCStoryBeatItem = {
+  beatId: string;
+  characterId: string | null;
+  title: string;
+  body: string;
+  promptIds: string[];
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CKCWorkflowHistoryItem = {
+  imageId: string;
+  characterId: string;
+  characterName: string;
+  relativePath: string;
+  fileHash: string;
+  workflow: unknown;
+  workflowJson: string;
+  metadata: Record<string, unknown>;
+  metadataJson: string | null;
+  prompts: { positive?: string[]; negative?: string[]; loras?: string[] };
+  promptsJson: string | null;
+  rigId: string | null;
+  addedAt: string;
 };
 
 type CKCTemplateAstFieldType =
@@ -754,6 +811,57 @@ interface Window {
       listCharacters: (params?: unknown) => Promise<CKCCharacterListItem[]>;
       listProtectedFieldIdsGlobal: () => Promise<string[]>;
     listAllTags: () => Promise<string[]>;
+    listRigs: (params?: { characterId?: string | null } | null) => Promise<CKCRig[]>;
+    getRig: (params: { rigId: string }) => Promise<CKCRig | null>;
+    createRig: (params: {
+      characterId: string;
+      portraitImageId: string;
+      poseJson?: unknown;
+      calibrationJson?: unknown;
+      label?: string;
+      status?: string;
+    }) => Promise<{ ok: true; rigId: string }>;
+    updateRigCalibration: (params: { rigId: string; calibrationJson?: unknown }) => Promise<{ ok: true }>;
+    setRigPortrait: (params: { rigId: string; portraitImageId: string }) => Promise<{ ok: true }>;
+    updateRigPose: (params: { rigId: string; poseJson?: unknown; status?: string }) => Promise<{ ok: true; rigId: string }>;
+    exportOpenposePng: (params: {
+      rigId: string;
+      pngBase64: string;
+      width?: number;
+      height?: number;
+    }) => Promise<{ ok: true; imageId: string; relativePath: string; fileHash: string; deduped: boolean }>;
+    registerComfyUIOutput: (params: unknown) => Promise<unknown>;
+    getWorkflowHistory: (params?: { characterId?: string | null; limit?: number } | null) => Promise<CKCWorkflowHistoryItem[]>;
+    extractPromptFromWorkflow: (params: { workflowJson: unknown }) => Promise<{ ok: true; positive: string[]; negative: string[]; loras: string[] }>;
+    replayWorkflow: (params: {
+      host?: string;
+      workflowJson: unknown;
+      characterId?: string | null;
+      rigId?: string | null;
+      openposeRef?: string | null;
+      clientId?: string | null;
+    }) => Promise<{ ok: true; promptId: string | null; number: number | null; nodeErrors: Record<string, unknown>; clientId: string }>;
+    getComfyUIStats: (params?: { host?: string } | null) => Promise<{ ok: true; stats: unknown }>;
+    listPrompts: (params?: { characterId?: string | null; kind?: string | null } | null) => Promise<CKCPrompt[]>;
+    upsertPrompt: (params: {
+      promptId?: string | null;
+      characterId?: string | null;
+      kind?: string;
+      title?: string;
+      text?: string;
+      tags?: string[];
+    }) => Promise<{ ok: true; promptId: string }>;
+    deletePrompt: (params: { promptId: string }) => Promise<{ ok: true }>;
+    listStoryBeats: (params?: { characterId?: string | null } | null) => Promise<CKCStoryBeatItem[]>;
+    upsertStoryBeat: (params: {
+      beatId?: string | null;
+      characterId?: string | null;
+      title?: string;
+      body?: string;
+      promptIds?: string[];
+      orderIndex?: number;
+    }) => Promise<{ ok: true; beatId: string }>;
+    deleteStoryBeat: (params: { beatId: string }) => Promise<{ ok: true }>;
     listFieldValueSuggestions: (params?: unknown) => Promise<string[]>;
     createCharacter: (params?: unknown) => Promise<string>;
     assignPublicCharacterIds: (params?: { dryRun?: boolean } | null) => Promise<{

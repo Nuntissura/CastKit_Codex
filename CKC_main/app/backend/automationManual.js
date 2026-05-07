@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-06.wp-0104b';
+const MANUAL_VERSION = '2026-05-07.posekit-comfyui';
 
 const featureGroups = [
   {
@@ -113,6 +113,44 @@ const featureGroups = [
       'Rating hotkeys are UI-only; automation should call metadata commands.',
       'Carousel/frontpage are represented as image tags.',
       'Linked intake mode copies source files; folder-only intake moves source files into status folders.',
+    ],
+  },
+  {
+    id: 'pose-rig-workflow',
+    title: 'Pose, rigs, workflow prompts, and story beats',
+    wp: ['WP-0107', 'WP-0108', 'WP-0109'],
+    summary:
+      'The Pose and Workflow tabs share CKC characters, images, tags, notes, prompts, story beats, rigs, and future ComfyUI workflow lineage through the same database and automation pipeline.',
+    commands: [
+      'openPose',
+      'openWorkflow',
+      'listRigs',
+      'getRig',
+      'createRig',
+      'updateRigCalibration',
+      'setRigPortrait',
+      'updateRigPose',
+      'exportOpenposePng',
+      'registerComfyUIOutput',
+      'getWorkflowHistory',
+      'extractPromptFromWorkflow',
+      'replayWorkflow',
+      'getComfyUIStats',
+      'listPrompts',
+      'upsertPrompt',
+      'deletePrompt',
+      'listStoryBeats',
+      'upsertStoryBeat',
+      'deleteStoryBeat',
+    ],
+    roadmap: [
+      'WorkflowTemplate CRUD (future WP-0109 hardening)',
+    ],
+    notes: [
+      'Use openPose/openWorkflow for renderer navigation; use backend rig/prompt/beat commands for deterministic data setup.',
+      'PoseKit detection, yaw/calibration transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Local MediaPipe pose + face model assets are bundled for body-18 and face-70 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
+      'CKC starts a localhost-only intake endpoint for ComfyUI bridge payloads. automationGetState reports the bound intakePort and whether a token is required.',
+      'Prompt and story-beat CRUD is live now and scoped by character when characterId is provided.',
     ],
   },
   {
@@ -412,6 +450,18 @@ const commandReference = [
     example: {},
   },
   {
+    id: 'openPose',
+    target: 'renderer',
+    description: 'Open the Pose tab for character image and rig work. Optional characterId/imageId selects the working context.',
+    example: { characterId: 'char_001', imageId: 'img_001' },
+  },
+  {
+    id: 'openWorkflow',
+    target: 'renderer',
+    description: 'Open the Workflow tab for prompt, story-beat, rig, and replay context. Optional characterId selects the working context.',
+    example: { characterId: 'char_001' },
+  },
+  {
     id: 'selectImage',
     target: 'renderer',
     description: 'Select an image inside the active character page.',
@@ -644,6 +694,114 @@ const commandReference = [
     target: 'backend',
     description: 'Search across characters, docs, moodboards, and image metadata. Returns hits with snippets.',
     example: { query: 'red dress', limit: 50 },
+  },
+  {
+    id: 'listRigs',
+    target: 'backend',
+    description: 'List rig rows, optionally scoped to one character. Returns parsed pose/calibration objects and their raw JSON strings.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'getRig',
+    target: 'backend',
+    description: 'Return one rig by rigId, including character id, portrait image id, status, pose JSON, and calibration JSON.',
+    example: { rigId: 'rig_abc' },
+  },
+  {
+    id: 'createRig',
+    target: 'backend',
+    description: 'Create a rig attached to a character image. The image must belong to the character. Empty pose/calibration JSON is created when omitted.',
+    example: { characterId: 'char_001', portraitImageId: 'img_001', label: 'front rig' },
+  },
+  {
+    id: 'updateRigCalibration',
+    target: 'backend',
+    description: 'Replace a rig calibration JSON object/string and bump updated_at.',
+    example: { rigId: 'rig_abc', calibrationJson: { schemaVersion: 1, yaw: 0 } },
+  },
+  {
+    id: 'setRigPortrait',
+    target: 'backend',
+    description: 'Point a rig at a different portrait image owned by the same character.',
+    example: { rigId: 'rig_abc', portraitImageId: 'img_002' },
+  },
+  {
+    id: 'updateRigPose',
+    target: 'backend',
+    description: 'Replace a rig pose JSON object/string after detector or calibration work and mirror it onto the portrait image row.',
+    example: { rigId: 'rig_abc', poseJson: { schemaVersion: 1, subsystem: 'posekit', body: [] }, status: 'ready' },
+  },
+  {
+    id: 'exportOpenposePng',
+    target: 'backend',
+    description: 'Persist a renderer-produced openpose PNG data URL/base64 payload under the character folder using a content-hash filename and link it to the rig.',
+    example: { rigId: 'rig_abc', pngBase64: 'data:image/png;base64,...', width: 1024, height: 1024 },
+  },
+  {
+    id: 'registerComfyUIOutput',
+    target: 'backend',
+    description: 'Register one ComfyUI bridge payload: decode image bytes, store the image under the target character, and attach workflow/metadata/prompt lineage.',
+    example: { schema: 'ckc.intake.comfyui_output@1', character_id: 'char_001', image_b64: '...', workflow_json: {}, metadata: {} },
+  },
+  {
+    id: 'getWorkflowHistory',
+    target: 'backend',
+    description: 'List images with stored ComfyUI workflow JSON, optionally scoped to one character.',
+    example: { characterId: 'char_001', limit: 25 },
+  },
+  {
+    id: 'extractPromptFromWorkflow',
+    target: 'backend',
+    description: 'Walk a ComfyUI workflow JSON object/string and return likely positive prompts, negative prompts, and LoRA names.',
+    example: { workflowJson: { 1: { class_type: 'CLIPTextEncode', inputs: { text: 'portrait' } } } },
+  },
+  {
+    id: 'replayWorkflow',
+    target: 'backend',
+    description: 'Submit workflow JSON to ComfyUI /prompt. Uses configured ComfyUI host unless host is supplied in params.',
+    example: { host: 'http://127.0.0.1:8188', workflowJson: {}, characterId: 'char_001', rigId: 'rig_abc' },
+  },
+  {
+    id: 'getComfyUIStats',
+    target: 'backend',
+    description: 'Call ComfyUI /system_stats on the configured or supplied host.',
+    example: { host: 'http://127.0.0.1:8188' },
+  },
+  {
+    id: 'listPrompts',
+    target: 'backend',
+    description: 'List prompt rows, optionally scoped by characterId and kind. Character-scoped lists include global prompts.',
+    example: { characterId: 'char_001', kind: 'positive' },
+  },
+  {
+    id: 'upsertPrompt',
+    target: 'backend',
+    description: 'Create or update a prompt with optional character scope, kind, title, text, and tags.',
+    example: { characterId: 'char_001', kind: 'positive', title: 'portrait', text: 'clean studio portrait', tags: ['studio'] },
+  },
+  {
+    id: 'deletePrompt',
+    target: 'backend',
+    description: 'Delete a prompt by promptId.',
+    example: { promptId: 'prompt_abc' },
+  },
+  {
+    id: 'listStoryBeats',
+    target: 'backend',
+    description: 'List story-beat rows, optionally scoped to one character. Character-scoped lists include global beats.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'upsertStoryBeat',
+    target: 'backend',
+    description: 'Create or update a story beat with title, body, linked prompt ids, and order index.',
+    example: { characterId: 'char_001', title: 'Arrival', body: 'Opening image beat', promptIds: ['prompt_abc'], orderIndex: 0 },
+  },
+  {
+    id: 'deleteStoryBeat',
+    target: 'backend',
+    description: 'Delete a story beat by beatId.',
+    example: { beatId: 'beat_abc' },
   },
 ];
 

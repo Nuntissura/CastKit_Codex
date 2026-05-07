@@ -16,6 +16,7 @@ const {
 const { validateCharacterValues, classifyChangeType } = require('./validation');
 const { extractDominantPaletteFromBitmap } = require('./palette');
 const { computeDhashHexFromBitmap, hammingDistanceHex64, isHex64 } = require('./dhash');
+const comfyuiClient = require('./comfyuiClient');
 
 const INBOX_CHARACTER_ID = '__ckc_inbox';
 const INBOX_CHARACTER_NAME = 'Inbox';
@@ -3617,6 +3618,654 @@ class CKCLibrary {
       await this.recomputeDerivedTags(c.character_id);
     }
     return { ok: true, count: chars.length };
+  }
+
+  _jsonText(value, fallback) {
+    if (value === undefined || value === null || value === '') return JSON.stringify(fallback);
+    if (typeof value === 'string') {
+      const raw = value.trim();
+      if (!raw) return JSON.stringify(fallback);
+      JSON.parse(raw);
+      return raw;
+    }
+    return JSON.stringify(value);
+  }
+
+  _safeJsonParse(value, fallback) {
+    try {
+      const parsed = JSON.parse(String(value ?? ''));
+      return parsed == null ? fallback : parsed;
+    } catch {
+      return fallback;
+    }
+  }
+
+  _posekitEmptyPose({ characterId, portraitImageId } = {}) {
+    return {
+      schemaVersion: 1,
+      subsystem: 'posekit',
+      characterId: String(characterId ?? ''),
+      portraitImageId: String(portraitImageId ?? ''),
+      people: [],
+      openpose: {
+        version: '1.0',
+        people: [],
+        canvas_width: 1024,
+        canvas_height: 1024,
+      },
+      detector: {
+        status: 'pending',
+        provider: null,
+      },
+    };
+  }
+
+  _posekitEmptyCalibration() {
+    return {
+      schemaVersion: 1,
+      perKeypoint: {},
+      reframer: {
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        anchor: 'head_anchor',
+      },
+      visibility: {},
+    };
+  }
+
+  _rigRow(row) {
+    if (!row) return null;
+    return {
+      rigId: row.rig_id,
+      characterId: row.character_id,
+      portraitImageId: row.portrait_image_id,
+      label: row.label ?? '',
+      pose: this._safeJsonParse(row.pose_json, null),
+      poseJson: row.pose_json,
+      calibration: this._safeJsonParse(row.calibration_json, null),
+      calibrationJson: row.calibration_json ?? null,
+      status: row.status ?? 'draft',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  _promptRow(row) {
+    if (!row) return null;
+    return {
+      promptId: row.prompt_id,
+      characterId: row.character_id ?? null,
+      kind: row.kind,
+      title: row.title ?? '',
+      text: row.text ?? '',
+      tags: this._safeJsonParse(row.tags_json, []),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  _storyBeatRow(row) {
+    if (!row) return null;
+    return {
+      beatId: row.beat_id,
+      characterId: row.character_id ?? null,
+      title: row.title ?? '',
+      body: row.body ?? '',
+      promptIds: this._safeJsonParse(row.prompt_ids_json, []),
+      orderIndex: Number(row.order_index) || 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async _assertCharacterExists(characterId) {
+    const cid = String(characterId ?? '').trim();
+    if (!cid) throw new Error('characterId is required');
+    const row = await get(this.db, 'SELECT character_id FROM Character WHERE character_id = ?', [cid]);
+    if (!row) throw new Error('Character not found');
+    return cid;
+  }
+
+  async _assertImageBelongsToCharacter({ characterId, imageId }) {
+    const cid = await this._assertCharacterExists(characterId);
+    const iid = String(imageId ?? '').trim();
+    if (!iid) throw new Error('portraitImageId is required');
+    const row = await get(this.db, 'SELECT image_id, character_id FROM ImageAsset WHERE image_id = ?', [iid]);
+    if (!row) throw new Error('ImageAsset not found');
+    if (String(row.character_id) !== cid) throw new Error('portraitImageId must belong to characterId');
+    return { characterId: cid, imageId: iid };
+  }
+
+  async listRigs({ characterId } = {}) {
+    const cid = String(characterId ?? '').trim();
+    const rows = cid
+      ? await all(
+          this.db,
+          `SELECT rig_id, character_id, portrait_image_id, label, pose_json, calibration_json, status, created_at, updated_at
+           FROM Rig
+           WHERE character_id = ?
+           ORDER BY updated_at DESC, created_at DESC`,
+          [cid]
+        )
+      : await all(
+          this.db,
+          `SELECT rig_id, character_id, portrait_image_id, label, pose_json, calibration_json, status, created_at, updated_at
+           FROM Rig
+           ORDER BY updated_at DESC, created_at DESC
+           LIMIT 200`
+        );
+    return rows.map((r) => this._rigRow(r));
+  }
+
+  async getRig({ rigId } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const row = await get(
+      this.db,
+      `SELECT rig_id, character_id, portrait_image_id, label, pose_json, calibration_json, status, created_at, updated_at
+       FROM Rig
+       WHERE rig_id = ?`,
+      [id]
+    );
+    return this._rigRow(row);
+  }
+
+  async createRig({ characterId, portraitImageId, poseJson, calibrationJson, label = '', status = 'draft' } = {}) {
+    const { characterId: cid, imageId } = await this._assertImageBelongsToCharacter({ characterId, imageId: portraitImageId });
+    const rigId = randomId('rig_');
+    const poseText = this._jsonText(poseJson, this._posekitEmptyPose({ characterId: cid, portraitImageId: imageId }));
+    const calibrationText = this._jsonText(calibrationJson, this._posekitEmptyCalibration());
+    const labelText = String(label ?? '').trim();
+    const statusText = String(status ?? 'draft').trim() || 'draft';
+
+    await run(
+      this.db,
+      `INSERT INTO Rig(rig_id, character_id, portrait_image_id, label, pose_json, calibration_json, status)
+       VALUES(?, ?, ?, ?, ?, ?, ?)`,
+      [rigId, cid, imageId, labelText, poseText, calibrationText, statusText]
+    );
+    await run(this.db, 'UPDATE ImageAsset SET rig_id = ?, pose_json = ? WHERE image_id = ?', [rigId, poseText, imageId]);
+    await this._audit('posekit.rig.create', cid, { rigId, portraitImageId: imageId });
+    return { ok: true, rigId };
+  }
+
+  async updateRigCalibration({ rigId, calibrationJson } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const existing = await this.getRig({ rigId: id });
+    if (!existing) throw new Error('Rig not found');
+    const calibrationText = this._jsonText(calibrationJson, this._posekitEmptyCalibration());
+    await run(
+      this.db,
+      `UPDATE Rig
+       SET calibration_json = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE rig_id = ?`,
+      [calibrationText, id]
+    );
+    await this._audit('posekit.rig.calibration.update', existing.characterId, { rigId: id });
+    return { ok: true };
+  }
+
+  async setRigPortrait({ rigId, portraitImageId } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const existing = await this.getRig({ rigId: id });
+    if (!existing) throw new Error('Rig not found');
+    const { imageId } = await this._assertImageBelongsToCharacter({ characterId: existing.characterId, imageId: portraitImageId });
+    await run(
+      this.db,
+      `UPDATE Rig
+       SET portrait_image_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE rig_id = ?`,
+      [imageId, id]
+    );
+    await run(this.db, 'UPDATE ImageAsset SET rig_id = ? WHERE image_id = ?', [id, imageId]);
+    await this._audit('posekit.rig.portrait.set', existing.characterId, { rigId: id, portraitImageId: imageId });
+    return { ok: true };
+  }
+
+  async updateRigPose({ rigId, poseJson, status = 'ready' } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const existing = await this.getRig({ rigId: id });
+    if (!existing) throw new Error('Rig not found');
+    const poseText = this._jsonText(
+      poseJson,
+      existing.pose || this._posekitEmptyPose({ characterId: existing.characterId, portraitImageId: existing.portraitImageId })
+    );
+    const statusText = String(status ?? existing.status ?? 'ready').trim() || 'ready';
+    await run(
+      this.db,
+      `UPDATE Rig
+       SET pose_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE rig_id = ?`,
+      [poseText, statusText, id]
+    );
+    await run(this.db, 'UPDATE ImageAsset SET rig_id = ?, pose_json = ? WHERE image_id = ?', [
+      id,
+      poseText,
+      existing.portraitImageId,
+    ]);
+    await this._audit('posekit.rig.pose.update', existing.characterId, { rigId: id, portraitImageId: existing.portraitImageId });
+    return { ok: true, rigId: id };
+  }
+
+  async exportOpenposePng({ rigId, pngBase64, width = 1024, height = 1024 } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const existing = await this.getRig({ rigId: id });
+    if (!existing) throw new Error('Rig not found');
+
+    const raw = String(pngBase64 ?? '').trim();
+    if (!raw) throw new Error('pngBase64 is required');
+    const cleaned = raw.includes(',') ? raw.slice(raw.indexOf(',') + 1) : raw;
+    const bytes = Buffer.from(cleaned, 'base64');
+    if (!bytes.length) throw new Error('pngBase64 is invalid');
+
+    const fileHash = sha256Hex(bytes);
+    const ext = raw.startsWith('data:image/jpeg') || raw.startsWith('data:image/jpg') ? '.jpg' : '.png';
+    const fileName = `${fileHash.slice(0, 16)}${ext}`;
+    const paths = this.getCharacterPaths(existing.characterId);
+    const rel = path.posix.join('images', 'openpose', fileName);
+    const dest = path.join(paths.base, rel.replaceAll('/', path.sep));
+    ensureDir(path.dirname(dest));
+    fs.writeFileSync(dest, bytes);
+
+    const existingImage = await get(
+      this.db,
+      `SELECT image_id, relative_path
+       FROM ImageAsset
+       WHERE character_id = ? AND file_hash = ? AND openpose_png_path = relative_path
+       ORDER BY added_at ASC
+       LIMIT 1`,
+      [existing.characterId, fileHash]
+    );
+    if (existingImage) {
+      await run(
+        this.db,
+        `UPDATE ImageAsset
+         SET rig_id = COALESCE(rig_id, ?),
+             pose_json = COALESCE(pose_json, ?),
+             openpose_png_path = COALESCE(openpose_png_path, ?)
+         WHERE image_id = ?`,
+        [id, existing.poseJson, rel, existingImage.image_id]
+      );
+      await run(this.db, 'UPDATE ImageAsset SET openpose_png_path = ? WHERE image_id = ?', [rel, existing.portraitImageId]);
+      return { ok: true, imageId: existingImage.image_id, relativePath: existingImage.relative_path, fileHash, deduped: true };
+    }
+
+    const imageId = randomId('img_');
+    await run(
+      this.db,
+      `INSERT INTO ImageAsset(
+         image_id, character_id, relative_path, file_hash, width, height,
+         favorite, rating, notes, tags_json, storage_mode, source_note,
+         pose_json, openpose_png_path, rig_id
+       ) VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 'copy', ?, ?, ?, ?)`,
+      [
+        imageId,
+        existing.characterId,
+        rel,
+        fileHash,
+        Math.max(1, Math.round(Number(width) || 1024)),
+        Math.max(1, Math.round(Number(height) || 1024)),
+        'openpose export',
+        JSON.stringify(['posekit', 'openpose']),
+        'posekit openpose export',
+        existing.poseJson,
+        rel,
+        id,
+      ]
+    );
+    await run(this.db, 'UPDATE ImageAsset SET openpose_png_path = ? WHERE image_id = ?', [rel, existing.portraitImageId]);
+    await this._audit('posekit.openpose.export', existing.characterId, { rigId: id, imageId, fileHash });
+    return { ok: true, imageId, relativePath: rel, fileHash, deduped: false };
+  }
+
+  _parseWorkflowJson(workflowJson) {
+    if (workflowJson == null || workflowJson === '') return {};
+    if (typeof workflowJson === 'string') {
+      const raw = workflowJson.trim();
+      if (!raw) return {};
+      return JSON.parse(raw);
+    }
+    if (typeof workflowJson === 'object') return workflowJson;
+    throw new Error('workflowJson must be an object or JSON string');
+  }
+
+  _workflowHistoryRow(row) {
+    if (!row) return null;
+    return {
+      imageId: row.image_id,
+      characterId: row.character_id,
+      characterName: row.character_name ?? '',
+      relativePath: row.relative_path,
+      fileHash: row.file_hash,
+      workflow: this._safeJsonParse(row.comfyui_workflow_json, {}),
+      workflowJson: row.comfyui_workflow_json,
+      metadata: this._safeJsonParse(row.comfyui_metadata_json, {}),
+      metadataJson: row.comfyui_metadata_json ?? null,
+      prompts: this._safeJsonParse(row.prompts_json, {}),
+      promptsJson: row.prompts_json ?? null,
+      rigId: row.rig_id ?? null,
+      addedAt: row.added_at,
+    };
+  }
+
+  _extractPromptDataFromWorkflow(workflowJson) {
+    const workflow = this._parseWorkflowJson(workflowJson);
+    const positive = [];
+    const negative = [];
+    const loras = [];
+    const nodes = Array.isArray(workflow?.nodes)
+      ? workflow.nodes
+      : workflow && typeof workflow === 'object'
+        ? Object.values(workflow)
+        : [];
+
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      const classType = String(node.class_type || node.type || '').toLowerCase();
+      const inputs = node.inputs && typeof node.inputs === 'object' ? node.inputs : node.widgets_values || {};
+      if (classType.includes('lora')) {
+        for (const value of Object.values(inputs || {})) {
+          if (typeof value === 'string' && value.trim()) loras.push(value.trim());
+        }
+      }
+      for (const [key, value] of Object.entries(inputs || {})) {
+        if (typeof value !== 'string') continue;
+        const text = value.trim();
+        if (!text) continue;
+        const k = String(key || '').toLowerCase();
+        if (k.includes('negative')) negative.push(text);
+        else if (k === 'text' || k.includes('positive') || k.includes('prompt')) positive.push(text);
+      }
+    }
+
+    return {
+      positive: Array.from(new Set(positive)),
+      negative: Array.from(new Set(negative)),
+      loras: Array.from(new Set(loras)),
+    };
+  }
+
+  _injectBridgeNodeInputs(workflowJson, { characterId = null, rigId = null, openposeRef = null } = {}) {
+    const workflow = JSON.parse(JSON.stringify(this._parseWorkflowJson(workflowJson)));
+    const nodes = workflow && typeof workflow === 'object' ? Object.values(workflow) : [];
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      if (String(node.class_type || '') !== 'CastKitCodexBridge') continue;
+      if (!node.inputs || typeof node.inputs !== 'object') node.inputs = {};
+      if (characterId && Object.prototype.hasOwnProperty.call(node.inputs, 'character_id')) node.inputs.character_id = characterId;
+      if (rigId && Object.prototype.hasOwnProperty.call(node.inputs, 'rig_id')) node.inputs.rig_id = rigId;
+      if (openposeRef && Object.prototype.hasOwnProperty.call(node.inputs, 'openpose_ref')) node.inputs.openpose_ref = openposeRef;
+    }
+    return workflow;
+  }
+
+  async registerComfyUIOutput(params = {}) {
+    const body = params && typeof params === 'object' ? params : {};
+    if (String(body.schema || '') !== 'ckc.intake.comfyui_output@1') return { ok: false, error: `unknown schema: ${body.schema || ''}` };
+    const cid = await this._assertCharacterExists(body.character_id);
+    const rigId = body.rig_id == null || body.rig_id === '' ? null : String(body.rig_id).trim();
+    if (rigId) {
+      const rig = await this.getRig({ rigId });
+      if (!rig || rig.characterId !== cid) return { ok: false, error: 'rig_id does not belong to character_id' };
+    }
+
+    const rawB64 = String(body.image_b64 || '').trim();
+    if (!rawB64) return { ok: false, error: 'missing image_b64' };
+    const bytes = Buffer.from(rawB64.includes(',') ? rawB64.slice(rawB64.indexOf(',') + 1) : rawB64, 'base64');
+    if (!bytes.length) return { ok: false, error: 'image_b64 decoded to zero bytes' };
+
+    const workflow = this._parseWorkflowJson(body.workflow_json || {});
+    const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : {};
+    const prompts = this._extractPromptDataFromWorkflow(workflow);
+    const workflowText = JSON.stringify(workflow);
+    const metadataText = JSON.stringify(metadata);
+    const promptsText = JSON.stringify(prompts);
+    const fileHash = sha256Hex(bytes);
+
+    const existing = await get(
+      this.db,
+      'SELECT image_id, relative_path FROM ImageAsset WHERE character_id = ? AND file_hash = ? ORDER BY added_at ASC LIMIT 1',
+      [cid, fileHash]
+    );
+    if (existing) {
+      await run(
+        this.db,
+        `UPDATE ImageAsset
+         SET comfyui_workflow_json = COALESCE(comfyui_workflow_json, ?),
+             comfyui_metadata_json = COALESCE(comfyui_metadata_json, ?),
+             prompts_json = COALESCE(prompts_json, ?),
+             rig_id = COALESCE(rig_id, ?)
+         WHERE image_id = ?`,
+        [workflowText, metadataText, promptsText, rigId, existing.image_id]
+      );
+      return { ok: true, image_id: existing.image_id, imageId: existing.image_id, deduped: true, relative_path: existing.relative_path, relativePath: existing.relative_path };
+    }
+
+    const hint = String(body.filename_hint || '').toLowerCase();
+    const ext = hint.endsWith('.jpg') || hint.endsWith('.jpeg') ? '.jpg' : hint.endsWith('.webp') ? '.webp' : '.png';
+    const fileName = `${fileHash.slice(0, 16)}${ext}`;
+    const paths = this.getCharacterPaths(cid);
+    ensureDir(paths.imagesOriginalDir);
+    ensureDir(paths.imagesThumbDir);
+    const rel = path.posix.join('images', 'original', fileName);
+    const dest = path.join(paths.base, rel.replaceAll('/', path.sep));
+    fs.writeFileSync(dest, bytes);
+
+    let width = null;
+    let height = null;
+    if (this.electronNativeImage) {
+      try {
+        const img = this.electronNativeImage.createFromBuffer(bytes);
+        const size = img.getSize();
+        width = Number(size?.width) || null;
+        height = Number(size?.height) || null;
+        const thumb = img.resize({ width: 320 });
+        fs.writeFileSync(path.join(paths.imagesThumbDir, `${fileHash.slice(0, 16)}.png`), thumb.toPNG());
+      } catch {
+        // thumbnails are best-effort only
+      }
+    }
+
+    const imageId = randomId('img_');
+    const metaTags = typeof metadata.tags === 'string' ? metadata.tags.split(',') : Array.isArray(metadata.tags) ? metadata.tags : [];
+    const tagsText = JSON.stringify(this._cleanTags(metaTags).filter((tag) => !this._isSystemTag(tag)));
+    await run(
+      this.db,
+      `INSERT INTO ImageAsset(
+         image_id, character_id, relative_path, file_hash, width, height,
+         favorite, rating, notes, tags_json, storage_mode, source_note,
+         comfyui_workflow_json, comfyui_metadata_json, prompts_json, rig_id
+       ) VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 'copy', ?, ?, ?, ?, ?)`,
+      [
+        imageId,
+        cid,
+        rel,
+        fileHash,
+        width,
+        height,
+        String(metadata.title || ''),
+        tagsText,
+        'comfyui generation',
+        workflowText,
+        metadataText,
+        promptsText,
+        rigId,
+      ]
+    );
+    await this._audit('posekit.comfyui.intake', cid, { imageId, rigId, fileHash, sessionId: String(body.session_id || '') });
+    return { ok: true, image_id: imageId, imageId, deduped: false, relative_path: rel, relativePath: rel };
+  }
+
+  async getWorkflowHistory({ characterId = null, limit = 100 } = {}) {
+    const cid = characterId == null ? null : String(characterId).trim() || null;
+    const lim = Math.max(1, Math.min(500, Math.floor(Number(limit) || 100)));
+    const params = [];
+    let where = "WHERE ia.comfyui_workflow_json IS NOT NULL AND ia.comfyui_workflow_json != ''";
+    if (cid) {
+      where += ' AND ia.character_id = ?';
+      params.push(cid);
+    }
+    const rows = await all(
+      this.db,
+      `SELECT ia.image_id, ia.character_id, c.display_name AS character_name, ia.relative_path, ia.file_hash,
+              ia.comfyui_workflow_json, ia.comfyui_metadata_json, ia.prompts_json, ia.rig_id, ia.added_at
+       FROM ImageAsset ia
+       JOIN Character c ON c.character_id = ia.character_id
+       ${where}
+       ORDER BY ia.added_at DESC
+       LIMIT ?`,
+      [...params, lim]
+    );
+    return rows.map((row) => this._workflowHistoryRow(row));
+  }
+
+  async extractPromptFromWorkflow({ workflowJson } = {}) {
+    return { ok: true, ...this._extractPromptDataFromWorkflow(workflowJson) };
+  }
+
+  async replayWorkflow({ host = 'http://127.0.0.1:8188', workflowJson, characterId = null, rigId = null, openposeRef = null, clientId = null } = {}) {
+    const cid = characterId == null ? null : String(characterId).trim() || null;
+    if (cid) await this._assertCharacterExists(cid);
+    if (rigId) {
+      const rig = await this.getRig({ rigId });
+      if (!rig) throw new Error('Rig not found');
+      if (cid && rig.characterId !== cid) throw new Error('rigId must belong to characterId');
+    }
+    const patched = this._injectBridgeNodeInputs(workflowJson, { characterId: cid, rigId, openposeRef });
+    const replayClientId = String(clientId || `ckc-replay-${randomId('session_')}`);
+    const result = await comfyuiClient.postPrompt({ host, workflowJson: patched, clientId: replayClientId });
+    return {
+      ok: true,
+      promptId: result.prompt_id || result.promptId || null,
+      number: result.number ?? null,
+      nodeErrors: result.node_errors || result.nodeErrors || {},
+      clientId: replayClientId,
+    };
+  }
+
+  async getComfyUIStats({ host = 'http://127.0.0.1:8188' } = {}) {
+    const stats = await comfyuiClient.getSystemStats({ host });
+    return { ok: true, stats };
+  }
+
+  async listPrompts({ characterId, kind } = {}) {
+    const cid = String(characterId ?? '').trim();
+    const k = String(kind ?? '').trim();
+    const clauses = [];
+    const params = [];
+    if (cid) {
+      clauses.push('(character_id = ? OR character_id IS NULL)');
+      params.push(cid);
+    }
+    if (k) {
+      clauses.push('kind = ?');
+      params.push(k);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await all(
+      this.db,
+      `SELECT prompt_id, character_id, kind, title, text, tags_json, created_at, updated_at
+       FROM Prompt
+       ${where}
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 500`,
+      params
+    );
+    return rows.map((r) => this._promptRow(r));
+  }
+
+  async upsertPrompt({ promptId, characterId = null, kind = 'positive', title = '', text = '', tags = [] } = {}) {
+    const id = String(promptId ?? '').trim() || randomId('prompt_');
+    const cidRaw = characterId == null ? null : String(characterId).trim();
+    const cid = cidRaw ? await this._assertCharacterExists(cidRaw) : null;
+    const kindText = String(kind ?? 'positive').trim() || 'positive';
+    const titleText = String(title ?? '').trim();
+    const textBody = String(text ?? '');
+    const tagsText = JSON.stringify(this._cleanTags(tags).filter((t) => !this._isSystemTag(t)));
+    await run(
+      this.db,
+      `INSERT INTO Prompt(prompt_id, character_id, kind, title, text, tags_json)
+       VALUES(?, ?, ?, ?, ?, ?)
+       ON CONFLICT(prompt_id) DO UPDATE SET
+         character_id = excluded.character_id,
+         kind = excluded.kind,
+         title = excluded.title,
+         text = excluded.text,
+         tags_json = excluded.tags_json,
+         updated_at = CURRENT_TIMESTAMP`,
+      [id, cid, kindText, titleText, textBody, tagsText]
+    );
+    await this._audit('posekit.prompt.upsert', cid, { promptId: id, kind: kindText });
+    return { ok: true, promptId: id };
+  }
+
+  async deletePrompt({ promptId } = {}) {
+    const id = String(promptId ?? '').trim();
+    if (!id) throw new Error('promptId is required');
+    await run(this.db, 'DELETE FROM Prompt WHERE prompt_id = ?', [id]);
+    await this._audit('posekit.prompt.delete', null, { promptId: id });
+    return { ok: true };
+  }
+
+  async listStoryBeats({ characterId } = {}) {
+    const cid = String(characterId ?? '').trim();
+    const rows = cid
+      ? await all(
+          this.db,
+          `SELECT beat_id, character_id, title, body, prompt_ids_json, order_index, created_at, updated_at
+           FROM StoryBeat
+           WHERE character_id = ? OR character_id IS NULL
+           ORDER BY order_index ASC, updated_at DESC`,
+          [cid]
+        )
+      : await all(
+          this.db,
+          `SELECT beat_id, character_id, title, body, prompt_ids_json, order_index, created_at, updated_at
+           FROM StoryBeat
+           ORDER BY order_index ASC, updated_at DESC
+           LIMIT 500`
+        );
+    return rows.map((r) => this._storyBeatRow(r));
+  }
+
+  async upsertStoryBeat({ beatId, characterId = null, title = 'Untitled beat', body = '', promptIds = [], orderIndex = 0 } = {}) {
+    const id = String(beatId ?? '').trim() || randomId('beat_');
+    const cidRaw = characterId == null ? null : String(characterId).trim();
+    const cid = cidRaw ? await this._assertCharacterExists(cidRaw) : null;
+    const titleText = String(title ?? '').trim() || 'Untitled beat';
+    const bodyText = String(body ?? '');
+    const promptIdsText = JSON.stringify(
+      Array.isArray(promptIds) ? Array.from(new Set(promptIds.map((x) => String(x).trim()).filter(Boolean))) : []
+    );
+    const order = Number.isFinite(Number(orderIndex)) ? Math.floor(Number(orderIndex)) : 0;
+    await run(
+      this.db,
+      `INSERT INTO StoryBeat(beat_id, character_id, title, body, prompt_ids_json, order_index)
+       VALUES(?, ?, ?, ?, ?, ?)
+       ON CONFLICT(beat_id) DO UPDATE SET
+         character_id = excluded.character_id,
+         title = excluded.title,
+         body = excluded.body,
+         prompt_ids_json = excluded.prompt_ids_json,
+         order_index = excluded.order_index,
+         updated_at = CURRENT_TIMESTAMP`,
+      [id, cid, titleText, bodyText, promptIdsText, order]
+    );
+    await this._audit('posekit.storybeat.upsert', cid, { beatId: id });
+    return { ok: true, beatId: id };
+  }
+
+  async deleteStoryBeat({ beatId } = {}) {
+    const id = String(beatId ?? '').trim();
+    if (!id) throw new Error('beatId is required');
+    await run(this.db, 'DELETE FROM StoryBeat WHERE beat_id = ?', [id]);
+    await this._audit('posekit.storybeat.delete', null, { beatId: id });
+    return { ok: true };
   }
 
   async getCharacter(characterId) {

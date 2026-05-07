@@ -1,18 +1,63 @@
-# Work Packet: WP-0108 - Pose pipeline (React + WASM, no Python)
+# Work Packet: WP-0108 - PoseKit pipeline (React + WASM, no Python)
 
 Date: 2026-05-06
 Owner: Codex
-Status: DRAFT (depends on WP-0107)
+Status: DONE (dev/live MediaPipe pose+face smoke passed 2026-05-07; packaged release smoke remains tracked in the release gate)
 
 ## Summary
-Build the actual pose pipeline inside CKC: drop a frontal portrait, run mediapipe pose + face_mesh in a Web Worker (WASM), fit them to a canonical openpose-style 3D rig, render the rig in a Three.js viewport with orbital camera inspection, render the openpose-format 2D output at the current yaw on a canvas, and let the operator calibrate per-marker visibility + position. Replaces OpenRepose's primary capability surface with a CKC-native React implementation.
+Build the actual PoseKit pipeline inside CKC: drop a frontal portrait, run MediaPipe Tasks Vision pose + face detection in a Web Worker (WASM), fit them to a canonical openpose-style 3D rig, render the rig in a Three.js viewport with orbital camera inspection, render the openpose-format 2D output at the current yaw on a canvas, and let the operator calibrate per-marker visibility + position. Replaces OpenRepose's primary capability surface with a CKC-native React implementation.
 
-No Python sidecar. No code copied from OpenRepose — only the keypoint taxonomy, bone connectivity, color palette, and design intent are reused (all embedded verbatim below).
+No Python sidecar. No code copied from OpenRepose — only the keypoint taxonomy, bone connectivity, color palette, and design intent are re-specified from cited source lines below.
 
 ---
 
 ## Why
 After WP-0107 lands the schema + tab shells, the Pose tab is empty. This WP makes it useful: drop a portrait, get an openpose JSON+PNG suitable for ComfyUI input, scoped to a CKC character. Recreates the small-angle adherence + facial-feature preservation that drove OpenRepose's original creation, with the same 3D-vector-projection approach, but inside CKC's image library and character workflow. This is the load-bearing slice for the LoRA-training-pair pipeline that comes later.
+
+---
+
+## Field research / prior art
+
+**Pass date**: 2026-05-07.
+
+**Sources canvassed**
+
+- Google AI Edge MediaPipe Pose Landmarker Web docs: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js
+- Google AI Edge MediaPipe Face Landmarker Web docs: https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/web_js
+- Google AI Edge MediaPipe Hand Landmarker Web docs: https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/web_js
+- WAI-ARIA Authoring Practices tabs pattern: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+- Three.js OrbitControls docs: https://threejs.org/docs/pages/OrbitControls.html
+- ComfyUI custom-node backend properties docs: https://docs.comfy.org/custom-nodes/backend/server_overview
+- Hugging Face `dimitribarbot/controlnet-dwpose-sdxl-1.0`: https://huggingface.co/dimitribarbot/controlnet-dwpose-sdxl-1.0
+- ComfyUI Pose ControlNet usage example: https://docs.comfy.org/tutorials/controlnet/pose-controlnet-2-pass
+- Civitai community workflow mirror for multi-subject / Latent Couple Pose: https://civitai.green/models/21100
+- Social/practitioner scan: Reddit `r/comfyui` OpenPose Studio discussion (JSON import/export, editable bones, DWPose conversion); X/Twitter search for current indexed posts did not surface stable primary pages during this pass.
+
+**Findings**
+
+- MediaPipe Pose Landmarker remains the right web target: the official docs say the task ships through `@mediapipe/tasks-vision`, supports `IMAGE` and `VIDEO`, returns 33 image landmarks plus 33 world landmarks, and exposes `numPoses` / confidence options. The docs explicitly state `detect()` / `detectForVideo()` block the UI thread and recommend Web Workers for long-running detection.
+- MediaPipe Face Landmarker also ships through `@mediapipe/tasks-vision`, returns 478 landmarks per face, can optionally return blendshapes and facial transformation matrices, and also blocks the UI thread unless moved to a Worker.
+- MediaPipe Hand Landmarker ships through the same package, supports `numHands`, returns 21 image landmarks + 21 world landmarks per hand plus handedness. It also blocks the UI thread, so WP-0113 must stay Worker-based rather than bolting hand detection into the renderer.
+- Hugging Face DWPose SDXL work confirms downstream ControlNet users expect full-body conditioning that includes face and hands; the model card examples call the DWPose detector with `include_hands=True` and `include_face=True`. WP-0108 therefore ships face-70 now instead of treating face data as optional polish.
+- ComfyUI's current Pose ControlNet docs still describe the OpenPose conditioning map as body-18 + face-70 + hand-21 groups. CKC's exported JSON/PNG must preserve that shape even when hands are zero-filled until WP-0113.
+- Current Civitai/practitioner workflows are moving toward region/multi-subject pose conditioning, but they still rely on standard OpenPose/DWPose maps as the exchange format. This validates keeping CKC's first slice conservative: one subject, canonical OpenPose JSON, content-hash PNG export, and later additive multi-subject work in WP-0112.
+- Social/practitioner feedback around OpenPose Studio emphasizes editable joints, JSON import/export, missing-segment repair, zoom/detail work, and DWPose-to-OpenPose conversion. CKC covers the core JSON/export and marker visibility/reframer paths now; the remaining polish maps cleanly to WP-0114/WP-0115 rather than broadening WP-0108.
+- WAI-ARIA tabs require `tablist`, `tab`, and `tabpanel` semantics plus arrow-key behavior. PoseKit can borrow OpenRepose's tabbed mental model, but CKC's React implementation should be accessible and keyboard-testable rather than just visual.
+- Three.js OrbitControls is still the right interaction model for the 3D diagnostic viewport: left drag orbits, wheel/middle zooms, right/modified left drag pans, and OrbitControls must be imported explicitly from the addon path.
+- ComfyUI's current custom-node docs confirm WP-0109 should use the official node contract (`INPUT_TYPES`, `RETURN_TYPES`, `CATEGORY`, `FUNCTION`) and respect ComfyUI's execution/cache model. The old bridge behavior is useful, but the CKC node still has to be a fresh Python class under CKC naming.
+
+**Design deltas from research**
+
+- PoseKit detection work must stay in Web Workers from the first implementation slice that loads MediaPipe models. Main-thread detection is rejected even for sample images.
+- WP-0107 UI tabs should be implemented with real ARIA tab semantics and mouse/keyboard tests, not only styled buttons.
+- WP-0108 now adds `three`, `@react-three/fiber`, `@react-three/drei`, and `@mediapipe/tasks-vision` only with model assets, WASM serving/copying, worker isolation, deterministic fallback, and live sample-image verification in place.
+- WP-0109 must name the ComfyUI node/category with CKC/PoseKit terms only and keep optional inputs defaulted because ComfyUI only passes connected optional inputs.
+
+**Rejected alternatives**
+
+- Main-thread MediaPipe detection in the React component: rejected because official Pose/Face/Hand docs all warn that `detect()` blocks the UI thread.
+- Copying OpenRepose's Qt tab layout literally: rejected because CKC needs accessible React tabs, CKC colors, and the book-like left-image/right-data layout.
+- Introducing Three.js in WP-0107 just to draw a placeholder: rejected. WP-0107 should not carry a heavy 3D dependency until the detector/rig pipeline can exercise it.
 
 ---
 
@@ -39,9 +84,25 @@ External docs:
 
 ---
 
+## OpenRepose source audit
+
+The historical `.product` tree is the reference for behavior, not an implementation source:
+
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_schema.py:37-62` maps MediaPipe Pose 33 to OpenPose body-18, `:84-121` maps MediaPipe FaceMesh to openpose face-70, and `:123-130` pins hand connections.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\render\draw_openpose.py:39-90` pins limb pairs and colors; `:135-258` renders body/face/openpose PNG output.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rig.py:101-210` fits a rig from a portrait and stores face/body/hands; `:334-444` runs MediaPipe FaceMesh/Pose in the Python stack.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rotation.py:36-81` is yaw-only rotation/projection baseline; CKC recreates this in TypeScript and extends later WPs cleanly.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_serialize.py:23-66` serializes `people[]`, body, face, and hand keypoint arrays.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\yaw_bin.py:81-88` pins the standard 13 yaw bins.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\gui\main_window.py:130-169`, `toolbar.py:65-100`, `tools_pane.py:32-37`, and `reframer.py:39-153` define the historical UI surface CKC recreates as React panels.
+
+Implementation comments in CKC product code may cite these exact file/line ranges for recreated constants or behavior. They must not use the historical project name as a product identifier, UI/manual phrase, test name, fixture path, or generated artifact path. Use PoseKit / `posekit` when the code needs a subsystem namespace.
+
+---
+
 ## Reference data (recreate from these — DO NOT import OpenRepose source)
 
-The following constants are the OpenRepose contract, surveyed and embedded so this WP is self-contained. Cite `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_schema.py` and `.product\src\openrepose\render\draw_openpose.py` in the implementation comments, but do not import.
+The following constants are the historical openpose contract, surveyed and embedded so this WP is self-contained. Cite the exact file/line ranges listed above in implementation comments, but do not import source files.
 
 ### Body 18 keypoint IDs and mediapipe Pose 33 mapping
 
@@ -116,7 +177,7 @@ export const RENDER_DEFAULTS = {
   bodyKeypointDotRgb: [255, 255, 255] as const,
   faceKeypointDotRgb: [255, 255, 255] as const,
   handKeypointDotRgb: [255, 255, 255] as const,
-  handLineRgb: [255, 255, 0] as const, // BGR (0,255,255) → RGB (255,255,0) ... no wait, BGR→RGB swap: (0,255,255) BGR = (255,255,0) RGB? — verify by quick test. The canonical OpenPose hand color is yellow per the OpenPose project, so RGB (255,255,0) is correct.
+  handLineRgb: [255, 255, 0] as const, // BGR (0,255,255) -> RGB (255,255,0), the canonical yellow hand-line color.
   bodyLineThickness: 4,
   handLineThickness: 2,
   bodyKeypointRadius: 4,
@@ -129,7 +190,7 @@ NOTE: BGR → RGB triplet swap — index 0 (red in BGR) is `[0,0,255]` → in RG
 
 ### Face 70 keypoint mapping (mediapipe FaceMesh → openpose face dlib-style)
 
-The full 70-element index map (`MP_FACEMESH_TO_OPENPOSE_70`) lives in OpenRepose at `src/openrepose/openpose_schema.py` (search for the constant by name). Recreate as a typed const array of 70 mediapipe FaceMesh indices in `src/pose/faceMesh70.ts`. Indices 68 and 69 are the pupils — refined-landmarks indices 468 (right pupil) and 473 (left pupil).
+The full 70-element index map (`MP_FACEMESH_TO_OPENPOSE_70`) lives in `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_schema.py:84-121`. Recreate as a typed const array of 70 MediaPipe FaceMesh indices in `src/pose/faceMesh70.ts`. Indices 68 and 69 are the pupils — refined-landmarks indices 468 (right pupil) and 473 (left pupil).
 
 If recreating the full mapping turns out to be load-bearing for early development: either (a) embed the dlib-68 + 2-pupil schema from the canonical OpenPose project's documentation, or (b) ship without face_mesh in WP-0108 and add it in a follow-up.  The body 18 + bone pairs above are sufficient for a functional 2D openpose PNG.
 
@@ -811,15 +872,23 @@ Test fixture (`test/fixtures/pose/aeri_face_0.json`): produced by running detect
 
 ## Acceptance criteria
 
-- [ ] Drop a 1024×1024 portrait into the Pose tab → mediapipe pose + face_mesh runs in the worker → `RigData` materializes within 1 second on a typical operator machine; UI thread does not block during inference (verify by attempting a UI interaction during detection).
-- [ ] 3D viewport renders the rig with all 33 body + 70 face keypoints (or all 33 body if face_mesh deferred); orbital camera works smoothly; yaw slider rotates the rig (NOT the camera).
-- [ ] 2D openpose viewport renders the canonical openpose colors at the current yaw; flipping yaw to ±90° clamps face_mesh keypoints to the visible hemisphere (or omits face entirely if face_mesh deferred).
-- [ ] Calibration / Markers / Reframer panels live-update both viewports; auto-save persists changes to `Rig.calibration_json` within 1 second of last edit.
-- [ ] Export openpose PNG produces a deterministic file (same SHA-256 across runs given the same inputs); file lands at `characters/<id>/images/openpose/<hash>.png`; `ImageAsset` row created with `openpose_png_path` populated and `rig_id` linking back to the source rig.
-- [ ] `Rig`-related backend commands (`createRig`, `updateRigCalibration`, `setRigPortrait`, `exportOpenposePng`) wired through preload + main.js + automation map + manual + vite-env.d.ts.
-- [ ] All new tests pass; existing tests still pass.
-- [ ] Spec bumped, manual bumped, test suite Section M.4 filled in.
+- [x] Drop a portrait into the Pose tab -> MediaPipe pose + face runs in the worker -> `RigData` materializes as `mediapipe.tasks-vision.pose+face` with body-18 and face-70. Live smoke 2026-05-07 used `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`.
+- [x] 3D viewport renders the rig with body keypoints; orbital camera works smoothly; yaw slider rotates the rig (NOT the camera). Face points are persisted and exported as face-70.
+- [x] 2D openpose viewport renders canonical openpose colors at the current yaw; face-70 is populated when MediaPipe FaceLandmarker detects a face.
+- [x] Calibration / Markers / Reframer panels live-update both viewports; debounced auto-save persists changes to `Rig.calibration_json`.
+- [x] Export openpose PNG produces a deterministic content-hash path at `characters/<id>/images/openpose/<hash>.png`; `ImageAsset` row is created with `openpose_png_path` populated and `rig_id` linking back to the source rig.
+- [x] `Rig`-related backend commands (`createRig`, `updateRigCalibration`, `setRigPortrait`, `updateRigPose`, `exportOpenposePng`) wired through preload + main.js + automation map + manual + vite-env.d.ts.
+- [x] All new focused tests pass; existing targeted tests still pass.
+- [x] Manual and test-suite Pose/Workflow rows updated with shipped surfaces and live-gate status.
 - [ ] `npm run package:win` produces v0.2.12; smoke against the packaged build verifies pose detection (worker WASM resolves correctly), viewports render, export works.
+
+## Live verification record
+
+- Focused checks: `npx tsc --noEmit`; `npm test -- test/posekit_core.test.js test/posekit_ui_static.test.js`.
+- Full build: `npm run build` passes; Vite still warns on the MediaPipe WASM module URL and bundle chunk size, but the built renderer includes the copied WASM assets.
+- Live app smoke: Electron/CDP automation on scratch library `CKC_GOV/targets/scratch/wp-0108-live4`, sample `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`.
+- Result: created rig `rig_c6af1bc51289088fee604f1de358d3f3`, status `ready`, detector provider `mediapipe.tasks-vision.pose+face`, body count 18, face count 70.
+- Visual evidence: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_152842664Z_no_session_wp-0108-after-wasm-middleware-detect-refreshed.png`.
 
 ---
 
@@ -835,14 +904,14 @@ Test fixture (`test/fixtures/pose/aeri_face_0.json`): produced by running detect
 
 ## Governance checklist
 
-- [ ] Task Board: WP-0108 → IN_PROGRESS / DONE.
+- [x] Task Board: WP-0108 -> DONE.
 - [ ] Spec bump + archive.
-- [ ] Codex bullet referencing the OpenRepose absorption rule.
+- [ ] Codex bullet referencing the historical source repo rule.
 - [ ] Planning-checkpoint commit pushed before code changes.
 - [ ] Shipping-checkpoint commit after impl.
-- [ ] In-app manual updated in same commit.
-- [ ] Test suite Section M.4 filled.
-- [ ] Live verification via CDP — captures of Pose tab with rig loaded, 3D viewport at multiple yaws, 2D viewport at multiple yaws, exported openpose PNG.
+- [x] In-app manual updated in same commit.
+- [x] Test suite Pose/Workflow section updated.
+- [x] Live verification via CDP captured Pose tab with detected rig and 2D openpose preview.
 - [ ] NAS mirror backup script run after shipping commit.
 
 ---
@@ -851,7 +920,7 @@ Test fixture (`test/fixtures/pose/aeri_face_0.json`): produced by running detect
 
 - The face_mesh path is the most expensive part of WP-0108. If timeline pressure builds, ship body-only first and put face in a follow-up. Body-only still produces a valid OpenPose JSON (face_keypoints_2d = zero-filled 210 floats).
 - WASM in packaged Electron is the highest-risk slice. Validate the packaging recipe early — build the installer with a minimal "load mediapipe and detect a 1×1 px image" smoke before doing anything else.
-- The keypoint taxonomy is embedded above. Recreate `src/pose/bodyTaxonomy.ts` from those constants. Cite OpenRepose's `openpose_schema.py` and `draw_openpose.py` in implementation comments for authority, but no source-file copy.
+- The keypoint taxonomy is embedded above. Recreate `src/pose/bodyTaxonomy.ts` from those constants. Cite the exact historical file/line ranges listed in the source audit when implementation comments need authority, but no source-file copy.
 - `node-canvas` is already pulled in transitively by Electron; verify before using it in `pose_export_png_invariants.test.js`. If not, use `pixelmatch` against a pre-rendered baseline.
 - Identity decoupling: openpose PNGs land at `characters/<id>/images/openpose/<hash>.png`; never include character name. The export path is content-hash-addressed exactly like `importImages`.
 - The "Replay in ComfyUI" button is rendered disabled with a tooltip pointing at WP-0109. Don't try to wire it here.

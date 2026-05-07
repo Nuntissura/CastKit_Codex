@@ -9,6 +9,7 @@ const { createLibraryBackup, restoreLibraryBackup } = require('./backend/backup'
 const { getAutomationManual } = require('./backend/automationManual');
 const { AutomationControlPlane } = require('./backend/automationControl');
 const { getAutomationCommandMap } = require('./backend/automationCommandMap');
+const { startIntakeServer } = require('./backend/intakeServer');
 const workflowSpecRegistry = require('./backend/workflowSpecRegistry');
 const {
     isBackgroundMode: isBackgroundModePure,
@@ -100,6 +101,11 @@ function loadConfig() {
                 user: 'castkit_codex',
                 password: 'castkit_codex',
             },
+            comfyui: {
+                host: 'http://127.0.0.1:8188',
+                intakePort: 52319,
+                intakeToken: null,
+            },
         },
     };
 }
@@ -121,6 +127,10 @@ function normalizeConfig(config) {
         cfg.database.user = cfg.database.user || 'castkit_codex';
         cfg.database.password = cfg.database.password || 'castkit_codex';
     }
+    if (!cfg.comfyui || typeof cfg.comfyui !== 'object') cfg.comfyui = {};
+    cfg.comfyui.host = String(cfg.comfyui.host || 'http://127.0.0.1:8188').trim() || 'http://127.0.0.1:8188';
+    cfg.comfyui.intakePort = Math.max(1, Math.min(65535, Number(cfg.comfyui.intakePort) || 52319));
+    cfg.comfyui.intakeToken = cfg.comfyui.intakeToken == null ? null : String(cfg.comfyui.intakeToken);
     return cfg;
 }
 
@@ -223,6 +233,8 @@ let libraryRestoreActiveJobId = null;
 let aiTagJobs = new Map();
 let aiTagActiveJobId = null;
 const automationControl = new AutomationControlPlane();
+let intakeServerHandle = null;
+let intakeServerError = null;
 
 // Bind the pure stealth helpers to process.env / appConfig /
 // automationControl. Use these everywhere a code path is about to
@@ -439,6 +451,33 @@ async function ensureLibrary() {
     }
 }
 
+async function startCkcIntakeServer() {
+    if (intakeServerHandle) return intakeServerHandle;
+    const token = String(process.env.CKC_INTAKE_TOKEN || appConfig?.comfyui?.intakeToken || '').trim() || null;
+    const preferredPort = Number(process.env.CKC_INTAKE_PORT || appConfig?.comfyui?.intakePort || 52319) || 52319;
+    intakeServerHandle = await startIntakeServer({
+        preferredPort,
+        maxPort: 52399,
+        token,
+        registerBundle: async (body) => {
+            const lib = await ensureLibrary();
+            return lib.registerComfyUIOutput(body);
+        },
+    });
+    intakeServerError = null;
+    return intakeServerHandle;
+}
+
+function stopCkcIntakeServer() {
+    if (!intakeServerHandle) return;
+    try {
+        intakeServerHandle.stop();
+    } catch {
+        // best-effort shutdown
+    }
+    intakeServerHandle = null;
+}
+
 function makeNearDupJobId() {
     return `nd_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
 }
@@ -591,6 +630,26 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'listTemplates') return lib.listTemplates();
     if (name === 'listAllTags') return lib.listAllTags();
     if (name === 'globalSearch') return lib.globalSearch(p);
+
+    // WP-0107: Pose/Rig/Workflow storage commands.
+    if (name === 'listRigs') return lib.listRigs(p);
+    if (name === 'getRig') return lib.getRig(p);
+    if (name === 'createRig') return lib.createRig(p);
+    if (name === 'updateRigCalibration') return lib.updateRigCalibration(p);
+    if (name === 'setRigPortrait') return lib.setRigPortrait(p);
+    if (name === 'updateRigPose') return lib.updateRigPose(p);
+    if (name === 'exportOpenposePng') return lib.exportOpenposePng(p);
+    if (name === 'registerComfyUIOutput') return lib.registerComfyUIOutput(p);
+    if (name === 'getWorkflowHistory') return lib.getWorkflowHistory(p);
+    if (name === 'extractPromptFromWorkflow') return lib.extractPromptFromWorkflow(p);
+    if (name === 'replayWorkflow') return lib.replayWorkflow({ ...p, host: p.host || appConfig?.comfyui?.host });
+    if (name === 'getComfyUIStats') return lib.getComfyUIStats({ host: p.host || appConfig?.comfyui?.host });
+    if (name === 'listPrompts') return lib.listPrompts(p);
+    if (name === 'upsertPrompt') return lib.upsertPrompt(p);
+    if (name === 'deletePrompt') return lib.deletePrompt(p);
+    if (name === 'listStoryBeats') return lib.listStoryBeats(p);
+    if (name === 'upsertStoryBeat') return lib.upsertStoryBeat(p);
+    if (name === 'deleteStoryBeat') return lib.deleteStoryBeat(p);
 
     // WP-0100: workflow spec registry (fs-backed, no DB)
     if (name === 'listWorkflowSpecs') return workflowSpecRegistry.listWorkflowSpecs(p);
@@ -1385,6 +1444,10 @@ function registerIpcHandlers() {
                 configPath: appConfigPath,
                 libraryRoot: appConfig?.libraryRoot || null,
                 databaseProvider: appConfig?.database?.provider || 'postgres',
+                comfyuiHost: appConfig?.comfyui?.host || 'http://127.0.0.1:8188',
+                intakePort: intakeServerHandle?.port || null,
+                intakeTokenRequired: !!intakeServerHandle?.tokenRequired,
+                intakeError: intakeServerError ? String(intakeServerError?.message || intakeServerError) : null,
             },
             renderer: automationRendererState,
             sessions: automationControl.listSessions(),
@@ -1928,6 +1991,98 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:listAllTags', async () => {
         const lib = await ensureLibrary();
         return lib.listAllTags();
+    });
+
+    ipcMain.handle('ckc:listRigs', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listRigs(params || {});
+    });
+
+    ipcMain.handle('ckc:getRig', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getRig(params || {});
+    });
+
+    ipcMain.handle('ckc:createRig', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.createRig(params || {});
+    });
+
+    ipcMain.handle('ckc:updateRigCalibration', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.updateRigCalibration(params || {});
+    });
+
+    ipcMain.handle('ckc:setRigPortrait', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setRigPortrait(params || {});
+    });
+
+    ipcMain.handle('ckc:updateRigPose', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.updateRigPose(params || {});
+    });
+
+    ipcMain.handle('ckc:exportOpenposePng', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.exportOpenposePng(params || {});
+    });
+
+    ipcMain.handle('ckc:registerComfyUIOutput', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.registerComfyUIOutput(params || {});
+    });
+
+    ipcMain.handle('ckc:getWorkflowHistory', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getWorkflowHistory(params || {});
+    });
+
+    ipcMain.handle('ckc:extractPromptFromWorkflow', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.extractPromptFromWorkflow(params || {});
+    });
+
+    ipcMain.handle('ckc:replayWorkflow', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params || {};
+        return lib.replayWorkflow({ ...p, host: p.host || appConfig?.comfyui?.host });
+    });
+
+    ipcMain.handle('ckc:getComfyUIStats', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        const p = params || {};
+        return lib.getComfyUIStats({ host: p.host || appConfig?.comfyui?.host });
+    });
+
+    ipcMain.handle('ckc:listPrompts', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listPrompts(params || {});
+    });
+
+    ipcMain.handle('ckc:upsertPrompt', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.upsertPrompt(params || {});
+    });
+
+    ipcMain.handle('ckc:deletePrompt', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deletePrompt(params || {});
+    });
+
+    ipcMain.handle('ckc:listStoryBeats', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listStoryBeats(params || {});
+    });
+
+    ipcMain.handle('ckc:upsertStoryBeat', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.upsertStoryBeat(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteStoryBeat', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteStoryBeat(params || {});
     });
 
     ipcMain.handle('ckc:listFieldValueSuggestions', async (_evt, params) => {
@@ -2587,12 +2742,19 @@ app.whenReady().then(async () => {
         }
     }
 
+    try {
+        await startCkcIntakeServer();
+    } catch (err) {
+        intakeServerError = err;
+    }
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
 });
 
 app.on('will-quit', () => {
+    stopCkcIntakeServer();
     try {
         globalShortcut.unregisterAll();
     } catch {

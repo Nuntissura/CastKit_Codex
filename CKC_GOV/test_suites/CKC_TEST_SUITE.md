@@ -44,7 +44,7 @@ The suite is organized so each block can be run independently. Findings get reco
 - C1.5. `automationEndSession` closes session cleanly.
 
 ### C2. Renderer commands
-- C2.1. `openLibrary` / `openCharacter` / `openExports` / `openIntake` change `route` correctly (verify via `getRendererState`).
+- C2.1. `openLibrary` / `openCharacter` / `openExports` / `openIntake` / `openPose` / `openWorkflow` change `route` correctly (verify via `getRendererState`).
 - C2.2. `selectImage`, `openGlobalSearch`, `toggleMenu`, `closeOverlays` reflect in renderer state.
 - C2.3. `getRendererUIState` returns richer payload including `initStatus`, `pendingDoc`, `exports.context`.
 
@@ -60,6 +60,7 @@ The suite is organized so each block can be run independently. Findings get reco
 - C4.3. `setImageMeta` persists `favorite`, `rating`, `notes`, `tags`, `sourceNote`. **Caveat:** the image object returned by `getCharacter().images[]` uses `id` (not `imageId`) — pass it as `imageId: img.id` to `setImageMeta`.
 - C4.4. `setImagesMetaBatch` patches multiple images atomically (BEGIN/COMMIT).
 - C4.5. `listTemplates`, `listAllTags`, `globalSearch` return shape-correct results.
+- C4.6. Pose/Workflow backend commands round-trip: `listRigs`, `getRig`, `createRig`, `updateRigCalibration`, `setRigPortrait`, `listPrompts`, `upsertPrompt`, `deletePrompt`, `listStoryBeats`, `upsertStoryBeat`, `deleteStoryBeat`.
 
 ## Section D — Stealth contract (WP-0099 slice 4)
 
@@ -181,13 +182,31 @@ The suite is organized so each block can be run independently. Findings get reco
 - I2. Renderer commands route correctly in both modes (renderer paints offscreen in stealth).
 - I3. Captures: `automationCaptureToFile` produces real PNGs in stealth (no occlusion); in operator mode produces 0×0 PNGs when window is occluded → use CDP `Page.captureScreenshot` as fallback.
 
-## Section J — Packaged build smokes
+## Section J — Pose and Workflow tabs (WP-0107+)
+
+- J1. Schema smoke: `backend_posekit_schema.test.js` passes. Fresh SQLite init and reopen include `ImageAsset.pose_json`, `openpose_png_path`, `comfyui_workflow_json`, `comfyui_metadata_json`, `prompts_json`, `rig_id`, plus `Rig`, `Prompt`, `StoryBeat`, and `RigTag`.
+- J2. Backend CRUD smoke: `backend_posekit_crud.test.js` passes. Create character -> import image -> set image notes/tags -> create rig -> update calibration -> upsert/delete prompt -> upsert/delete story beat.
+- J3. Sample-image smoke: import at least one image from `D:/Projects/LLM projects/OpenRepose/test_material/image_samples` into a temporary CKC library, create a rig, upsert a prompt and story beat, then delete the temporary library. Historical source stays read-only.
+- J4. Renderer routes: `openPose` and `openWorkflow` route via `automationRunCommand({ target: 'renderer' })`; `getRendererUIState().route` returns `pose` and `workflow`.
+- J5. Pose visual pass: capture the Pose tab after selecting the Tools / Calibration tab. Verify book layout: left image stage, right data/tools tabs, CKC color palette, no blank viewport, no text overlap.
+- J6. Workflow visual pass: type a prompt through `typeText`, click `workflow-save-prompt` through `clickElement`, click `workflow-tab-beats`, capture the Story beats tab, and verify the prompt appears as selectable beat input.
+- J7. Accessibility/static UI: `posekit_ui_static.test.js` passes. Pose and Workflow tab groups use `role="tablist"`, `role="tab"`, `role="tabpanel"`, `aria-selected`, and `aria-controls`.
+- J8. Console: during visual pass, no renderer red errors. Dev CSP warning is acceptable in Vite/Electron dev mode only.
+- J9. PoseKit core smoke: `posekit_core.test.js` passes. Fallback rig has body-18, serializes to canonical openpose arrays, yaw identity is deterministic, and calibration visibility zeroes keypoints.
+- J10. PoseKit export smoke: `backend_posekit_crud.test.js` covers `updateRigPose` and `exportOpenposePng`, verifies content-hash `images/openpose/<hash>.png`, `openpose_png_path`, `rig_id`, and deduped re-export.
+- J11. ComfyUI workflow storage smoke: `backend_posekit_workflow.test.js` passes. Synthetic bridge payload registers image bytes, stores workflow/metadata/prompts, dedupes repeated payloads, lists workflow history, extracts prompts, and posts replay to a mocked ComfyUI `/prompt`.
+- J12. Intake server smoke: `intake_server.test.js` passes. Localhost intake binds, bearer token rejects unauthorized POST, and authorized POST dispatches to the registration callback.
+- J13. ComfyUI node contract: `comfyui_node_contract.test.js` passes when Python is available. The CKC bridge node exposes ComfyUI class/display mappings under the CKC category.
+- J14. WP-0108 live MediaPipe gate: import at least one image from `D:/Projects/LLM projects/OpenRepose/test_material/image_samples`, open Pose via `openPose`, click `pose-detect`, and verify `listRigs` returns status `ready`, detector provider `mediapipe.tasks-vision.pose+face`, body count 18, face count 70. Latest pass: 2026-05-07 on `1085406391.jpg`, rig `rig_c6af1bc51289088fee604f1de358d3f3`, capture `CKC_GOV/targets/CKC/automation_captures/2026-05-07_152842664Z_no_session_wp-0108-after-wasm-middleware-detect-refreshed.png`.
+- J15. Remaining live gates before WP-0109/release DONE: real ComfyUI bridge intake/replay; packaged build smoke; hidden visual captures of the Workflow replay panel and Pose replay button after a stored workflow exists.
+
+## Section K — Packaged build smokes
 
 Run after every `npm run package:win`:
-- J1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
-- J2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
-- J3. Launch the portable .exe → repeats sections A, B, C, F as a packaged-build smoke.
-- J4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
+- K1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
+- K2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
+- K3. Launch the portable .exe → repeats sections A, B, C, F, and J as a packaged-build smoke.
+- K4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
 
 ---
 
@@ -201,6 +220,38 @@ The agent runs each section by attaching to CDP and evaluating JS in the rendere
 These helpers are not committed — they live under `.tmp/` (operator's local-only). The canonical scripts live in this document; if the helpers go missing, the agent rewrites them from these specs.
 
 ## Findings (latest pass)
+
+### 2026-05-07 - WP-0108/WP-0109 functional PoseKit slices
+- Online research refreshed before implementation: MediaPipe Tasks Vision Web, Three.js OrbitControls, ComfyUI server routes, and ARIA tabs. Current package metadata checked before dependency changes; installed React-19-compatible `@mediapipe/tasks-vision`, `three`, `@react-three/fiber`, `@react-three/drei`, and `@types/three`.
+- PoseKit core/UI: worker + WASM copy path, deterministic body-18 fallback rig, yaw/calibration transforms, openpose JSON serializer, canvas renderer, 3D diagnostic viewport, 2D openpose preview, marker/reframer controls, debounced calibration save, detect/export/replay toolbar actions.
+- Backend/manual/automation: `updateRigPose`, `exportOpenposePng`, `registerComfyUIOutput`, `getWorkflowHistory`, `extractPromptFromWorkflow`, `replayWorkflow`, and `getComfyUIStats` wired through IPC, preload, automation map, manual, and renderer types.
+- ComfyUI bridge: localhost intake server module, app-bound intake lifecycle/state, CKC-named ComfyUI custom node under `CKC_main/comfyui_node/`, Workflow tab history/JSON/extract/replay panel, Pose tab replay button.
+- Tests passed:
+  - `node --test --test-reporter=spec test/posekit_core.test.js test/backend_posekit_crud.test.js test/backend_posekit_workflow.test.js test/intake_server.test.js test/comfyui_node_contract.test.js test/posekit_ui_static.test.js test/automation_manual_consistency.test.js`
+  - `npm run build`
+- Hidden visual smoke via CKC automation passed on CDP port 9333 using `D:/Projects/LLM projects/OpenRepose/test_material/image_samples` imported into a temporary portable CKC library. Captures:
+  - Pose pipeline: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080434918Z_no_session_posekit-pipeline-pose.png`
+  - Pose sample/tools/3D: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080619633Z_no_session_posekit-pose-tools-3d.png`
+  - Workflow replay: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080556969Z_no_session_posekit-workflow-replay.png`
+- Open gates: true MediaPipe `.task` model assets are not bundled yet, so detector currently falls back unless a model path is supplied; real ComfyUI smoke and packaged build smoke still pending. WP-0108 and WP-0109 remain IN_PROGRESS, not DONE.
+
+### 2026-05-07 — WP-0107 Pose/Workflow first slice
+- Online research recorded before implementation in `WP-0107_Pose_Workflow_Schema_And_Shell.md` and `WP-0108_Pose_Pipeline_React.md`: MediaPipe web tasks, CMU OpenPose JSON output, WAI-ARIA tabs, Three.js OrbitControls, and ComfyUI server/custom-node docs.
+- Backend: `Rig`, `Prompt`, `StoryBeat`, and `RigTag` schema landed; `ImageAsset` gained nullable pose/workflow columns. IPC, preload, automation map, and manual entries are wired.
+- UI: Pose and Workflow routes landed with OpenRepose-inspired tabs, CKC colors, and the book layout rule: image/visual context left, data/tools right. Calibration tab is visually isolated inside the Pose tools panel.
+- Tests passed:
+  - `node --test --test-reporter=spec test/backend_posekit_schema.test.js`
+  - `node --test --test-reporter=spec test/backend_posekit_crud.test.js`
+  - `node --test --test-reporter=spec test/posekit_ui_static.test.js test/automation_manual_consistency.test.js test/automation_input_injection_invariants.test.js`
+  - `node --test --test-reporter=spec test/backend_docs.test.js test/backend_tag_manager.test.js test/backend_image_meta_batch.test.js`
+  - `npm run build`
+- Sample-image smoke passed against `D:/Projects/LLM projects/OpenRepose/test_material/image_samples`: imported 3 images into a temporary CKC library, set notes/tags, created one rig, one prompt, and one story beat.
+- Visual pass passed in hidden automation mode on CDP port 9333. Captures:
+  - Pose Tools: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_030836216Z_llm_378ca9b889d6_1778123297247_posekit-pose-tools.png`
+  - Workflow Story beats confirmed: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_031106176Z_no_session_posekit-workflow-beats-confirmed.png`
+- Renderer mouse/text interaction: `typeText` filled Workflow prompt title/body, `clickElement` saved the prompt, `clickElement` switched to Story beats, and backend `listPrompts` confirmed the prompt rows. This specifically exercises notes/tags/data via backend and app mouse interaction via renderer automation.
+- Console findings: only Electron's dev-mode insecure-CSP warning appeared; no red renderer error surfaced during the visual pass.
+- Migration fix found during testing: fresh SQLite initialization was slow because additive migrations ran as separate disk transactions. SQLite `initSchema` now wraps `ensureSchemaUpgrades` in one transaction. The obsolete fresh-bootstrap creation of `idx_image_dedupe` was replaced with the intended non-unique `idx_image_hash`; existing DBs still run the old-index drop migration.
 
 ### 2026-05-06 — post-WP-0099/WP-0100 inspection
 - A: ✅ all pass; 2 pre-existing bugs found and fixed in commit `2846ddd` (`initSchema` Postgres skip, `lib.getDiagnostics` missing).

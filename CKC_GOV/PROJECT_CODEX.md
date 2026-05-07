@@ -303,7 +303,7 @@ If research surfaces something that reshapes the WP scope, **update the WP draft
 
 **The tradeoff is explicit**: this slows down WP planning by hours, sometimes days for research-heavy work. It is acceptable. The cost of shipping a WP that reinvents a wheel, ignores a recent paper that obsoletes the approach, or misses a library that would have replaced 2 weeks of code is much higher.
 
-This rule binds in addition to the code-truth, in-app-manual, live-verification, schema-compat, and absorption rules.
+This rule binds in addition to the code-truth, in-app-manual, live-verification, schema-compat, and historical-source rules.
 
 ---
 
@@ -316,15 +316,17 @@ The image-sourcing **init_task.py** reference implementation and the **spec_init
 - The init_task.py file is `stdlib-only` by design and must stay portable. Adding a runtime dep, an env-var assumption, or a hardcoded path is a contract violation.
 - This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above. Tasks initialized in downstream image-sourcing repos remain pinned to the spec_version they were initialized under (per the spec's own `migration_policy`); CKC is responsible for keeping the corresponding handler maintained for as long as any in-flight or archived task references that version.
 
-### OpenRepose absorption (binding)
+### Historical OpenRepose reference (binding)
 
 The OpenRepose project at `D:\Projects\LLM projects\OpenRepose` is **defunct** as of 2026-05-06. CKC is now the canonical home for pose / openpose / ComfyUI workflow features.
 
 - The OpenRepose repo is **preserved read-only** for historical reference. Do not modify, push, or import it as a dependency from CKC.
 - Pose / openpose / ComfyUI features that derive design intent from OpenRepose must include the file path + line citation in the WP. The implementation must be a clean recreation in CKC's stack (TS / React / Electron / PG), not a code copy.
 - WP-0107 lands the schema + tab shells; WP-0108 lands the pose pipeline; WP-0109 lands the ComfyUI bridge. After WP-0109 ships, the OpenRepose repo is officially obsolete.
-- **Naming policy.** "OpenRepose" is a historical-citation term only. It must NOT appear in CKC product code identifiers, in-app manual prose, DB schema, test names, test fixture paths, or UI strings. Active features use generic, self-describing names: `Pose` tab, `Rig`, `ComfyUI bridge`, `Workflow` tab, `openpose export`. The name is allowed in implementation comments only when citing a specific OpenRepose file/line as the source of a design choice (e.g. `// Body 18 taxonomy from OpenRepose openpose_schema.py:62-100`).
+- Implementation checkpoint 2026-05-07: CKC now has true MediaPipe Tasks Vision pose+face detection in the PoseKit worker, deterministic fallback, 3D/2D Pose UI, openpose export, ComfyUI intake/storage/replay backend, and CKC-named ComfyUI bridge node in product code. Do not mark the rebuild fully shipped until real ComfyUI intake/replay, packaged build, and visual automation smokes pass.
+- **Naming policy.** "OpenRepose" is a historical-citation term only. It must NOT appear in CKC product code identifiers, in-app manual prose, DB schema, test names, test fixture paths, or UI strings. The CKC-native subsystem name is **PoseKit**. Use `posekit` for internal folder/module namespaces when a subsystem namespace is needed. User-facing surfaces remain generic and self-describing: `Pose` tab, `Rig`, `ComfyUI bridge`, `Workflow` tab, `openpose export`. The name is allowed in implementation comments only when citing a specific OpenRepose file/line as the source of a design choice (e.g. `// Body 18 taxonomy from OpenRepose openpose_schema.py:62-100`).
 - Carry-over WPs (those derived from OpenRepose's planned-but-unimplemented work) are titled by their feature, not their origin. The OpenRepose WP-id is recorded in a one-line citation inside the WP body for traceability.
+- The complete historical OpenRepose taskboard is imported into `CKC_GOV/taskboard/OPENREPOSE_TASKBOARD_IMPORT.md`. Before drafting new pose/workflow/ComfyUI/intake carry-over work, check that ledger and either map the historical item to an existing CKC WP, open a new CKC-native WP, or explicitly mark it skipped/deferred.
 
 This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above.
 

@@ -8,11 +8,13 @@ import { CharacterView } from './views/CharacterView';
 import { ReferenceWindowView } from './views/ReferenceWindowView';
 import { ExportHubView } from './views/ExportHubView';
 import { IntakeSorterView } from './views/IntakeSorterView';
+import { PoseView } from './views/PoseView';
+import { WorkflowView } from './views/WorkflowView';
 import { useHotkeys } from './hooks/useHotkeys';
 import styles from './styles/app.module.css';
 
-type Page = 'library' | 'character' | 'exports' | 'intake';
-type NonExportPage = 'library' | 'character';
+type Page = 'library' | 'character' | 'exports' | 'intake' | 'pose' | 'workflow';
+type NonExportPage = 'library' | 'character' | 'pose' | 'workflow';
 type DrawerMode = 'none' | 'menu' | 'library';
 
 type InitState =
@@ -118,7 +120,7 @@ function MainApp() {
       }
 
       if (cmd.kind === 'openExports') {
-        const from: NonExportPage = page === 'character' ? 'character' : 'library';
+        const from: NonExportPage = page === 'character' || page === 'pose' || page === 'workflow' ? page : 'library';
         setExportsReturnPage(from);
         setExportsContext({
           characterId: from === 'character' ? selectedCharacterId : null,
@@ -230,11 +232,24 @@ function MainApp() {
           setPendingFocusField(null);
           setPage('character');
         } else if (command === 'openExports') {
-          setExportsReturnPage(page === 'character' ? 'character' : 'library');
+          setExportsReturnPage(page === 'character' || page === 'pose' || page === 'workflow' ? page : 'library');
           setExportsContext({ characterId: selectedCharacterId, moodboardDocId: null });
           setPage('exports');
         } else if (command === 'openIntake') {
           setPage('intake');
+        } else if (command === 'openPose') {
+          const characterId = String(params.characterId || '').trim();
+          const imageId = String(params.imageId || '').trim();
+          if (characterId) setSelectedCharacterId(characterId);
+          if (imageId) setSelectedImageId(imageId);
+          setPage('pose');
+        } else if (command === 'openWorkflow') {
+          const characterId = String(params.characterId || '').trim();
+          if (characterId) {
+            setSelectedCharacterId(characterId);
+            setSelectedImageId(null);
+          }
+          setPage('workflow');
         } else if (command === 'selectImage') {
           const imageId = String(params.imageId || '').trim();
           if (!imageId) throw new Error('imageId is required');
@@ -385,7 +400,7 @@ function MainApp() {
         onClose={() => setDrawerMode('none')}
         onNavigate={(nextPage) => {
           if (nextPage === 'exports') {
-            const from: NonExportPage = page === 'character' ? 'character' : 'library';
+            const from: NonExportPage = page === 'character' || page === 'pose' || page === 'workflow' ? page : 'library';
             setExportsReturnPage(from);
             setExportsContext({
               characterId: from === 'character' ? selectedCharacterId : null,
@@ -470,6 +485,24 @@ function MainApp() {
             onBack={() => setPage(exportsReturnPage)}
             initialCharacterId={exportsContext.characterId}
             initialMoodboardDocId={exportsContext.moodboardDocId}
+          />
+        ) : page === 'pose' ? (
+          <PoseView
+            initialCharacterId={selectedCharacterId}
+            initialImageId={selectedImageId}
+            onSelectCharacter={(characterId) => {
+              setSelectedCharacterId(characterId);
+              setSelectedImageId(null);
+            }}
+            onSelectImage={(imageId) => setSelectedImageId(imageId)}
+          />
+        ) : page === 'workflow' ? (
+          <WorkflowView
+            initialCharacterId={selectedCharacterId}
+            onSelectCharacter={(characterId) => {
+              setSelectedCharacterId(characterId);
+              setSelectedImageId(null);
+            }}
           />
         ) : (
           <IntakeSorterView onBack={() => setPage('library')} />

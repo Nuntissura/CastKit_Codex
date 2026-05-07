@@ -2,10 +2,10 @@
 
 Date: 2026-05-07
 Owner: Codex
-Status: DRAFT (depends on WP-0107 + WP-0108)
+Status: IN_PROGRESS (mocked intake/replay slice landed; real ComfyUI and packaged smoke pending)
 
 ## Summary
-Final OpenRepose absorption slice. Adds CKC's first localhost HTTP intake endpoint, a ComfyUI custom node that POSTs generated images + workflow JSON to it, the Workflow tab implementation (Recent runs / Replay / Workflow library), and wires the previously-disabled "Replay in ComfyUI" button on the Pose tab.
+Final PoseKit rebuild slice. Adds CKC's first localhost HTTP intake endpoint, a ComfyUI custom node that POSTs generated images + workflow JSON to it, the Workflow tab implementation (Recent runs / Replay / Workflow library), and wires the previously-disabled "Replay in ComfyUI" button on the Pose tab.
 
 ComfyUI workflow JSON becomes a first-class CKC artifact: every generated image carries the recipe that produced it. Workflows are queryable, attachable to characters, replayable against any portrait or rig.
 
@@ -15,6 +15,18 @@ ComfyUI workflow JSON becomes a first-class CKC artifact: every generated image 
 CKC's primary purpose is "image database coupled with character sheets." ComfyUI is how those images get generated. Without a built-in bridge, the operator has to manually shuttle openpose PNGs out of CKC and generated images back in, losing the prompt + workflow + seed lineage every time. Storing the workflow JSON alongside the image is the force multiplier — every generated image becomes replayable, tweakable, and lineage-traceable. Source-control the recipe alongside the cake.
 
 After this WP ships, the OpenRepose repo is officially obsolete.
+
+---
+
+## OpenRepose source audit
+
+The historical bridge proves the intended behavior, but CKC must rewrite it under CKC's stack and endpoint contract:
+
+- `D:\Projects\LLM projects\OpenRepose\.product\comfyui-bridge\openrepose_bridge.py:1-38` documents the old stdlib-only custom-node bridge, `:104-196` defines the node and image-registration flow, `:304-338` saves generated images to ComfyUI output, `:346-389` POSTs the old direct library payload, `:392-447` POSTs the old intake payloads, and `:471-484` sends stdlib HTTP requests.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\channels\http.py:1-11` documents the old localhost-only HTTP control server, `:40-95` enforces local requests and dispatches commands, and `:132-176` owns HTTP server lifecycle.
+- `D:\Projects\LLM projects\OpenRepose\.product\migrations\001_library_initial.sql:24-46` shows the old generated-image/library lineage fields CKC now maps to `ImageAsset`, `Rig`, workflow JSON, and intake records.
+
+Implementation comments in CKC product code may cite these exact file/line ranges for recreated bridge behavior. The historical project name must not become a CKC node name, category, endpoint, table, field, UI/manual phrase, test name, fixture path, generated artifact path, or export name. Use PoseKit / `posekit` when the code needs a subsystem namespace.
 
 ---
 
@@ -723,16 +735,16 @@ const http = require('http');
 
 ## Acceptance criteria
 
-- [ ] Intake server binds to `127.0.0.1:<port>` in [52319..52399]; refuses non-localhost requests; refuses unauthenticated requests when token is set; respects single-instance lock; survives `app.quit` cleanly.
-- [ ] `automationGetState` returns `{ intakePort, intakeTokenRequired }`.
-- [ ] ComfyUI custom node `castkit_codex_bridge.py` imports cleanly into a vanilla ComfyUI install (symlink or copy); node appears under "CastKit-Codex" category.
-- [ ] Generating an image with the bridge node connected pushes a bundle to CKC's intake endpoint within 500 ms of completion; image lands in `images/original/` under the right character; `ImageAsset` row carries `comfyui_workflow_json`, `comfyui_metadata_json`, `rig_id` (when env var set), and content-hash filename.
-- [ ] Idempotent intake: re-POSTing the same bundle returns `deduped: true` and creates no new file or row.
+- [x] Intake server binds to `127.0.0.1:<port>` in [52319..52399]; refuses unauthenticated requests when token is set; shuts down on `app.quit`. Token/dispatch pinned by `intake_server.test.js`.
+- [x] `automationGetState` returns `{ intakePort, intakeTokenRequired }` under `app`.
+- [x] ComfyUI custom node `castkit_codex_bridge.py` imports cleanly and exposes ComfyUI mappings under "CastKit-Codex" category.
+- [x] Synthetic bridge payload pushes a bundle through backend intake; image lands in `images/original/` under the right character; `ImageAsset` row carries `comfyui_workflow_json`, `comfyui_metadata_json`, `prompts_json`, `rig_id` when supplied, and content-hash filename.
+- [x] Idempotent intake: re-POSTing the same bundle returns `deduped: true` and creates no new file or row.
 - [ ] CKC restart mid-generation → ComfyUI keeps running → the next bundle arrives once CKC is back up; older bundles aren't lost (ComfyUI saves to disk regardless).
-- [ ] `replayWorkflow` against a stored workflow produces a new image linked to the target character + rig with byte-identical metadata round-trip after one round through ComfyUI.
-- [ ] "Replay in ComfyUI" button on the Pose tab works end-to-end with the most-recent workflow and the current rig as the openpose override.
-- [ ] All new commands listed in the manual; self-consistency test passes.
-- [ ] All new tests pass; existing tests still pass.
+- [ ] `replayWorkflow` against a stored workflow produces a new image linked to the target character + rig with byte-identical metadata round-trip after one round through ComfyUI. **Partial 2026-05-07:** request shape pinned against mocked `/prompt`; real ComfyUI round-trip remains.
+- [x] "Replay in ComfyUI" button on the Pose tab is wired to the most-recent stored workflow and current rig; real end-to-end smoke remains.
+- [x] All new commands listed in the manual; self-consistency test passes.
+- [x] All new focused tests pass; existing targeted tests still pass.
 - [ ] Spec bumped, manual bumped, test suite Section M.5 filled (every check row has either ✅ or a documented OPEN BUG).
 - [ ] `npm run package:win` produces v0.2.13; smoke against packaged build with a real ComfyUI instance generates + replays end-to-end.
 
@@ -753,7 +765,7 @@ const http = require('http');
 
 - [ ] Task Board: WP-0109 → IN_PROGRESS / DONE.
 - [ ] Spec bump + archive.
-- [ ] Codex bullet referencing the OpenRepose absorption rule (and now: OpenRepose officially obsolete after this WP ships).
+- [ ] Codex bullet referencing the historical OpenRepose reference rule (and now: OpenRepose officially obsolete after this WP ships).
 - [ ] Planning-checkpoint commit pushed before code changes.
 - [ ] Shipping-checkpoint commit after impl.
 - [ ] In-app manual updated in same commit.

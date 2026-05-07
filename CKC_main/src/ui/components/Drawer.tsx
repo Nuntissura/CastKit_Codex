@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './drawer.module.css';
 
-type NavPage = 'library' | 'character' | 'exports' | 'intake';
+type NavPage = 'library' | 'character' | 'exports' | 'intake' | 'pose' | 'workflow';
 
 export function Drawer({
   isOpen,
@@ -34,6 +34,12 @@ export function Drawer({
           </button>
           <button className={styles.navItem} onClick={() => onNavigate('character')}>
             Character
+          </button>
+          <button className={styles.navItem} onClick={() => onNavigate('pose')}>
+            Pose
+          </button>
+          <button className={styles.navItem} onClick={() => onNavigate('workflow')}>
+            Workflow
           </button>
           <button className={styles.navItem} onClick={() => onNavigate('exports')}>
             Exports

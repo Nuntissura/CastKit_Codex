@@ -12,6 +12,10 @@ const POSTGRES_TABLE_ORDER = [
   'SheetVersion',
   'ProtectedField',
   'ImageAsset',
+  'Rig',
+  'Prompt',
+  'StoryBeat',
+  'RigTag',
   'TemplateSpinOff',
   'TagRule',
   'SavedSearch',
@@ -428,6 +432,77 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', "review_status", "TEXT NOT NULL DEFAULT 'accepted'");
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_review_status ON ImageAsset(character_id, review_status)');
+
+  // WP-0107 / PoseKit: rig, prompt, story-beat, and workflow attachment
+  // fields. Columns are nullable so historical ImageAsset rows stay valid.
+  await ensureColumn(db, 'ImageAsset', 'pose_json', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'openpose_png_path', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'comfyui_workflow_json', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'comfyui_metadata_json', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'prompts_json', 'TEXT');
+  await ensureColumn(db, 'ImageAsset', 'rig_id', 'TEXT');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_rig_id ON ImageAsset(rig_id)');
+
+  await exec(
+    db,
+    `
+    CREATE TABLE IF NOT EXISTS Rig (
+      rig_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      portrait_image_id TEXT NOT NULL,
+      label TEXT NOT NULL DEFAULT '',
+      pose_json TEXT NOT NULL,
+      calibration_json TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE,
+      FOREIGN KEY(portrait_image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_rig_character ON Rig(character_id);
+    CREATE INDEX IF NOT EXISTS idx_rig_portrait ON Rig(portrait_image_id);
+    CREATE INDEX IF NOT EXISTS idx_rig_updated ON Rig(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS Prompt (
+      prompt_id TEXT PRIMARY KEY,
+      character_id TEXT,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      text TEXT NOT NULL,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompt_character ON Prompt(character_id);
+    CREATE INDEX IF NOT EXISTS idx_prompt_kind ON Prompt(character_id, kind);
+    CREATE INDEX IF NOT EXISTS idx_prompt_updated ON Prompt(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS StoryBeat (
+      beat_id TEXT PRIMARY KEY,
+      character_id TEXT,
+      title TEXT NOT NULL,
+      body TEXT,
+      prompt_ids_json TEXT NOT NULL DEFAULT '[]',
+      order_index INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_storybeat_character ON StoryBeat(character_id, order_index);
+    CREATE INDEX IF NOT EXISTS idx_storybeat_updated ON StoryBeat(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS RigTag (
+      rig_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      PRIMARY KEY (rig_id, tag_id),
+      FOREIGN KEY(rig_id) REFERENCES Rig(rig_id) ON DELETE CASCADE,
+      FOREIGN KEY(tag_id) REFERENCES Tag(tag_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_rigtag_rig ON RigTag(rig_id);
+    CREATE INDEX IF NOT EXISTS idx_rigtag_tag ON RigTag(tag_id);
+  `
+  );
 
   // WP-0100: image-sourcing provenance + sheet-version linkage. All
   // nullable so existing rows stay valid; new ingestion paths fill them.
@@ -1263,7 +1338,7 @@ async function initSchema(db) {
       FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_image_dedupe ON ImageAsset(character_id, file_hash);
+    CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash);
 
     CREATE TABLE IF NOT EXISTS TemplateSpinOff (
       spinoff_id TEXT PRIMARY KEY,
@@ -1293,7 +1368,18 @@ async function initSchema(db) {
   `;
 
   await exec(db, schema);
-  await ensureSchemaUpgrades(db);
+  await run(db, 'BEGIN');
+  try {
+    await ensureSchemaUpgrades(db);
+    await run(db, 'COMMIT');
+  } catch (err) {
+    try {
+      await run(db, 'ROLLBACK');
+    } catch {
+      // ignore rollback failures; surface the original migration error
+    }
+    throw err;
+  }
 }
 
 module.exports = {
