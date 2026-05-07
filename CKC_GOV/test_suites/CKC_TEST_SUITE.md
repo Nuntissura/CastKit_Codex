@@ -201,13 +201,20 @@ The suite is organized so each block can be run independently. Findings get reco
 - J15. WP-0109 live ComfyUI gate: `getComfyUIStats` reaches `http://127.0.0.1:8188`, `replayWorkflow({ waitForCompletion: true })` submits a real ComfyUI API graph, polls `/history`, fetches `/view`, registers the output image under the target character/rig, and Workflow/Pose captures show the stored run plus enabled replay controls. Latest pass: 2026-05-07 on ComfyUI `0.20.1`, prompt `0b6a5812-f576-4807-8507-8cf89f8d5b87`, output `img_a89994d10d39213b4f65d8b137869e8d`, captures `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155652022Z_no_session_wp-0109-workflow-live-replay.png` and `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155653305Z_no_session_wp-0109-pose-replay-button.png`.
 - J16. Remaining release gate: packaged build smoke repeats J14 and J15 from the packaged app.
 
-## Section K — Packaged build smokes
+## Section K - Reset modes (WP-0105)
+
+- K1. Installer invariant: `installer_modes_invariants.test.js` passes; `installer_custom.nsh` exposes Update / Reinstall / Light / Full modes and no destructive rule targets `images/original` or `images/thumb`.
+- K2. Full reset marker: `full_reset_marker.test.js` passes; marker startup path writes `orphans/<timestamp>/manifest.json`, preserves image-byte SHA-256, removes generated folders, truncates content tables, and preserves `CkcMeta` / `CkcDbMigration`.
+- K3. Orphan adoption: `adopt_orphan_images.test.js` passes; `adoptOrphanImages` restores tags/rating/favorite/notes/source metadata and is idempotent.
+- K4. Live reset smoke: import `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, request Full reset through the backend automation gateway, restart CKC, verify `lastFullResetResult.ran === true`, list the newest orphan manifest, adopt into `__new__`, and capture the recovered character. Latest pass: 2026-05-07, manifest `CKC_GOV/targets/scratch/wp-0105-live/CastKit-Codex-Library/orphans/2026-05-07_182837/manifest.json`, captures `2026-05-07_162707767Z_no_session_wp-0105-before-full-reset.png` and `2026-05-07_162854971Z_no_session_wp-0105-after-adopt-orphans.png`.
+
+## Section L - Packaged build smokes
 
 Run after every `npm run package:win`:
-- K1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
-- K2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
-- K3. Launch the portable .exe → repeats sections A, B, C, F, and J as a packaged-build smoke.
-- K4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
+- L1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
+- L2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
+- L3. Launch the portable .exe → repeats sections A, B, C, F, J, and K as a packaged-build smoke.
+- L4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
 
 ---
 

@@ -46,7 +46,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.067.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.069.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -113,7 +113,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.067.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.069.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -324,6 +324,7 @@ The OpenRepose project at `D:\Projects\LLM projects\OpenRepose` is **defunct** a
 - Pose / openpose / ComfyUI features that derive design intent from OpenRepose must include the file path + line citation in the WP. The implementation must be a clean recreation in CKC's stack (TS / React / Electron / PG), not a code copy.
 - WP-0107 lands the schema + tab shells; WP-0108 lands the pose pipeline; WP-0109 lands the ComfyUI bridge. After WP-0109 ships, the OpenRepose repo is officially obsolete.
 - Implementation checkpoint 2026-05-07: CKC now has true MediaPipe Tasks Vision pose+face detection in the PoseKit worker, deterministic fallback, 3D/2D Pose UI, openpose export, ComfyUI intake/storage/replay backend, CKC-named ComfyUI bridge node in product code, and live real-ComfyUI replay with `/history` + `/view` fallback registration for vanilla `SaveImage` workflows. Do not mark the rebuild release-shipped until packaged build and packaged visual automation smokes pass.
+- Reset checkpoint 2026-05-07: WP-0105 adds explicit Update / Reinstall / Light reset / Full reset modes. Full reset is marker-driven, writes `libraryRoot/orphans/<timestamp>/manifest.json`, truncates content tables except `CkcMeta` / `CkcDbMigration`, and preserves image bytes under `characters/<id>/images/{original,thumb}`. Recovery is through `adoptOrphanImages`; the latest live reset/adopt smoke used `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`.
 - **Naming policy.** "OpenRepose" is a historical-citation term only. It must NOT appear in CKC product code identifiers, in-app manual prose, DB schema, test names, test fixture paths, or UI strings. The CKC-native subsystem name is **PoseKit**. Use `posekit` for internal folder/module namespaces when a subsystem namespace is needed. User-facing surfaces remain generic and self-describing: `Pose` tab, `Rig`, `ComfyUI bridge`, `Workflow` tab, `openpose export`. The name is allowed in implementation comments only when citing a specific OpenRepose file/line as the source of a design choice (e.g. `// Body 18 taxonomy from OpenRepose openpose_schema.py:62-100`).
 - Carry-over WPs (those derived from OpenRepose's planned-but-unimplemented work) are titled by their feature, not their origin. The OpenRepose WP-id is recorded in a one-line citation inside the WP body for traceability.
 - The complete historical OpenRepose taskboard is imported into `CKC_GOV/taskboard/OPENREPOSE_TASKBOARD_IMPORT.md`. Before drafting new pose/workflow/ComfyUI/intake carry-over work, check that ledger and either map the historical item to an existing CKC WP, open a new CKC-native WP, or explicitly mark it skipped/deferred.

@@ -760,6 +760,22 @@ interface Window {
       selectLibraryRoot: () => Promise<string | null>;
       getDefaultLibraryRootInfo: () => Promise<{ isPortable: boolean; portableDir: string | null; defaultLibraryRoot: string }>;
       resetLibraryRootToDefault: () => Promise<string>;
+      resetPreferences: () => Promise<{ ok: true; deleted: string[]; failed?: Array<{ path: string; error: string }>; restartRequired: boolean }>;
+      requestFullReset: () => Promise<{ ok: true; markerPath: string; libraryRoot: string; deleted: string[]; failed?: Array<{ path: string; error: string }>; restartRequired: boolean }>;
+      listOrphanManifests: (params?: { limit?: number } | null) => Promise<Array<{
+        manifestPath: string;
+        createdAt: string;
+        entryCount: number;
+        oldCharacters: string[];
+        unreadable?: boolean;
+      }>>;
+      adoptOrphanImages: (params: { manifestPath: string; targetCharacterId: string; imageIds?: string[] | null }) => Promise<{
+        ok: true;
+        manifestPath: string;
+        adopted: Array<{ oldImageId: string; imageId: string; targetCharacterId: string; relativePath: string; fileHash: string }>;
+        skipped: Array<{ imageId: string; reason: string; targetCharacterId?: string; existingImageId?: string }>;
+        errors: Array<{ imageId: string; reason: string }>;
+      }>;
       getLibraryDiagnostics: (params?: { topN?: number } | null) => Promise<CKCLibraryDiagnostics>;
       listDuplicateGroups: (params?: { minCount?: number; limitGroups?: number; maxPerGroup?: number } | null) => Promise<CKCDuplicateGroup[]>;
       startNearDuplicateScan: (params?: { threshold?: number; maxImages?: number; maxPerGroup?: number } | null) => Promise<{ ok: true; jobId: string }>;

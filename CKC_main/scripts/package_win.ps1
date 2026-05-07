@@ -118,6 +118,8 @@ Write-Host "Stage:     $stageRoot"
 Write-Host "Artifacts: $artifactsRoot"
 
 Copy-Item -Recurse -Force -LiteralPath (Join-Path $repoRoot 'app') -Destination (Join-Path $stageRoot 'app')
+New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'scripts') | Out-Null
+Copy-Item -Force -LiteralPath (Join-Path $repoRoot 'scripts\installer_custom.nsh') -Destination (Join-Path $stageRoot 'scripts\installer_custom.nsh')
 
 # Build renderer into stage\dist (keeps build output out of the repo)
 Push-Location $repoRoot
@@ -177,6 +179,7 @@ $stagePkg = [ordered]@{
       artifactName = '${productName}-Setup-${version}-${arch}.${ext}'
       oneClick = $false
       allowToChangeInstallationDirectory = $true
+      include = 'scripts/installer_custom.nsh'
     }
     portable = [ordered]@{
       artifactName = '${productName}-Portable-${version}-${arch}.${ext}'

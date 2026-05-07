@@ -12,6 +12,12 @@ const { getAutomationCommandMap } = require('./backend/automationCommandMap');
 const { startIntakeServer } = require('./backend/intakeServer');
 const workflowSpecRegistry = require('./backend/workflowSpecRegistry');
 const {
+    getPendingFullResetMarkerPath,
+    readPendingFullResetMarker,
+    writePendingFullResetMarker,
+    clearPreferenceFiles,
+} = require('./backend/resetModes');
+const {
     isBackgroundMode: isBackgroundModePure,
     assertBackgroundSafe: assertBackgroundSafePure,
     STEALTH_DIALOG_STUB,
@@ -271,6 +277,7 @@ let automationRendererState = {
 };
 let automationCommandSeq = 1;
 const automationPendingCommands = new Map();
+let lastFullResetResult = null;
 
 function looksLikeLibraryRoot(absPath) {
     try {
@@ -453,6 +460,17 @@ async function ensureLibrary() {
     }
 }
 
+function getFullResetMarkerPath() {
+    return getPendingFullResetMarkerPath(path.dirname(appConfigPath || getPrimaryConfigPath()));
+}
+
+function resetPreferenceStorage() {
+    return clearPreferenceFiles({
+        userDataDir: app.getPath('userData'),
+        configPath: appConfigPath || getPrimaryConfigPath(),
+    });
+}
+
 async function startCkcIntakeServer() {
     if (intakeServerHandle) return intakeServerHandle;
     const token = String(process.env.CKC_INTAKE_TOKEN || appConfig?.comfyui?.intakeToken || '').trim() || null;
@@ -632,6 +650,25 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'listTemplates') return lib.listTemplates();
     if (name === 'listAllTags') return lib.listAllTags();
     if (name === 'globalSearch') return lib.globalSearch(p);
+    if (name === 'resetPreferences') return { ...resetPreferenceStorage(), restartRequired: true };
+    if (name === 'requestFullReset') {
+        const marker = writePendingFullResetMarker({
+            markerPath: getFullResetMarkerPath(),
+            libraryRoot: lib.libraryRoot,
+            database: appConfig?.database || null,
+        });
+        const prefs = resetPreferenceStorage();
+        return {
+            ok: true,
+            markerPath: marker.markerPath,
+            libraryRoot: marker.libraryRoot,
+            deleted: prefs.deleted,
+            failed: prefs.failed || [],
+            restartRequired: true,
+        };
+    }
+    if (name === 'listOrphanManifests') return lib.listOrphanManifests(p);
+    if (name === 'adoptOrphanImages') return lib.adoptOrphanImages(p);
 
     // WP-0107: Pose/Rig/Workflow storage commands.
     if (name === 'listRigs') return lib.listRigs(p);
@@ -1457,6 +1494,8 @@ function registerIpcHandlers() {
                 intakePort: intakeServerHandle?.port || null,
                 intakeTokenRequired: !!intakeServerHandle?.tokenRequired,
                 intakeError: intakeServerError ? String(intakeServerError?.message || intakeServerError) : null,
+                pendingFullReset: fs.existsSync(getFullResetMarkerPath()),
+                lastFullResetResult,
             },
             renderer: automationRendererState,
             sessions: automationControl.listSessions(),
@@ -1890,6 +1929,38 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:renameTag', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.renameTag(params || {});
+    });
+
+    ipcMain.handle('ckc:resetPreferences', async () => {
+        return { ...resetPreferenceStorage(), restartRequired: true };
+    });
+
+    ipcMain.handle('ckc:requestFullReset', async () => {
+        const lib = await ensureLibrary();
+        const marker = writePendingFullResetMarker({
+            markerPath: getFullResetMarkerPath(),
+            libraryRoot: lib.libraryRoot,
+            database: appConfig?.database || null,
+        });
+        const prefs = resetPreferenceStorage();
+        return {
+            ok: true,
+            markerPath: marker.markerPath,
+            libraryRoot: marker.libraryRoot,
+            deleted: prefs.deleted,
+            failed: prefs.failed || [],
+            restartRequired: true,
+        };
+    });
+
+    ipcMain.handle('ckc:listOrphanManifests', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listOrphanManifests(params || {});
+    });
+
+    ipcMain.handle('ckc:adoptOrphanImages', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.adoptOrphanImages(params || {});
     });
 
     ipcMain.handle('ckc:selectLibraryRoot', async () => {
@@ -2726,6 +2797,15 @@ app.whenReady().then(async () => {
     const loaded = loadConfig();
     appConfigPath = loaded.configPath;
     appConfig = normalizeConfig(loaded.config);
+    const pendingReset = readPendingFullResetMarker(getFullResetMarkerPath());
+    const pendingResetRoot = String(pendingReset?.library_root || pendingReset?.libraryRoot || '').trim();
+    if (pendingResetRoot) appConfig.libraryRoot = pendingResetRoot;
+    if (pendingReset?.database && typeof pendingReset.database === 'object') {
+        appConfig.database = pendingReset.database;
+    }
+    if (pendingReset) {
+        resetPreferenceStorage();
+    }
     saveConfig(appConfigPath, appConfig);
 
     registerIpcHandlers();
@@ -2735,7 +2815,12 @@ app.whenReady().then(async () => {
 
     // Initialize the library eagerly so the renderer cannot observe a partially-initialized instance.
     try {
-        await ensureLibrary();
+        const lib = await ensureLibrary();
+        lastFullResetResult = await lib.runPendingFullReset({ markerPath: getFullResetMarkerPath() });
+        if (lastFullResetResult?.ran) {
+            resetLibrary();
+            await ensureLibrary();
+        }
     } catch (err) {
         try {
             await safeShowMessageBox({

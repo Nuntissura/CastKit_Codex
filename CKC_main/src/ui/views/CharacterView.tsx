@@ -323,6 +323,7 @@ export function CharacterView({
   const [packSections, setPackSections] = React.useState<string[] | null>(null);
   const [exportError, setExportError] = React.useState<string | null>(null);
   const [lastExportPath, setLastExportPath] = React.useState<string | null>(null);
+  const [resetStatus, setResetStatus] = React.useState<string | null>(null);
   const [isExporting, setIsExporting] = React.useState<boolean>(false);
 
   const [isImportingImages, setIsImportingImages] = React.useState<boolean>(false);
@@ -1972,6 +1973,54 @@ export function CharacterView({
     }
   };
 
+  const resetPreferences = async () => {
+    setExportError(null);
+    setResetStatus(null);
+    const token = window.prompt('Type RESET to wipe preferences.');
+    if (token !== 'RESET') return;
+    try {
+      const res = await window.ckc.resetPreferences();
+      setResetStatus(`Preferences reset queued (${res.deleted.length} path(s)). Restart CastKit-Codex.`);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const requestFullReset = async () => {
+    setExportError(null);
+    setResetStatus(null);
+    const token = window.prompt('Type RESET to wipe content database and generated files while keeping image bytes.');
+    if (token !== 'RESET') return;
+    try {
+      const res = await window.ckc.requestFullReset();
+      setResetStatus(`Full reset marker written: ${res.markerPath}. Restart CastKit-Codex.`);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const recoverNewestOrphans = async () => {
+    if (!characterId) return;
+    setExportError(null);
+    setResetStatus(null);
+    const token = window.prompt('Type ADOPT to recover the newest orphan manifest into this character.');
+    if (token !== 'ADOPT') return;
+    try {
+      const manifests = await window.ckc.listOrphanManifests({ limit: 1 });
+      const newest = manifests[0];
+      if (!newest?.manifestPath) {
+        setResetStatus('No orphan manifests found.');
+        return;
+      }
+      const res = await window.ckc.adoptOrphanImages({ manifestPath: newest.manifestPath, targetCharacterId: characterId });
+      setResetStatus(`Recovered ${res.adopted.length}; skipped ${res.skipped.length}; errors ${res.errors.length}.`);
+      const refreshed = await window.ckc.getCharacter(characterId);
+      setCharacter(refreshed);
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const addMoodboardImage = (imageId: string) => {
     setMoodboardDraft((prev) => ({
       ...prev,
@@ -3484,6 +3533,15 @@ export function CharacterView({
                       >
                         Reset
                       </button>
+                      <button className={styles.btnSecondary} disabled={isExporting} onClick={() => void resetPreferences()}>
+                        Reset prefs
+                      </button>
+                      <button className={styles.btnSecondary} disabled={isExporting} onClick={() => void requestFullReset()}>
+                        Full reset
+                      </button>
+                      <button className={styles.btnSecondary} disabled={isExporting || !characterId} onClick={() => void recoverNewestOrphans()}>
+                        Recover orphans
+                      </button>
                     </div>
 
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
@@ -3630,6 +3688,11 @@ export function CharacterView({
                     {exportError ? (
                       <div className={styles.error} style={{ margin: '10px 0' }}>
                         {exportError}
+                      </div>
+                    ) : null}
+                    {resetStatus ? (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 6 }}>
+                        {resetStatus}
                       </div>
                     ) : null}
                     {lastExportPath ? (

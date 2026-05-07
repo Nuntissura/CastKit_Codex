@@ -17,6 +17,7 @@ const { validateCharacterValues, classifyChangeType } = require('./validation');
 const { extractDominantPaletteFromBitmap } = require('./palette');
 const { computeDhashHexFromBitmap, hammingDistanceHex64, isHex64 } = require('./dhash');
 const comfyuiClient = require('./comfyuiClient');
+const resetModes = require('./resetModes');
 
 const INBOX_CHARACTER_ID = '__ckc_inbox';
 const INBOX_CHARACTER_NAME = 'Inbox';
@@ -1027,6 +1028,23 @@ class CKCLibrary {
 
   close() {
     if (this.db) this.db.close();
+  }
+
+  async runPendingFullReset({ markerPath, now = new Date() } = {}) {
+    return resetModes.runPendingFullReset({
+      markerPath,
+      libraryRoot: this.libraryRoot,
+      db: this.db,
+      now,
+    });
+  }
+
+  listOrphanManifests(params = {}) {
+    return resetModes.listOrphanManifests({ libraryRoot: this.libraryRoot, ...(params || {}) });
+  }
+
+  async adoptOrphanImages(params = {}) {
+    return resetModes.adoptOrphanImages({ library: this, ...(params || {}) });
   }
 
   async getTemplateAst(templateId = null) {

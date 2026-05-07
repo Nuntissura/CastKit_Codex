@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0109-live-fallback';
+const MANUAL_VERSION = '2026-05-07.wp-0105-reset-modes';
 
 const featureGroups = [
   {
@@ -28,6 +28,10 @@ const featureGroups = [
     commands: [
       'automationGetState',
       'automationGetManual',
+      'resetPreferences',
+      'requestFullReset',
+      'listOrphanManifests',
+      'adoptOrphanImages',
       'script:postgres_up.ps1',
       'script:postgres_dump.ps1',
       'script:postgres_restore.ps1',
@@ -36,6 +40,7 @@ const featureGroups = [
       'Do not mirror governance into CKC_main/docs.',
       'Do not introduce spaces in generated file or folder names.',
       'Use PostgreSQL dumps for database backup; filesystem mirror alone is not a database backup.',
+      'Reset modes are explicit: Update/Reinstall preserve data, Light reset wipes preferences, Full reset writes an orphan manifest and keeps image bytes under images/original and images/thumb.',
     ],
   },
   {
@@ -569,6 +574,30 @@ const commandReference = [
     target: 'backend',
     description: 'Classify an intake image in folder-only or linked CKC profile mode.',
     example: { sourcePath: 'C:/intake_batch/a.png', status: 'pending', mode: 'linked', characterId: 'char_001' },
+  },
+  {
+    id: 'resetPreferences',
+    target: 'backend',
+    description: 'Queue a Light reset from inside CKC: delete ckc-config.json plus Electron preference/storage files. Content rows, library files, and image bytes are preserved. Restart is required.',
+    example: {},
+  },
+  {
+    id: 'requestFullReset',
+    target: 'backend',
+    description: 'Queue a Full reset from inside CKC by writing .ckc-pending-full-reset, clearing preferences, and preserving the active library root for next launch. Startup writes an orphan manifest, truncates content tables, and keeps image bytes.',
+    example: {},
+  },
+  {
+    id: 'listOrphanManifests',
+    target: 'backend',
+    description: 'List orphan image manifests under libraryRoot/orphans, newest first. Use before adoptOrphanImages after a Full reset.',
+    example: { limit: 10 },
+  },
+  {
+    id: 'adoptOrphanImages',
+    target: 'backend',
+    description: 'Recover images from an orphan manifest into an existing character, or pass targetCharacterId="__new__" to create placeholder characters by prior display name. Re-hashes bytes and skips duplicates.',
+    example: { manifestPath: 'C:/CastKit-Codex-Library/orphans/2026-05-07_120000/manifest.json', targetCharacterId: '__new__' },
   },
   // WP-0100: workflow spec registry (read-only, fs-backed)
   {

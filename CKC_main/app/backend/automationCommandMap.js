@@ -50,6 +50,10 @@ function getAutomationCommandMap() {
             'setImagesMetaBatch',
             'listAllTags',
             'globalSearch',
+            'resetPreferences',
+            'requestFullReset',
+            'listOrphanManifests',
+            'adoptOrphanImages',
             // WP-0107: PoseKit schema + Pose / Workflow surfaces
             'listRigs',
             'getRig',
