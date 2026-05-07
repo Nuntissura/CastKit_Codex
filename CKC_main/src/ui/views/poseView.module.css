@@ -52,13 +52,42 @@
   border-radius: 0;
 }
 
-.yawRange {
-  width: min(220px, 18vw);
+.headPoseStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  gap: 8px;
+  min-width: min(520px, 42vw);
+}
+
+.axisControl {
+  display: grid;
+  grid-template-columns: auto 58px 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.axisControl input[type='number'] {
+  width: 58px;
+  min-height: 30px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--text-primary);
+  padding: 4px 6px;
+  border-radius: 0;
+}
+
+.headPoseRange {
+  width: 100%;
+  min-width: 56px;
   accent-color: var(--accent-color);
 }
 
 .button,
-.primaryButton {
+.primaryButton,
+.iconButton {
   min-height: 36px;
   border: 1px solid var(--glass-border);
   background: transparent;
@@ -69,6 +98,13 @@
   white-space: nowrap;
 }
 
+.iconButton {
+  min-height: 30px;
+  width: 28px;
+  padding: 0;
+  font-size: 0.75rem;
+}
+
 .primaryButton {
   border-color: var(--accent-color);
   background: var(--accent-color);
@@ -77,6 +113,7 @@
 
 .button:hover,
 .primaryButton:hover,
+.iconButton:hover,
 .tab:hover,
 .subtab:hover,
 .rigItem:hover,
@@ -319,6 +356,25 @@
   overflow: hidden;
 }
 
+.poseReadout {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  padding: 10px;
+  font-size: 0.8rem;
+}
+
+.poseReadout span {
+  color: var(--text-secondary);
+}
+
+.poseReadout code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .markerGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -384,6 +440,11 @@
   .toolbar {
     padding-left: 64px;
     flex-wrap: wrap;
+  }
+
+  .headPoseStrip {
+    min-width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .workspace {

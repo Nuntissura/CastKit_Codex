@@ -3,9 +3,11 @@ import { Pose3DViewport } from '../components/Pose3DViewport';
 import { detectPoseFromImage } from '../../posekit/poseDetectionClient';
 import {
   BODY_18,
-  YAW_BINS,
+  HEAD_POSE_LIMITS,
   createDefaultCalibration,
+  createHeadPose,
   getRigStats,
+  normalizeHeadPose,
   openposeJsonText,
   renderRigToCanvas,
 } from '../../posekit/core.mjs';
@@ -22,6 +24,7 @@ type PoseViewProps = {
 };
 
 type Calibration = ReturnType<typeof createDefaultCalibration>;
+type HeadPose = ReturnType<typeof createHeadPose>;
 
 function imageUrl(imageId: string | null | undefined): string {
   const id = String(imageId ?? '').trim();
@@ -36,15 +39,16 @@ function formatDate(value: string | null | undefined): string {
   return d.toLocaleString();
 }
 
-function safeCalibration(value: unknown, yaw: number, toolTab: ToolTab): Calibration {
+function safeCalibration(value: unknown, headPose: HeadPose, toolTab: ToolTab): Calibration {
   const fallback = createDefaultCalibration();
-  const src = value && typeof value === 'object' ? (value as Partial<Calibration> & { yaw?: number; activeTool?: string }) : {};
+  const src = value && typeof value === 'object' ? (value as Partial<Calibration> & { yaw?: number; activeTool?: string; headPose?: unknown }) : {};
   return {
     ...fallback,
     ...src,
     schemaVersion: 1,
     activeTool: toolTab,
-    yaw,
+    yaw: headPose.yaw,
+    headPose,
     perKeypoint: src.perKeypoint && typeof src.perKeypoint === 'object' ? src.perKeypoint : {},
     reframer: {
       ...fallback.reframer,
@@ -91,8 +95,8 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
   const [draftRig, setDraftRig] = React.useState<unknown | null>(null);
   const [rightTab, setRightTab] = React.useState<RightTab>('inspector');
   const [toolTab, setToolTab] = React.useState<ToolTab>('calibration');
-  const [yaw, setYaw] = React.useState<number>(0);
-  const [calibration, setCalibration] = React.useState<Calibration>(() => safeCalibration(null, 0, 'calibration'));
+  const [headPose, setHeadPose] = React.useState<HeadPose>(() => createHeadPose());
+  const [calibration, setCalibration] = React.useState<Calibration>(() => safeCalibration(null, createHeadPose(), 'calibration'));
   const [calibrationDirty, setCalibrationDirty] = React.useState<boolean>(false);
   const [status, setStatus] = React.useState<string>('Ready');
   const [busy, setBusy] = React.useState<boolean>(false);
@@ -187,21 +191,27 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
 
   React.useEffect(() => {
     setDraftRig(null);
-    setCalibration(safeCalibration(selectedRig?.calibration, yaw, toolTab));
+    const nextHeadPose = normalizeHeadPose(
+      selectedRig?.calibration && typeof selectedRig.calibration === 'object'
+        ? (selectedRig.calibration as { headPose?: unknown; yaw?: number }).headPose || { yaw: (selectedRig.calibration as { yaw?: number }).yaw || 0 }
+        : null
+    );
+    setHeadPose(nextHeadPose);
+    setCalibration(safeCalibration(selectedRig?.calibration, nextHeadPose, toolTab));
     setCalibrationDirty(false);
   }, [selectedRig?.rigId]);
 
   React.useEffect(() => {
-    setCalibration((current) => ({ ...current, yaw, activeTool: toolTab }) as Calibration);
-  }, [yaw, toolTab]);
+    setCalibration((current) => ({ ...current, yaw: headPose.yaw, headPose, activeTool: toolTab }) as Calibration);
+  }, [headPose, toolTab]);
 
   React.useEffect(() => {
     if (!activeRig) return;
     const overlay = overlayCanvasRef.current;
     const preview = previewCanvasRef.current;
-    if (overlay) renderRigToCanvas(overlay, activeRig, { yawDegrees: yaw, calibration, background: 'transparent', alpha: true });
-    if (preview) renderRigToCanvas(preview, activeRig, { yawDegrees: yaw, calibration, background: '#000000' });
-  }, [activeRig, yaw, calibration]);
+    if (overlay) renderRigToCanvas(overlay, activeRig, { headPose, calibration, background: 'transparent', alpha: true });
+    if (preview) renderRigToCanvas(preview, activeRig, { headPose, calibration, background: '#000000' });
+  }, [activeRig, headPose, calibration]);
 
   React.useEffect(() => {
     if (!selectedRig || !calibrationDirty) return;
@@ -320,7 +330,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     setError(null);
     try {
       const canvas = document.createElement('canvas');
-      renderRigToCanvas(canvas, activeRig, { yawDegrees: yaw, calibration, background: '#000000' });
+      renderRigToCanvas(canvas, activeRig, { headPose, calibration, background: '#000000' });
       const pngBase64 = canvas.toDataURL('image/png');
       const result = await window.ckc.exportOpenposePng({ rigId: selectedRig.rigId, pngBase64, width: canvas.width, height: canvas.height });
       setStatus(`${result.deduped ? 'Openpose already saved' : 'Openpose saved'} ${result.imageId}`);
@@ -359,10 +369,21 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
 
   function updateCalibration(mutator: (draft: Calibration) => Calibration) {
     setCalibration((current) => {
-      const next = mutator(safeCalibration(current, yaw, toolTab));
+      const next = mutator(safeCalibration(current, headPose, toolTab));
       return next;
     });
     setCalibrationDirty(true);
+  }
+
+  function setHeadPoseAxis(axis: 'yaw' | 'pitch' | 'roll', value: number) {
+    const limits = HEAD_POSE_LIMITS[axis] as readonly [number, number];
+    const clamped = Math.min(limits[1], Math.max(limits[0], Number(value) || 0));
+    setHeadPose((current) => createHeadPose({ ...current, [axis]: clamped }));
+    setCalibrationDirty(true);
+  }
+
+  function resetHeadPoseAxis(axis: 'yaw' | 'pitch' | 'roll') {
+    setHeadPoseAxis(axis, 0);
   }
 
   function setKeypointVisible(id: string, visible: boolean) {
@@ -446,27 +467,43 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
             ))}
           </select>
         </label>
-        <label className={styles.selectLabel}>
-          <span>Yaw</span>
-          <select value={yaw} onChange={(event) => setYaw(Number(event.target.value) || 0)} data-action="pose-yaw-select">
-            {YAW_BINS.map((value: number) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <input
-          className={styles.yawRange}
-          type="range"
-          min="-90"
-          max="90"
-          step="15"
-          value={yaw}
-          onChange={(event) => setYaw(Number(event.target.value) || 0)}
-          aria-label="Yaw"
-          data-action="pose-yaw-slider"
-        />
+        <div className={styles.headPoseStrip} data-action="pose-head-pose-controls">
+          {([
+            ['yaw', 'Yaw', 15],
+            ['pitch', 'Pitch', 5],
+            ['roll', 'Roll', 5],
+          ] as const).map(([axis, label, step]) => {
+            const limits = HEAD_POSE_LIMITS[axis] as readonly [number, number];
+            return (
+              <label key={axis} className={styles.axisControl}>
+                <span>{label}</span>
+                <input
+                  type="number"
+                  min={limits[0]}
+                  max={limits[1]}
+                  step={step}
+                  value={headPose[axis]}
+                  onChange={(event) => setHeadPoseAxis(axis, Number(event.target.value) || 0)}
+                  data-action={`pose-${axis}-input`}
+                />
+                <input
+                  className={styles.headPoseRange}
+                  type="range"
+                  min={limits[0]}
+                  max={limits[1]}
+                  step={step}
+                  value={headPose[axis]}
+                  onChange={(event) => setHeadPoseAxis(axis, Number(event.target.value) || 0)}
+                  aria-label={label}
+                  data-action={`pose-${axis}-slider`}
+                />
+                <button type="button" className={styles.iconButton} onClick={() => resetHeadPoseAxis(axis)} data-action={`pose-${axis}-reset`} aria-label={`Reset ${label}`}>
+                  0
+                </button>
+              </label>
+            );
+          })}
+        </div>
         <button type="button" className={styles.button} onClick={() => refreshCharacter()} disabled={busy} data-action="pose-reload">
           Reload
         </button>
@@ -496,7 +533,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
               <div className={styles.emptyStage}>No image selected</div>
             )}
             <div className={styles.stageOverlay}>
-              <span>{yaw} deg</span>
+              <span>{headPose.yaw} / {headPose.pitch} / {headPose.roll} deg</span>
               <span>{selectedRig ? selectedRig.status : 'draft'}</span>
               <span>{rigStats ? `${rigStats.visibleBody}/${rigStats.bodyCount}` : 'no pose'}</span>
             </div>
@@ -574,7 +611,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
                   <span>Updated</span>
                   <strong>{formatDate(selectedRig?.updatedAt)}</strong>
                 </div>
-                <pre className={styles.jsonBox}>{activeRig ? openposeJsonText(activeRig, { yawDegrees: yaw, calibration }) : selectedRig ? JSON.stringify(selectedRig.pose, null, 2) : '{}'}</pre>
+                <pre className={styles.jsonBox}>{activeRig ? openposeJsonText(activeRig, { headPose, calibration }) : selectedRig ? JSON.stringify(selectedRig.pose, null, 2) : '{}'}</pre>
               </div>
             ) : null}
 
@@ -604,12 +641,14 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
                   {toolTab === 'calibration' ? (
                     <>
                       <div className={styles.viewport3d} data-action="pose-3d-viewport">
-                        {activeRig ? <Pose3DViewport rig={activeRig} yaw={yaw} /> : <div className={styles.emptyPanel}>No rig loaded</div>}
+                        {activeRig ? <Pose3DViewport rig={activeRig} headPose={headPose} /> : <div className={styles.emptyPanel}>No rig loaded</div>}
                       </div>
-                      <label className={styles.fieldLabel}>
-                        <span>Yaw offset</span>
-                        <input type="number" value={yaw} min={-90} max={90} step={15} onChange={(event) => setYaw(Number(event.target.value) || 0)} />
-                      </label>
+                      <div className={styles.poseReadout}>
+                        <span>Order</span>
+                        <strong>{headPose.order}</strong>
+                        <span>Quaternion</span>
+                        <code>{headPose.quaternion.map((n: number) => n.toFixed(4)).join(', ')}</code>
+                      </div>
                       <button type="button" className={styles.primaryButton} onClick={saveCalibration} disabled={busy || !selectedRig} data-action="pose-save-calibration">
                         Save calibration
                       </button>

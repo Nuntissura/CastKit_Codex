@@ -169,6 +169,15 @@ type CKCRig = {
   updatedAt: string;
 };
 
+type CKCHeadPose = {
+  schemaVersion: 1;
+  order: 'YXZ';
+  yaw: number;
+  pitch: number;
+  roll: number;
+  quaternion: [number, number, number, number];
+};
+
 type CKCPrompt = {
   promptId: string;
   characterId: string | null;
@@ -838,6 +847,7 @@ interface Window {
       status?: string;
     }) => Promise<{ ok: true; rigId: string }>;
     updateRigCalibration: (params: { rigId: string; calibrationJson?: unknown }) => Promise<{ ok: true }>;
+    setRigHeadPose: (params: { rigId: string; headPose?: Partial<CKCHeadPose> }) => Promise<{ ok: true; headPose: CKCHeadPose }>;
     setRigPortrait: (params: { rigId: string; portraitImageId: string }) => Promise<{ ok: true }>;
     updateRigPose: (params: { rigId: string; poseJson?: unknown; status?: string }) => Promise<{ ok: true; rigId: string }>;
     exportOpenposePng: (params: {

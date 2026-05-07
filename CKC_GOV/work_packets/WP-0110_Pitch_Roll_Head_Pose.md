@@ -2,17 +2,29 @@
 
 Date: 2026-05-07
 Owner: Codex
-Status: PLANNED (depends on WP-0108 stable build)
+Status: DONE (dev/live verified; packaged release gate deferred)
 
 ## Summary
-Extend the pose pipeline from yaw-only rotation to full head pose: yaw + pitch + roll. New backend commands `setPitch`, `setRoll`, `setPose`. New UI sliders alongside the existing yaw slider. The 3D viewport applies all three rotations to the rig; the 2D openpose viewport renders the rotated rig at every angle. Calibration applies before rotation.
+Extend the pose pipeline from yaw-only rotation to full head pose: yaw + pitch + roll. New backend command `setRigHeadPose`, quaternion-backed `applyHeadRotation` / `applyHeadPose` math, and UI sliders alongside the existing yaw slider. The 3D viewport applies the head pose to the rig; the 2D openpose viewport renders the projected keypoints. Calibration and head-local offsets follow the convention below.
 
 Carry-over citation: derived from OpenRepose `WP-I1-007` (planned, not implemented; design intent only).
+
+## Completion Notes
+
+Implemented 2026-05-07 in CKC's PoseKit stack.
+
+- Product code: `CKC_main/src/posekit/core.mjs`, `core.d.mts`, `PoseView.tsx`, `Pose3DViewport.tsx`, `poseView.module.css`, `library.js`, `main.js`, `preload.js`, `vite-env.d.ts`, `automationCommandMap.js`, and `automationManual.js`.
+- Stored contract: `Rig.calibration_json.headPose` contains `{ schemaVersion: 1, order: "YXZ", yaw, pitch, roll, quaternion: [x, y, z, w] }`; legacy `calibration.yaw` remains synchronized for backward compatibility.
+- Backend gateway: `setRigHeadPose({ rigId, headPose })` persists normalized head pose and derives a quaternion from yaw/pitch/roll when callers omit one.
+- UI: Pose toolbar has yaw/pitch/roll numeric inputs, range sliders, and per-axis reset buttons; Tools / Calibration shows `YXZ` and quaternion readout.
+- Live gate: hidden CKC Electron automation, using `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, detected rig `rig_d815e8ea6a53933eacdf681f84ce6325`, persisted `yaw=30`, `pitch=-15`, `roll=10`, captured `CKC_GOV/targets/CKC/automation_captures/2026-05-07_175728510Z_no_session_wp-0110-head-pose-live.png`, and exported deterministic openpose PNG hash `15e1ec81aed024e92db747aea026ef073bb9701bab0de25fd8124f80a0273116`.
+- Verification: focused WP-0110 suite passed, `npx tsc --noEmit` passed, `npm run build` passed, and `npm test -- --test-reporter=spec` passed with 197 passing / 1 skipped.
+- Packaged release smoke remains deferred because unrelated future-WP planning files are still dirty in the worktree.
 
 ---
 
 ## Why
-Yaw alone covers half the LoRA-training pose sweep — characters need pitch (looking up/down) and roll (head tilt) for full coverage. The existing rig math already supports arbitrary rotation; this WP exposes pitch + roll as first-class controls and pins the convention so downstream ComfyUI workflows (and future skill-distillation pipelines per Handshake's pillar 20) can drive them.
+Yaw alone covers half the LoRA-training pose sweep — characters need pitch (looking up/down) and roll (head tilt) for full coverage. WP-0108 establishes yaw-only rig projection; this WP extends that math with a pinned quaternion convention so downstream ComfyUI workflows (and future skill-distillation pipelines per Handshake's pillar 20) can drive head pose deterministically.
 
 ## Pre-flight read list
 
@@ -24,15 +36,15 @@ Yaw alone covers half the LoRA-training pose sweep — characters need pitch (lo
 | `CKC_main/app/backend/library.js` | search "createRig" | Backend wiring pattern. |
 | `CKC_GOV/work_packets/WP-0108_Pose_Pipeline_React.md` | search "Yaw rotation convention" | The math contract. Pitch + roll add to the same convention. |
 
-External: OpenRepose `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rotation.py:36-81` for pitch/roll convention reference (do not import).
+Historical source audit: `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rotation.py:36-81` is a yaw-only baseline. Pitch/roll were planned, not implemented, in `D:\Projects\LLM projects\OpenRepose\.gov\workflow\workpackets\WP-I1-007-pitch-roll-rotation.md:16` and `:25-34`. Do not import or port source.
 
 ## Rotation conventions (lock these)
 
-- **Yaw** — rotation around world Y axis. Positive = avatar's head turns to her left (image-right). Anchor: neck position (`body[1]`). (Already pinned by WP-0108.)
-- **Pitch** — rotation around world X axis. Positive = avatar's head tips up (chin lifts). Anchor: same neck position.
-- **Roll** — rotation around world Z axis. Positive = avatar's head tilts to her right shoulder. Anchor: same neck position.
-- **Order**: yaw → pitch → roll (extrinsic, applied in that sequence). Document this order in `rig.ts` and pin via tests.
-- All angles in degrees at the UI; radians at the math layer; conversion at the boundary.
+- **Yaw** — rotation around world/subject Y axis. Positive = avatar's head turns to her left (image-right). Anchor: neck position (`body[1]`). (Already pinned by WP-0108.)
+- **Pitch** — rotation around local X axis. Positive = avatar's head tips up (chin lifts). Anchor: same neck position.
+- **Roll** — rotation around local Z axis. Positive = avatar's head tilts to her right shoulder. Anchor: same neck position.
+- **Order/storage**: Tait-Bryan intrinsic `YXZ` using Three.js `Quaternion` as the stored representation. UI yaw/pitch/roll degrees convert at the boundary with `new Euler(pitch, yaw, roll, 'YXZ')`.
+- All angles in degrees at the UI; radians only at the math/Three.js boundary; persisted head pose is quaternion + explicit order metadata.
 
 ## Field research / prior art
 
@@ -94,18 +106,17 @@ External: OpenRepose `D:\Projects\LLM projects\OpenRepose\.product\src\openrepos
 ### In
 1. `src/pose/rig.ts` — new functions:
    ```ts
-   export function applyPitch(rig: RigData, pitchRadians: number, anchor?: [number, number]): RigData;
-   export function applyRoll(rig: RigData, rollRadians: number, anchor?: [number, number]): RigData;
-   export function applyHeadPose(rig: RigData, pose: { yaw: number; pitch: number; roll: number }, anchor?: [number, number]): RigData;
+   export function applyHeadRotation(rig: RigData, quaternion: QuaternionLike, anchor?: [number, number]): RigData;
+   export function applyHeadPose(rig: RigData, pose: { yaw: number; pitch: number; roll: number; order?: 'YXZ' }, anchor?: [number, number]): RigData;
    ```
-   Applied in yaw → pitch → roll order. `applyHeadPose` is the canonical entry point.
-2. UI: replace single yaw slider with three sliders (yaw, pitch, roll). Default range -90° to +90° per axis. Reset-to-zero buttons per axis. Numeric input alongside each slider for precise values.
-3. Backend: extend `Rig.calibration_json` schema to include a `headPose` field; existing rigs without it default to `{ yaw: 0, pitch: 0, roll: 0 }`. New methods:
+   `applyHeadRotation` is canonical at the math layer; `applyHeadPose` is a convenience wrapper that builds an intrinsic `YXZ` quaternion from UI degrees.
+2. UI: replace single yaw slider with three sliders (yaw, pitch, roll). Default ranges: yaw -90° to +90°, pitch -75° to +75°, roll -45° to +45°. Reset-to-zero buttons per axis. Numeric input alongside each slider for precise values.
+3. Backend: extend `Rig.calibration_json` schema to include a `headPose` field; existing rigs without it default to `{ order: 'YXZ', quaternion: [0, 0, 0, 1], yaw: 0, pitch: 0, roll: 0 }`. New methods:
    - `setRigHeadPose({ rigId, headPose })` — persists to `calibration_json`.
 4. Export: openpose JSON export uses the rotated rig; PNG renders at the current head pose.
 5. Tests:
-   - `test/pose_pitch_roll_math.test.js` — `applyPitch(rig, 0)` is identity; `applyPitch(rig, π/2)` rotates appropriately; same for roll.
-   - `test/pose_head_pose_order.test.js` — verifies yaw→pitch→roll extrinsic order.
+   - `test/pose_pitch_roll_math.test.js` — `applyHeadRotation(rig, identityQuat)` is identity; pitch/roll fixture quaternions rotate appropriately.
+   - `test/pose_head_pose_order.test.js` — verifies intrinsic `YXZ` quaternion composition and save/load round-trip.
    - `test/pose_export_with_head_pose.test.js` — exporting at non-zero pitch/roll produces deterministic PNG bytes.
 6. Spec bump. Manual MANUAL_VERSION bumped. Test suite Section M.4 expanded.
 7. Ship as packaged build.
@@ -116,10 +127,10 @@ External: OpenRepose `D:\Projects\LLM projects\OpenRepose\.product\src\openrepos
 - Animation interpolation. One static pose per rig.
 
 ## Acceptance criteria
-- [ ] Three sliders + numeric inputs render in the Pose tab; reset-to-zero per axis works.
-- [ ] 3D viewport reflects yaw + pitch + roll in real time.
-- [ ] 2D openpose viewport renders correctly at any combination.
-- [ ] `setRigHeadPose` persists; reload restores all three angles byte-exact.
-- [ ] Export PNG at non-zero head pose is deterministic.
-- [ ] Tests pass; existing tests still pass.
-- [ ] Packaged build smoke verifies the feature.
+- [x] Three sliders + numeric inputs render in the Pose tab; reset-to-zero per axis works.
+- [x] 3D viewport reflects yaw + pitch + roll in real time.
+- [x] 2D openpose viewport renders correctly at any combination.
+- [x] `setRigHeadPose` persists; reload restores all three angles byte-exact.
+- [x] Export PNG at non-zero head pose is deterministic.
+- [x] Tests pass; existing tests still pass.
+- [ ] Packaged build smoke verifies the feature. Deferred until the unrelated future-WP planning files are committed or removed from the dirty worktree.

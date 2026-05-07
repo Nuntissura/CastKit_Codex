@@ -25,6 +25,7 @@ test('pose and workflow routes are wired for renderer automation and drawer navi
   assert.match(commandMap, /'openPose'/);
   assert.match(commandMap, /'openWorkflow'/);
   assert.match(commandMap, /'updateRigPose'/);
+  assert.match(commandMap, /'setRigHeadPose'/);
   assert.match(commandMap, /'exportOpenposePng'/);
   assert.match(commandMap, /'getWorkflowHistory'/);
   assert.match(commandMap, /'replayWorkflow'/);
@@ -49,6 +50,10 @@ test('pose and workflow tabs use ARIA tab semantics and stable automation select
   assert.match(pose, /data-action="pose-replay-comfyui"/);
   assert.match(pose, /data-action="pose-openpose-preview"/);
   assert.match(pose, /data-action="pose-save-calibration"/);
+  assert.match(pose, /\['yaw', 'Yaw', 15\]/);
+  assert.match(pose, /\['pitch', 'Pitch', 5\]/);
+  assert.match(pose, /\['roll', 'Roll', 5\]/);
+  assert.match(pose, /data-action=\{`pose-\$\{axis\}-slider`\}/);
   assert.match(workflow, /data-testid="workflow-view"/);
   assert.match(workflow, /data-action="workflow-save-prompt"/);
   assert.match(workflow, /data-action="workflow-save-beat"/);

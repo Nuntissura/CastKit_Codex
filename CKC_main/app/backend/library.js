@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
+const { Euler, Quaternion } = require('three');
 
 const { randomId, sha256Hex } = require('./crypto');
 const { openDb, initSchema, run, get, all, isPostgresDb, dbNotReady } = require('./db');
@@ -3678,9 +3679,43 @@ class CKCLibrary {
     };
   }
 
+  _posekitDefaultHeadPose() {
+    return {
+      schemaVersion: 1,
+      order: 'YXZ',
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      quaternion: [0, 0, 0, 1],
+    };
+  }
+
+  _normalizeRigHeadPose(value = null) {
+    const src = value && typeof value === 'object' ? value : {};
+    const yaw = Number.isFinite(Number(src.yaw)) ? Number(src.yaw) : 0;
+    const pitch = Number.isFinite(Number(src.pitch)) ? Number(src.pitch) : 0;
+    const roll = Number.isFinite(Number(src.roll)) ? Number(src.roll) : 0;
+    const derived = new Quaternion()
+      .setFromEuler(new Euler((pitch * Math.PI) / 180, (yaw * Math.PI) / 180, (roll * Math.PI) / 180, 'YXZ'))
+      .normalize();
+    const derivedQuaternion = [derived.x, derived.y, derived.z, derived.w];
+    const quaternion = Array.isArray(src.quaternion) ? src.quaternion.map((n) => Number(n)) : derivedQuaternion;
+    const q = quaternion.length === 4 && quaternion.every((n) => Number.isFinite(n)) ? quaternion : derivedQuaternion;
+    const len = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+    return {
+      schemaVersion: 1,
+      order: 'YXZ',
+      yaw,
+      pitch,
+      roll,
+      quaternion: q.map((n) => Math.round((n / len) * 1000000) / 1000000),
+    };
+  }
+
   _posekitEmptyCalibration() {
     return {
       schemaVersion: 1,
+      headPose: this._posekitDefaultHeadPose(),
       perKeypoint: {},
       reframer: {
         scale: 1,
@@ -3823,6 +3858,34 @@ class CKCLibrary {
     );
     await this._audit('posekit.rig.calibration.update', existing.characterId, { rigId: id });
     return { ok: true };
+  }
+
+  async setRigHeadPose({ rigId, headPose } = {}) {
+    const id = String(rigId ?? '').trim();
+    if (!id) throw new Error('rigId is required');
+    const existing = await this.getRig({ rigId: id });
+    if (!existing) throw new Error('Rig not found');
+    const base = existing.calibration && typeof existing.calibration === 'object'
+      ? existing.calibration
+      : this._posekitEmptyCalibration();
+    const normalized = this._normalizeRigHeadPose(headPose);
+    const next = {
+      ...this._posekitEmptyCalibration(),
+      ...base,
+      schemaVersion: 1,
+      yaw: normalized.yaw,
+      headPose: normalized,
+    };
+    const calibrationText = JSON.stringify(next);
+    await run(
+      this.db,
+      `UPDATE Rig
+       SET calibration_json = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE rig_id = ?`,
+      [calibrationText, id]
+    );
+    await this._audit('posekit.rig.headPose.set', existing.characterId, { rigId: id, headPose: normalized });
+    return { ok: true, headPose: normalized };
   }
 
   async setRigPortrait({ rigId, portraitImageId } = {}) {

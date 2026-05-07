@@ -60,7 +60,7 @@ The suite is organized so each block can be run independently. Findings get reco
 - C4.3. `setImageMeta` persists `favorite`, `rating`, `notes`, `tags`, `sourceNote`. **Caveat:** the image object returned by `getCharacter().images[]` uses `id` (not `imageId`) — pass it as `imageId: img.id` to `setImageMeta`.
 - C4.4. `setImagesMetaBatch` patches multiple images atomically (BEGIN/COMMIT).
 - C4.5. `listTemplates`, `listAllTags`, `globalSearch` return shape-correct results.
-- C4.6. Pose/Workflow backend commands round-trip: `listRigs`, `getRig`, `createRig`, `updateRigCalibration`, `setRigPortrait`, `listPrompts`, `upsertPrompt`, `deletePrompt`, `listStoryBeats`, `upsertStoryBeat`, `deleteStoryBeat`.
+- C4.6. Pose/Workflow backend commands round-trip: `listRigs`, `getRig`, `createRig`, `updateRigCalibration`, `setRigHeadPose`, `setRigPortrait`, `listPrompts`, `upsertPrompt`, `deletePrompt`, `listStoryBeats`, `upsertStoryBeat`, `deleteStoryBeat`.
 
 ## Section D — Stealth contract (WP-0099 slice 4)
 
@@ -199,7 +199,9 @@ The suite is organized so each block can be run independently. Findings get reco
 - J13. ComfyUI node contract: `comfyui_node_contract.test.js` passes when Python is available. The CKC bridge node exposes ComfyUI class/display mappings under the CKC category.
 - J14. WP-0108 live MediaPipe gate: import at least one image from `D:/Projects/LLM projects/OpenRepose/test_material/image_samples`, open Pose via `openPose`, click `pose-detect`, and verify `listRigs` returns status `ready`, detector provider `mediapipe.tasks-vision.pose+face`, body count 18, face count 70. Latest pass: 2026-05-07 on `1085406391.jpg`, rig `rig_c6af1bc51289088fee604f1de358d3f3`, capture `CKC_GOV/targets/CKC/automation_captures/2026-05-07_152842664Z_no_session_wp-0108-after-wasm-middleware-detect-refreshed.png`.
 - J15. WP-0109 live ComfyUI gate: `getComfyUIStats` reaches `http://127.0.0.1:8188`, `replayWorkflow({ waitForCompletion: true })` submits a real ComfyUI API graph, polls `/history`, fetches `/view`, registers the output image under the target character/rig, and Workflow/Pose captures show the stored run plus enabled replay controls. Latest pass: 2026-05-07 on ComfyUI `0.20.1`, prompt `0b6a5812-f576-4807-8507-8cf89f8d5b87`, output `img_a89994d10d39213b4f65d8b137869e8d`, captures `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155652022Z_no_session_wp-0109-workflow-live-replay.png` and `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155653305Z_no_session_wp-0109-pose-replay-button.png`.
-- J16. Remaining release gate: packaged build smoke repeats J14 and J15 from the packaged app.
+- J16. WP-0110 head-pose gate: `pose_head_pose_math.test.js`, `backend_posekit_crud.test.js`, `posekit_core.test.js`, `posekit_ui_static.test.js`, and `automation_manual_consistency.test.js` pass; Pose toolbar exposes yaw/pitch/roll inputs, sliders, and reset selectors; `setRigHeadPose` persists `Rig.calibration_json.headPose` with intrinsic `YXZ` quaternion and legacy `calibration.yaw` compatibility.
+- J17. WP-0110 live visual/backend gate: import `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, open Pose, detect a rig, call `setRigHeadPose({ yaw: 30, pitch: -15, roll: 10 })`, reload Pose, verify DOM controls show `30`, `-15`, `10`, verify 3D viewport canvas and 1024x1024 openpose preview exist, capture the Pose tools view, and export the preview PNG twice with identical hash. Latest pass: 2026-05-07, rig `rig_d815e8ea6a53933eacdf681f84ce6325`, capture `CKC_GOV/targets/CKC/automation_captures/2026-05-07_175728510Z_no_session_wp-0110-head-pose-live.png`, export hash `15e1ec81aed024e92db747aea026ef073bb9701bab0de25fd8124f80a0273116`.
+- J18. Remaining release gate: packaged build smoke repeats J14, J15, and J17 from the packaged app.
 
 ## Section K - Reset modes (WP-0105)
 
@@ -241,6 +243,17 @@ The agent runs each section by attaching to CDP and evaluating JS in the rendere
 These helpers are not committed — they live under `.tmp/` (operator's local-only). The canonical scripts live in this document; if the helpers go missing, the agent rewrites them from these specs.
 
 ## Findings (latest pass)
+
+### 2026-05-07 - WP-0110 head-pose extension
+- Field research confirmed OpenPose/DWPose/ComfyUI pipelines encode head pose through projected keypoint geometry, not explicit Euler fields; MediaPipe Pose Landmarker also does not provide head yaw/pitch/roll directly. CKC therefore stores the operator-edited PoseKit head pose as intrinsic `YXZ` quaternion data in rig calibration.
+- Product coverage: `createHeadPose`, `normalizeHeadPose`, `applyHeadRotation`, `applyHeadPose`, openpose serialization/rendering, 3D viewport transform, Pose toolbar controls, backend `setRigHeadPose`, IPC/preload/types/manual.
+- Tests passed:
+  - `npm test -- test/backend_posekit_crud.test.js test/pose_head_pose_math.test.js test/posekit_core.test.js test/posekit_ui_static.test.js test/automation_manual_consistency.test.js`
+  - `npx tsc --noEmit`
+  - `npm run build`
+  - `npm test -- --test-reporter=spec` (197 pass, 1 skipped)
+- Live hidden automation passed with `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`: MediaPipe rig `rig_d815e8ea6a53933eacdf681f84ce6325`, persisted `30/-15/10`, capture `2026-05-07_175728510Z_no_session_wp-0110-head-pose-live.png`, deterministic openpose export hash `15e1ec81aed024e92db747aea026ef073bb9701bab0de25fd8124f80a0273116`.
+- During the gate, backend normalization was corrected so angle-only `setRigHeadPose` calls derive the matching quaternion instead of storing identity rotation.
 
 ### 2026-05-07 - WP-0108/WP-0109 functional PoseKit slices
 - Online research refreshed before implementation: MediaPipe Tasks Vision Web, Three.js OrbitControls, ComfyUI server routes, and ARIA tabs. Current package metadata checked before dependency changes; installed React-19-compatible `@mediapipe/tasks-vision`, `three`, `@react-three/fiber`, `@react-three/drei`, and `@types/three`.

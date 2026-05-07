@@ -675,6 +675,7 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'getRig') return lib.getRig(p);
     if (name === 'createRig') return lib.createRig(p);
     if (name === 'updateRigCalibration') return lib.updateRigCalibration(p);
+    if (name === 'setRigHeadPose') return lib.setRigHeadPose(p);
     if (name === 'setRigPortrait') return lib.setRigPortrait(p);
     if (name === 'updateRigPose') return lib.updateRigPose(p);
     if (name === 'exportOpenposePng') return lib.exportOpenposePng(p);
@@ -2091,6 +2092,11 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:updateRigCalibration', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.updateRigCalibration(params || {});
+    });
+
+    ipcMain.handle('ckc:setRigHeadPose', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.setRigHeadPose(params || {});
     });
 
     ipcMain.handle('ckc:setRigPortrait', async (_evt, params) => {

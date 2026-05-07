@@ -100,6 +100,7 @@ contextBridge.exposeInMainWorld('ckc', {
     getRig: (params) => ipcRenderer.invoke('ckc:getRig', params),
     createRig: (params) => ipcRenderer.invoke('ckc:createRig', params),
     updateRigCalibration: (params) => ipcRenderer.invoke('ckc:updateRigCalibration', params),
+    setRigHeadPose: (params) => ipcRenderer.invoke('ckc:setRigHeadPose', params),
     setRigPortrait: (params) => ipcRenderer.invoke('ckc:setRigPortrait', params),
     updateRigPose: (params) => ipcRenderer.invoke('ckc:updateRigPose', params),
     exportOpenposePng: (params) => ipcRenderer.invoke('ckc:exportOpenposePng', params),

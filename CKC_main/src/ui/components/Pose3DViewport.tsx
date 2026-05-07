@@ -2,7 +2,7 @@ import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { LIMB_PAIRS } from '../../posekit/core.mjs';
+import { LIMB_PAIRS, applyHeadPose } from '../../posekit/core.mjs';
 
 type Keypoint = {
   id?: string;
@@ -27,11 +27,12 @@ function Bone({ a, b, width, height, color }: { a: Keypoint; b: Keypoint; width:
   return <Line points={points} color={color} lineWidth={1.8} />;
 }
 
-export function Pose3DViewport({ rig, yaw }: { rig: unknown; yaw: number }) {
-  const rawBody = (rig as { body?: Keypoint[]; canvas?: { width?: number; height?: number } } | null)?.body || [];
-  const body = asBody(rig);
-  const width = Number((rig as { canvas?: { width?: number } } | null)?.canvas?.width || 1024);
-  const height = Number((rig as { canvas?: { height?: number } } | null)?.canvas?.height || 1024);
+export function Pose3DViewport({ rig, headPose }: { rig: unknown; headPose: unknown }) {
+  const transformedRig = React.useMemo(() => applyHeadPose(rig, headPose as never), [rig, headPose]);
+  const rawBody = (transformedRig as { body?: Keypoint[]; canvas?: { width?: number; height?: number } } | null)?.body || [];
+  const body = asBody(transformedRig);
+  const width = Number((transformedRig as { canvas?: { width?: number } } | null)?.canvas?.width || 1024);
+  const height = Number((transformedRig as { canvas?: { height?: number } } | null)?.canvas?.height || 1024);
 
   if (!body.length) {
     return <div style={{ minHeight: 180 }} />;
@@ -42,7 +43,7 @@ export function Pose3DViewport({ rig, yaw }: { rig: unknown; yaw: number }) {
       <color attach="background" args={['#111315']} />
       <ambientLight intensity={0.8} />
       <gridHelper args={[900, 12, '#4f6d74', '#22282b']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -180]} />
-      <group rotation={[0, (yaw * Math.PI) / 180, 0]}>
+      <group>
         {LIMB_PAIRS.map(([ai, bi], index) => {
           const a = rawBody[ai];
           const b = rawBody[bi];

@@ -80,6 +80,30 @@ test('posekit backend: rigs, prompts, story beats, image notes, and tags share o
   await lib.updateRigCalibration({ rigId: createdRig.rigId, calibrationJson: { schemaVersion: 1, yaw: 15 } });
   const updatedRig = await lib.getRig({ rigId: createdRig.rigId });
   assert.equal(updatedRig.calibration.yaw, 15);
+  const headPoseResult = await lib.setRigHeadPose({
+    rigId: createdRig.rigId,
+    headPose: { order: 'YXZ', yaw: 20, pitch: -12, roll: 7, quaternion: [0.1, 0.2, 0.05, 0.97] },
+  });
+  assert.equal(headPoseResult.ok, true);
+  assert.equal(headPoseResult.headPose.order, 'YXZ');
+  const headPoseRig = await lib.getRig({ rigId: createdRig.rigId });
+  assert.equal(headPoseRig.calibration.headPose.yaw, 20);
+  assert.equal(headPoseRig.calibration.headPose.pitch, -12);
+  assert.equal(headPoseRig.calibration.headPose.roll, 7);
+  assert.equal(headPoseRig.calibration.yaw, 20);
+  const derivedHeadPoseResult = await lib.setRigHeadPose({
+    rigId: createdRig.rigId,
+    headPose: { order: 'YXZ', yaw: -30, pitch: 15, roll: 10 },
+  });
+  assert.equal(derivedHeadPoseResult.ok, true);
+  assert.deepEqual(
+    derivedHeadPoseResult.headPose.quaternion.map((n) => Math.round(n * 1000) / 1000),
+    [0.103, -0.267, 0.117, 0.951]
+  );
+  const derivedHeadPoseRig = await lib.getRig({ rigId: createdRig.rigId });
+  assert.equal(derivedHeadPoseRig.calibration.headPose.yaw, -30);
+  assert.equal(derivedHeadPoseRig.calibration.headPose.pitch, 15);
+  assert.equal(derivedHeadPoseRig.calibration.headPose.roll, 10);
 
   await lib.updateRigPose({
     rigId: createdRig.rigId,

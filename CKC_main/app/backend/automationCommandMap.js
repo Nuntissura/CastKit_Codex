@@ -59,6 +59,7 @@ function getAutomationCommandMap() {
             'getRig',
             'createRig',
             'updateRigCalibration',
+            'setRigHeadPose',
             'setRigPortrait',
             'updateRigPose',
             'exportOpenposePng',

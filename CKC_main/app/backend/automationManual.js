@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0106-compat-invariants';
+const MANUAL_VERSION = '2026-05-07.wp-0110-head-pose';
 
 const featureGroups = [
   {
@@ -134,6 +134,7 @@ const featureGroups = [
       'getRig',
       'createRig',
       'updateRigCalibration',
+      'setRigHeadPose',
       'setRigPortrait',
       'updateRigPose',
       'exportOpenposePng',
@@ -154,7 +155,7 @@ const featureGroups = [
     ],
     notes: [
       'Use openPose/openWorkflow for renderer navigation; use backend rig/prompt/beat commands for deterministic data setup.',
-      'PoseKit detection, yaw/calibration transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Local MediaPipe pose + face model assets are bundled for body-18 and face-70 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
+      'PoseKit detection, yaw/pitch/roll head-pose transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Head pose uses intrinsic YXZ order and persists as a quaternion in rig calibration JSON. Local MediaPipe pose + face model assets are bundled for body-18 and face-70 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
       'CKC starts a localhost-only intake endpoint for ComfyUI bridge payloads. automationGetState reports the bound intakePort and whether a token is required.',
       'Prompt and story-beat CRUD is live now and scoped by character when characterId is provided.',
     ],
@@ -747,7 +748,13 @@ const commandReference = [
     id: 'updateRigCalibration',
     target: 'backend',
     description: 'Replace a rig calibration JSON object/string and bump updated_at.',
-    example: { rigId: 'rig_abc', calibrationJson: { schemaVersion: 1, yaw: 0 } },
+    example: { rigId: 'rig_abc', calibrationJson: { schemaVersion: 1, headPose: { order: 'YXZ', yaw: 0, pitch: 0, roll: 0, quaternion: [0, 0, 0, 1] } } },
+  },
+  {
+    id: 'setRigHeadPose',
+    target: 'backend',
+    description: 'Persist yaw/pitch/roll head pose on a rig calibration record. CKC normalizes to intrinsic YXZ order and stores a quaternion plus the UI-degree angles.',
+    example: { rigId: 'rig_abc', headPose: { order: 'YXZ', yaw: 15, pitch: -10, roll: 8, quaternion: [0.085832, 0.136671, 0.057006, 0.98522] } },
   },
   {
     id: 'setRigPortrait',

@@ -11,6 +11,7 @@ export type PoseKitCalibration = {
   schemaVersion: 1;
   activeTool?: string;
   yaw?: number;
+  headPose?: PoseKitHeadPose;
   perKeypoint: Record<
     string,
     {
@@ -27,6 +28,15 @@ export type PoseKitCalibration = {
     anchorPoint?: [number, number];
   };
   visibility: Record<string, boolean>;
+};
+
+export type PoseKitHeadPose = {
+  schemaVersion: 1;
+  order: 'YXZ';
+  yaw: number;
+  pitch: number;
+  roll: number;
+  quaternion: [number, number, number, number];
 };
 
 export type PoseKitRig = {
@@ -89,8 +99,16 @@ export const RENDER_DEFAULTS: {
   handKeypointRadius: number;
 };
 export const YAW_BINS: ReadonlyArray<number>;
+export const HEAD_POSE_ORDER: 'YXZ';
+export const HEAD_POSE_LIMITS: {
+  yaw: readonly [number, number];
+  pitch: readonly [number, number];
+  roll: readonly [number, number];
+};
 
 export function createDefaultCalibration(): PoseKitCalibration;
+export function createHeadPose(params?: { yaw?: number; pitch?: number; roll?: number; order?: 'YXZ' }): PoseKitHeadPose;
+export function normalizeHeadPose(value?: unknown): PoseKitHeadPose;
 export function buildFallbackRig(params?: {
   imageWidth?: number;
   imageHeight?: number;
@@ -116,14 +134,24 @@ export function fitFaceLandmarkerResultToFace70(params?: {
 }): PoseKitKeypoint[];
 export function getRigCanvas(rig: unknown): { width: number; height: number };
 export function applyYaw(rig: unknown, yawDegrees?: number): PoseKitRig;
+export function applyHeadRotation(
+  rig: unknown,
+  quaternion: [number, number, number, number] | { x?: number; y?: number; z?: number; w?: number },
+  anchor?: [number, number] | [number, number, number] | null
+): PoseKitRig;
+export function applyHeadPose(
+  rig: unknown,
+  pose?: Partial<PoseKitHeadPose> | null,
+  anchor?: [number, number] | [number, number, number] | null
+): PoseKitRig;
 export function applyCalibration(rig: unknown, calibration?: PoseKitCalibration | null): PoseKitRig;
 export function rigToOpenposeJson(
   rig: unknown,
-  options?: { yawDegrees?: number; calibration?: PoseKitCalibration | null }
+  options?: { yawDegrees?: number; headPose?: Partial<PoseKitHeadPose> | null; calibration?: PoseKitCalibration | null }
 ): PoseKitOpenposeJson;
 export function withOpenpose(
   rig: unknown,
-  options?: { yawDegrees?: number; calibration?: PoseKitCalibration | null }
+  options?: { yawDegrees?: number; headPose?: Partial<PoseKitHeadPose> | null; calibration?: PoseKitCalibration | null }
 ): PoseKitRig;
 export function getRigStats(rig: unknown): PoseKitRigStats;
 export function renderOpenposeJsonToCanvas(
@@ -134,9 +162,9 @@ export function renderOpenposeJsonToCanvas(
 export function renderRigToCanvas(
   canvas: HTMLCanvasElement,
   rig: unknown,
-  options?: { yawDegrees?: number; calibration?: PoseKitCalibration | null; background?: string; alpha?: boolean }
+  options?: { yawDegrees?: number; headPose?: Partial<PoseKitHeadPose> | null; calibration?: PoseKitCalibration | null; background?: string; alpha?: boolean }
 ): boolean;
 export function openposeJsonText(
   rig: unknown,
-  options?: { yawDegrees?: number; calibration?: PoseKitCalibration | null }
+  options?: { yawDegrees?: number; headPose?: Partial<PoseKitHeadPose> | null; calibration?: PoseKitCalibration | null }
 ): string;

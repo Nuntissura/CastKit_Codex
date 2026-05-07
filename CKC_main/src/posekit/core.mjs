@@ -1,3 +1,5 @@
+import { Euler, Quaternion, Vector3 } from 'three';
+
 export const BODY_18 = [
   { idx: 0, id: 'nose', mpIdx: 0 },
   { idx: 1, id: 'neck', mpIdx: null },
@@ -112,6 +114,81 @@ export const RENDER_DEFAULTS = {
 };
 
 export const YAW_BINS = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
+export const HEAD_POSE_ORDER = 'YXZ';
+export const HEAD_POSE_LIMITS = {
+  yaw: [-90, 90],
+  pitch: [-75, 75],
+  roll: [-45, 45],
+};
+
+function roundPoseValue(value) {
+  return Math.round(finiteNumber(value, 0) * 1000000) / 1000000;
+}
+
+function radToDeg(value) {
+  return (finiteNumber(value, 0) * 180) / Math.PI;
+}
+
+function degToRad(value) {
+  return (finiteNumber(value, 0) * Math.PI) / 180;
+}
+
+function normalizeQuaternionLike(value) {
+  let parts = null;
+  if (Array.isArray(value)) {
+    parts = value;
+  } else if (value && typeof value === 'object') {
+    parts = [value.x, value.y, value.z, value.w];
+  }
+  if (!parts || parts.length < 4) return new Quaternion(0, 0, 0, 1);
+  const q = new Quaternion(
+    finiteNumber(parts[0], 0),
+    finiteNumber(parts[1], 0),
+    finiteNumber(parts[2], 0),
+    finiteNumber(parts[3], 1)
+  );
+  if (!Number.isFinite(q.lengthSq()) || q.lengthSq() <= 0) return new Quaternion(0, 0, 0, 1);
+  return q.normalize();
+}
+
+function quaternionToArray(q) {
+  return [roundPoseValue(q.x), roundPoseValue(q.y), roundPoseValue(q.z), roundPoseValue(q.w)];
+}
+
+export function createHeadPose({ yaw = 0, pitch = 0, roll = 0, order = HEAD_POSE_ORDER } = {}) {
+  const euler = new Euler(degToRad(pitch), degToRad(yaw), degToRad(roll), order === HEAD_POSE_ORDER ? HEAD_POSE_ORDER : HEAD_POSE_ORDER);
+  const q = new Quaternion().setFromEuler(euler).normalize();
+  return {
+    schemaVersion: 1,
+    order: HEAD_POSE_ORDER,
+    yaw: roundPoseValue(yaw),
+    pitch: roundPoseValue(pitch),
+    roll: roundPoseValue(roll),
+    quaternion: quaternionToArray(q),
+  };
+}
+
+export function normalizeHeadPose(value = null) {
+  const src = value && typeof value === 'object' ? value : {};
+  const hasQuaternion = Array.isArray(src.quaternion) || (src.quaternion && typeof src.quaternion === 'object');
+  if (hasQuaternion) {
+    const q = normalizeQuaternionLike(src.quaternion);
+    const e = new Euler().setFromQuaternion(q, HEAD_POSE_ORDER);
+    return {
+      schemaVersion: 1,
+      order: HEAD_POSE_ORDER,
+      yaw: roundPoseValue(src.yaw ?? radToDeg(e.y)),
+      pitch: roundPoseValue(src.pitch ?? radToDeg(e.x)),
+      roll: roundPoseValue(src.roll ?? radToDeg(e.z)),
+      quaternion: quaternionToArray(q),
+    };
+  }
+  return createHeadPose({
+    yaw: finiteNumber(src.yaw, 0),
+    pitch: finiteNumber(src.pitch, 0),
+    roll: finiteNumber(src.roll, 0),
+  });
+}
 
 const FALLBACK_BODY_NORMALIZED = {
   nose: [0.5, 0.18, -0.06],
@@ -168,6 +245,7 @@ function zeroTriples(count) {
 export function createDefaultCalibration() {
   return {
     schemaVersion: 1,
+    headPose: createHeadPose(),
     perKeypoint: {},
     reframer: {
       scale: 1,
@@ -398,6 +476,35 @@ export function applyYaw(rig, yawDegrees = 0) {
   return out;
 }
 
+export function applyHeadRotation(rig, quaternion, anchor = null) {
+  const out = cloneRig(rig);
+  const q = normalizeQuaternionLike(quaternion);
+  if (Math.abs(q.x) < 1e-12 && Math.abs(q.y) < 1e-12 && Math.abs(q.z) < 1e-12 && Math.abs(q.w - 1) < 1e-12) return out;
+
+  const neck = out.body.find((kp) => kp.id === 'neck') || out.body[1] || out.body[0];
+  const anchorX = Array.isArray(anchor) ? finiteNumber(anchor[0], finiteNumber(neck?.x, out.canvas.width / 2)) : finiteNumber(neck?.x, out.canvas.width / 2);
+  const anchorY = Array.isArray(anchor) ? finiteNumber(anchor[1], finiteNumber(neck?.y, out.canvas.height / 2)) : finiteNumber(neck?.y, out.canvas.height / 2);
+  const anchorZ = Array.isArray(anchor) ? finiteNumber(anchor[2], finiteNumber(neck?.z, 0)) : finiteNumber(neck?.z, 0);
+  const focal = Math.max(out.canvas.width, out.canvas.height) * 2.2;
+
+  for (const group of [out.body, out.face, out.handLeft, out.handRight]) {
+    for (const kp of group) {
+      const v = new Vector3(kp.x - anchorX, anchorY - kp.y, kp.z - anchorZ);
+      v.applyQuaternion(q);
+      const perspective = focal / Math.max(1, focal + v.z);
+      kp.x = anchorX + v.x * perspective;
+      kp.y = anchorY - v.y * perspective;
+      kp.z = anchorZ + v.z;
+    }
+  }
+  return out;
+}
+
+export function applyHeadPose(rig, pose = {}, anchor = null) {
+  const normalized = normalizeHeadPose(pose);
+  return applyHeadRotation(rig, normalized.quaternion, anchor);
+}
+
 function keypointConfig(calibration, keypointId) {
   const per = calibration?.perKeypoint && typeof calibration.perKeypoint === 'object' ? calibration.perKeypoint : {};
   return per[keypointId] && typeof per[keypointId] === 'object' ? per[keypointId] : null;
@@ -451,8 +558,11 @@ function roundConfidence(value) {
   return Math.round(clamp(finiteNumber(value, 0), 0, 1) * 10000) / 10000;
 }
 
-export function rigToOpenposeJson(rig, { yawDegrees = 0, calibration = null } = {}) {
-  const transformed = applyCalibration(applyYaw(rig, yawDegrees), calibration);
+export function rigToOpenposeJson(rig, { yawDegrees = 0, headPose = null, calibration = null } = {}) {
+  const poseFromCalibration = calibration && typeof calibration === 'object' ? calibration.headPose : null;
+  const pose = headPose || poseFromCalibration;
+  const rotated = pose ? applyHeadPose(rig, pose) : applyYaw(rig, yawDegrees);
+  const transformed = applyCalibration(rotated, calibration);
   const canvas = getRigCanvas(transformed);
   return {
     version: '1.0',
@@ -563,8 +673,8 @@ export function renderOpenposeJsonToCanvas(canvas, openposeJson, { background = 
   return true;
 }
 
-export function renderRigToCanvas(canvas, rig, { yawDegrees = 0, calibration = null, background = '#000000', alpha = false } = {}) {
-  const openposeJson = rigToOpenposeJson(rig, { yawDegrees, calibration });
+export function renderRigToCanvas(canvas, rig, { yawDegrees = 0, headPose = null, calibration = null, background = '#000000', alpha = false } = {}) {
+  const openposeJson = rigToOpenposeJson(rig, { yawDegrees, headPose, calibration });
   return renderOpenposeJsonToCanvas(canvas, openposeJson, { background, alpha });
 }
 
