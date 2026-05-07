@@ -18,7 +18,7 @@ Notes:
 4. `README.md` (this file)
 
 Then, for context:
-- `CKC_GOV/spec/CastKit_Codex_Spec_v00.072.md` — current spec
+- `CKC_GOV/spec/CastKit_Codex_Spec_v00.073.md` — current spec
 - `CKC_GOV/spec/SESSION_DUMP_2026-02-10.md` — verbatim requirements
 
 You can also run `ckcstart.cmd` at the repo root to print the bootstrap read order.

@@ -46,7 +46,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.072.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.073.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -113,7 +113,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.072.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.073.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`

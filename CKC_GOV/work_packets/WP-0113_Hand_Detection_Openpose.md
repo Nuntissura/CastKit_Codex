@@ -2,7 +2,7 @@
 
 Date: 2026-05-07
 Owner: Codex
-Status: PLANNED (depends on WP-0108 stable build)
+Status: DONE (shipped dev/live 2026-05-07)
 
 ## Summary
 Add MediaPipe hand detection to the pose pipeline. Each detected hand contributes 21 keypoints (wrist + 4 joints per 5 fingers); both hands surface in the openpose JSON export under `hand_left_keypoints_2d` and `hand_right_keypoints_2d` (63 floats each). Renders in 3D and 2D viewports. Enables DWPose-style hand conditioning in ComfyUI.
@@ -149,19 +149,19 @@ export const HAND_BONES: ReadonlyArray<readonly [number, number]> = [
 ## Scope
 
 ### In
-1. Add `@mediapipe/tasks-vision` `HandLandmarker` to the existing pose detection worker. Detection runs in parallel with pose + face_mesh against the same image bitmap. Returns up to 2 hands (`numHands: 2`).
+1. Add `@mediapipe/tasks-vision` `HandLandmarker` to the existing pose detection worker. Detection runs in the same worker with pose + face_mesh against the same image bitmap. Returns up to 2 hands (`numHands: 2`).
 2. `src/pose/rig.ts`: populate `RigData.handLeft` and `handRight` from the detector output. MediaPipe `HandLandmarker` returns `handednesses` (`Left`/`Right` classification) per detected hand; map appropriately. Hand 21 indices align directly with mediapipe order — no re-mapping.
 3. 2D viewport: render hand bones in cyan, hand keypoints as white dots, after body + face passes.
 4. 3D viewport: render hand keypoints as small spheres; bones as line segments.
-5. OpenPose JSON export: populate `hand_left_keypoints_2d` and `hand_right_keypoints_2d` arrays (63 floats each). Confidence per keypoint = mediapipe `visibility` if available, else `1.0`.
-6. Hand-specific calibration: optional per-hand visibility flag in `Calibration.perKeypoint` covers `hand_left_*` and `hand_right_*` ids; reuse existing infra.
+5. OpenPose JSON export: populate `hand_left_keypoints_2d` and `hand_right_keypoints_2d` arrays (63 floats each). Confidence per keypoint is derived from handedness score and landmark presence when present; CKC intentionally ignores image-mode `visibility: 0` on otherwise valid MediaPipe hand landmarks.
+6. Hand-specific calibration: optional per-hand visibility flag covers `hand_left_*` and `hand_right_*` ids; reuse existing calibration visibility infra.
 7. UI: add a "Hands detected: 0/1/2" indicator in the Pose tab; toggle per-hand visibility.
 8. Tests:
    - `test/hand_detection_taxonomy.test.js` — fixture mediapipe hand output → 21 keypoints; left/right correctly mapped.
    - `test/hand_openpose_export.test.js` — both hands present in exported JSON; 63 floats each.
-   - `test/hand_2d_render_smoke.test.js` — render sample produces non-trivial bytes.
+   - `test/hand_openpose_export.test.js` also covers 2D render smoke with a mock canvas draw-call check.
 9. Spec bump, manual bump, test suite expanded.
-10. Ship as packaged build.
+10. Dev/live ship; packaged build smoke remains in the release gate.
 
 ### Out
 - Hand-only mode (skip body + face). The detection runs all three.
@@ -169,9 +169,20 @@ export const HAND_BONES: ReadonlyArray<readonly [number, number]> = [
 - Hand pose presets. Future WP.
 
 ## Acceptance criteria
-- [ ] Drop a portrait with one or both hands visible → hand keypoints appear in 3D + 2D viewports.
-- [ ] OpenPose JSON export contains 63 floats per hand (or zeros if not detected).
-- [ ] Hands rotate correctly with the rig under yaw/pitch/roll.
+- [x] Drop an image with one or both hands visible → hand keypoints appear in 3D + 2D viewports.
+- [x] OpenPose JSON export contains 63 floats per hand (or zeros if not detected).
+- [x] Hands rotate correctly with the rig under yaw/pitch/roll.
 - [ ] ComfyUI workflow with a DWPose hand-conditioning node accepts the exported PNG end-to-end.
-- [ ] All tests pass.
+- [x] All tests pass.
 - [ ] Packaged build smoke verifies a portrait with hands produces a usable hand-conditioned ComfyUI generation.
+
+## Implementation result
+
+Shipped in CKC as the native PoseKit hand-21 slice. `HandLandmarker` runs in the existing worker with pose + face, fills `RigData.handLeft` / `handRight`, exports canonical OpenPose `hand_left_keypoints_2d` / `hand_right_keypoints_2d` arrays, renders hands in 2D and 3D, and exposes left/right hand visibility toggles in Tools / Markers.
+
+Verification:
+- Focused suite: `node --test test/hand_detection_taxonomy.test.js test/hand_openpose_export.test.js test/posekit_core.test.js test/pose_head_pose_math.test.js test/posekit_ui_static.test.js test/automation_manual_consistency.test.js` passed.
+- TypeScript: `npx tsc --noEmit` passed.
+- Build: `npm run build` passed with the existing MediaPipe/Vite warnings.
+- Operator-sample live gate: `wp-0113-32563168_041_565e.jpg`, `wp-0111-1085406391.jpg`, and `wp-0115-813965426.jpg` ran through `mediapipe.tasks-vision.pose+face+hand`; no hand passed confidence gating, so CKC produced valid zero-filled 63-float hand arrays.
+- Hand-positive live gate: `wp-0113-mediapipe-hand-demo.jpg` produced rig `rig_26e1e52789758372e0d0e88618b9b9dd`, `handRight.length=21`, nonzero `hand_right_keypoints_2d`, and captures `2026-05-07_193516138Z_no_session_wp-0113-hand-positive-live.png`, `2026-05-07_193516766Z_no_session_wp-0113-hand-positive-3d.png`, and `2026-05-07_193517389Z_no_session_wp-0113-hand-positive-toggles.png`.

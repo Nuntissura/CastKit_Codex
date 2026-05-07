@@ -53,6 +53,10 @@ test('pose and workflow tabs use ARIA tab semantics and stable automation select
   assert.match(pose, /data-action="pose-identity-panel"/);
   assert.match(pose, /data-action="pose-replay-comfyui"/);
   assert.match(pose, /data-action="pose-openpose-preview"/);
+  assert.match(pose, /data-action="pose-hands-detected"/);
+  assert.match(pose, /data-action="pose-hand-visibility-controls"/);
+  assert.match(pose, /data-action="pose-toggle-left-hand"/);
+  assert.match(pose, /data-action="pose-toggle-right-hand"/);
   assert.match(pose, /data-action="pose-save-calibration"/);
   assert.match(pose, /\['yaw', 'Yaw', 15\]/);
   assert.match(pose, /\['pitch', 'Pitch', 5\]/);

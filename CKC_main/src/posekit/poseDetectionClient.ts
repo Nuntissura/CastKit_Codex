@@ -9,6 +9,7 @@ type DetectPoseParams = {
   timeoutMs?: number;
   poseModelAssetPath?: string | null;
   faceModelAssetPath?: string | null;
+  handModelAssetPath?: string | null;
 };
 
 type WorkerResult = {
@@ -124,7 +125,7 @@ export async function detectPoseFromImage(params: DetectPoseParams): Promise<{
         fallback: true,
         durationMs: Math.round(performance.now() - startedAt),
       });
-    }, Math.max(1000, params.timeoutMs || 15000));
+    }, Math.max(1000, params.timeoutMs || 30000));
 
     worker.onmessage = (event: MessageEvent<WorkerResult>) => {
       const payload = event.data;
@@ -168,6 +169,7 @@ export async function detectPoseFromImage(params: DetectPoseParams): Promise<{
       portraitImageId: params.portraitImageId || '',
       poseModelAssetPath: params.poseModelAssetPath || defaultAssetUrl('pose_landmarker_lite.task'),
       faceModelAssetPath: params.faceModelAssetPath || defaultAssetUrl('face_landmarker.task'),
+      handModelAssetPath: params.handModelAssetPath || defaultAssetUrl('hand_landmarker.task'),
     };
 
     if (bitmap) worker.postMessage(message, [bitmap]);

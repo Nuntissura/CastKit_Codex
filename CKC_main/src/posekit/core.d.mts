@@ -86,6 +86,7 @@ export const BODY_18: ReadonlyArray<{ idx: number; id: string; mpIdx: number | n
 export const LIMB_PAIRS: ReadonlyArray<readonly [number, number]>;
 export const LIMB_COLORS_BGR: ReadonlyArray<readonly [number, number, number]>;
 export const HAND_CONNECTIONS: ReadonlyArray<readonly [number, number]>;
+export const HAND_21: ReadonlyArray<{ idx: number; id: string }>;
 export const MP_FACEMESH_TO_OPENPOSE_70: ReadonlyArray<number>;
 export const RENDER_DEFAULTS: {
   bodyKeypointDotRgb: readonly [number, number, number];
@@ -132,6 +133,13 @@ export function fitFaceLandmarkerResultToFace70(params?: {
   canvasWidth?: number;
   canvasHeight?: number;
 }): PoseKitKeypoint[];
+export function fitHandLandmarkerResultToHands(params?: {
+  handResult?: unknown;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  minHandDetectionConfidence?: number;
+  minLandmarkConfidence?: number;
+}): { handLeft: PoseKitKeypoint[]; handRight: PoseKitKeypoint[] };
 export function getRigCanvas(rig: unknown): { width: number; height: number };
 export function applyYaw(rig: unknown, yawDegrees?: number): PoseKitRig;
 export function applyHeadRotation(

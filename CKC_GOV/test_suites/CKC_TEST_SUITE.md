@@ -203,7 +203,9 @@ The suite is organized so each block can be run independently. Findings get reco
 - J17. WP-0110 live visual/backend gate: import `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, open Pose, detect a rig, call `setRigHeadPose({ yaw: 30, pitch: -15, roll: 10 })`, reload Pose, verify DOM controls show `30`, `-15`, `10`, verify 3D viewport canvas and 1024x1024 openpose preview exist, capture the Pose tools view, and export the preview PNG twice with identical hash. Latest pass: 2026-05-07, rig `rig_d815e8ea6a53933eacdf681f84ce6325`, capture `CKC_GOV/targets/CKC/automation_captures/2026-05-07_175728510Z_no_session_wp-0110-head-pose-live.png`, export hash `15e1ec81aed024e92db747aea026ef073bb9701bab0de25fd8124f80a0273116`.
 - J18. WP-0111 identity profile gate: `identity_profile_crud.test.js`, `identity_profile_replay_injection.test.js`, `backend_posekit_workflow.test.js`, `posekit_ui_static.test.js`, and `automation_manual_consistency.test.js` pass; Pose tab exposes the Identity panel; Workflow replay exposes the Identity profile dropdown; `replayWorkflow({ identityProfileId })` injects identity references into the CKC ComfyUI bridge node.
 - J19. WP-0111 live visual/backend gate: import `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, open Pose, detect a MediaPipe rig, create an identity profile, verify `listIdentityProfiles` returns a cropped 512x512 face image under `images/identity/`, capture the Pose Identity panel, open Workflow, and capture the replay identity selector. Latest pass: 2026-05-07, profile `idp_562fb122ff50282c7f697a30ae362fc2`, crop `images/identity/d7f57768109c90a0.png`, captures `CKC_GOV/targets/CKC/automation_captures/2026-05-07_185915473Z_no_session_wp-0111-identity-panel.png` and `CKC_GOV/targets/CKC/automation_captures/2026-05-07_185916851Z_no_session_wp-0111-workflow-identity-dropdown.png`.
-- J20. Remaining release gate: packaged build smoke repeats J14, J15, J17, and J19 from the packaged app.
+- J20. WP-0113 hand-keypoint gate: `hand_detection_taxonomy.test.js`, `hand_openpose_export.test.js`, `posekit_core.test.js`, `pose_head_pose_math.test.js`, `posekit_ui_static.test.js`, and `automation_manual_consistency.test.js` pass; `npm run build` passes; `HAND_21` maps MediaPipe hand output to OpenPose arrays without index remap.
+- J21. WP-0113 live visual/backend gate: run the operator sample images through Pose detection and verify `mediapipe.tasks-vision.pose+face+hand` plus valid zero-filled 63-float arrays when no hand passes gating. Run `wp-0113-mediapipe-hand-demo.jpg`, verify `handRight.length=21`, nonzero `hand_right_keypoints_2d`, `hands 1/2` UI text, 2D/3D captures, and left/right hand visibility controls. Latest pass: 2026-05-07, rig `rig_26e1e52789758372e0d0e88618b9b9dd`, captures `CKC_GOV/targets/CKC/automation_captures/2026-05-07_193516138Z_no_session_wp-0113-hand-positive-live.png`, `2026-05-07_193516766Z_no_session_wp-0113-hand-positive-3d.png`, and `2026-05-07_193517389Z_no_session_wp-0113-hand-positive-toggles.png`.
+- J22. Remaining release gate: packaged build smoke repeats J14, J15, J17, J19, and J21 from the packaged app.
 
 ## Section K - Reset modes (WP-0105)
 
@@ -245,6 +247,16 @@ The agent runs each section by attaching to CDP and evaluating JS in the rendere
 These helpers are not committed — they live under `.tmp/` (operator's local-only). The canonical scripts live in this document; if the helpers go missing, the agent rewrites them from these specs.
 
 ## Findings (latest pass)
+
+### 2026-05-07 - WP-0113 hand detection + openpose hand keypoints
+- Field research confirmed MediaPipe HandLandmarker is the right browser-side model for this WP, while DWPose/HaMeR/HandRefiner remain downstream or heavier alternatives. OpenPose/ComfyUI interop uses `hand_left_keypoints_2d` and `hand_right_keypoints_2d` as 63-float arrays.
+- Product coverage: bundled `hand_landmarker.task`, `HAND_21`, `fitHandLandmarkerResultToHands`, worker `HandLandmarker` integration, OpenPose hand export, 2D/3D rendering, Pose hand count, and left/right hand visibility toggles.
+- Tests passed:
+  - `node --test test/hand_detection_taxonomy.test.js test/hand_openpose_export.test.js test/posekit_core.test.js test/pose_head_pose_math.test.js test/posekit_ui_static.test.js test/automation_manual_consistency.test.js`
+  - `npx tsc --noEmit`
+  - `npm run build`
+- Live automation passed. Operator samples ran through `mediapipe.tasks-vision.pose+face+hand` and produced valid zero-filled hand arrays when no hand passed gating. The MediaPipe hand demo reference produced `handRight.length=21`, nonzero `hand_right_keypoints_2d`, and captures `2026-05-07_193516138Z_no_session_wp-0113-hand-positive-live.png`, `2026-05-07_193516766Z_no_session_wp-0113-hand-positive-3d.png`, and `2026-05-07_193517389Z_no_session_wp-0113-hand-positive-toggles.png`.
+- During the live gate, CKC corrected hand confidence handling: MediaPipe JS image-mode can emit valid hand landmarks with `visibility: 0`, so the fitter gates on presence when present and otherwise on handedness confidence.
 
 ### 2026-05-07 - WP-0111 identity export profiles
 - Field research confirmed current ComfyUI identity-preservation practice centers on stable face-reference images and node-specific extraction for IPAdapter FaceID, InstantID, PuLID, and face-swap packs. CKC therefore ships a portable identity profile bundle now and leaves heavyweight embedding caches for a later dependency-specific WP.

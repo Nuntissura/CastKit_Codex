@@ -2,7 +2,7 @@ import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { LIMB_PAIRS, applyHeadPose } from '../../posekit/core.mjs';
+import { HAND_CONNECTIONS, LIMB_PAIRS, applyHeadPose } from '../../posekit/core.mjs';
 
 type Keypoint = {
   id?: string;
@@ -18,6 +18,11 @@ function asBody(rig: unknown): Keypoint[] {
   return Array.isArray(body) ? body.filter((kp) => Number(kp?.visibility ?? 0) > 0) : [];
 }
 
+function asKeypoints(rig: unknown, field: 'handLeft' | 'handRight'): Keypoint[] {
+  const group = (rig as { handLeft?: Keypoint[]; handRight?: Keypoint[] } | null)?.[field];
+  return Array.isArray(group) ? group.filter((kp) => Number(kp?.visibility ?? 0) > 0) : [];
+}
+
 function pointToVector(kp: Keypoint, width: number, height: number) {
   return new THREE.Vector3(kp.x - width / 2, height / 2 - kp.y, Number(kp.z || 0) * 0.15);
 }
@@ -29,8 +34,13 @@ function Bone({ a, b, width, height, color }: { a: Keypoint; b: Keypoint; width:
 
 export function Pose3DViewport({ rig, headPose }: { rig: unknown; headPose: unknown }) {
   const transformedRig = React.useMemo(() => applyHeadPose(rig, headPose as never), [rig, headPose]);
-  const rawBody = (transformedRig as { body?: Keypoint[]; canvas?: { width?: number; height?: number } } | null)?.body || [];
+  const raw = transformedRig as { body?: Keypoint[]; handLeft?: Keypoint[]; handRight?: Keypoint[]; canvas?: { width?: number; height?: number } } | null;
+  const rawBody = raw?.body || [];
+  const rawLeftHand = raw?.handLeft || [];
+  const rawRightHand = raw?.handRight || [];
   const body = asBody(transformedRig);
+  const leftHand = asKeypoints(transformedRig, 'handLeft');
+  const rightHand = asKeypoints(transformedRig, 'handRight');
   const width = Number((transformedRig as { canvas?: { width?: number } } | null)?.canvas?.width || 1024);
   const height = Number((transformedRig as { canvas?: { height?: number } } | null)?.canvas?.height || 1024);
 
@@ -55,6 +65,25 @@ export function Pose3DViewport({ rig, headPose }: { rig: unknown; headPose: unkn
             <sphereGeometry args={[kp.estimated ? 8 : 6, 12, 12]} />
             <meshBasicMaterial color={kp.estimated ? '#e6a23b' : '#f7f3e8'} />
           </mesh>
+        ))}
+        {[
+          { key: 'left', raw: rawLeftHand, visible: leftHand, color: '#6fe7ff' },
+          { key: 'right', raw: rawRightHand, visible: rightHand, color: '#8df5d2' },
+        ].map((hand) => (
+          <React.Fragment key={hand.key}>
+            {HAND_CONNECTIONS.map(([ai, bi]) => {
+              const a = hand.raw[ai];
+              const b = hand.raw[bi];
+              if (!a || !b || Number(a.visibility || 0) <= 0 || Number(b.visibility || 0) <= 0) return null;
+              return <Bone key={`${hand.key}-${ai}-${bi}`} a={a} b={b} width={width} height={height} color={hand.color} />;
+            })}
+            {hand.visible.map((kp, index) => (
+              <mesh key={`${hand.key}-${kp.id || 'hand'}-${index}`} position={pointToVector(kp, width, height)}>
+                <sphereGeometry args={[4, 10, 10]} />
+                <meshBasicMaterial color="#ffffff" />
+              </mesh>
+            ))}
+          </React.Fragment>
         ))}
       </group>
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />

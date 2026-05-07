@@ -1,4 +1,4 @@
-import { buildFallbackRig, fitFaceLandmarkerResultToFace70, fitPoseLandmarkerResultToRig, withOpenpose } from './core.mjs';
+import { buildFallbackRig, fitFaceLandmarkerResultToFace70, fitHandLandmarkerResultToHands, fitPoseLandmarkerResultToRig, withOpenpose } from './core.mjs';
 import ModuleFactory from '@mediapipe/tasks-vision/vision_wasm_module_internal.js';
 
 const wasmModuleFactory =
@@ -28,6 +28,7 @@ type DetectRequest = {
   portraitImageId?: string;
   poseModelAssetPath?: string;
   faceModelAssetPath?: string;
+  handModelAssetPath?: string;
 };
 
 async function createTask<T>(
@@ -93,6 +94,7 @@ async function runMediapipe(request: DetectRequest) {
     (task) => task.close()
   );
   let face: { detect: (image: ImageBitmap) => unknown; close: () => void } | null = null;
+  let hand: { detect: (image: ImageBitmap) => unknown; close: () => void } | null = null;
   try {
     if (request.faceModelAssetPath) {
       face = await createTask(
@@ -106,6 +108,23 @@ async function runMediapipe(request: DetectRequest) {
             numFaces: 1,
             outputFaceBlendshapes: false,
             outputFacialTransformationMatrixes: false,
+          }),
+        (task) => task.close()
+      );
+    }
+    if (request.handModelAssetPath) {
+      hand = await createTask(
+        (delegate) =>
+          vision.HandLandmarker.createFromOptions(fileset, {
+            baseOptions: {
+              modelAssetPath: request.handModelAssetPath,
+              delegate,
+            },
+            runningMode: 'IMAGE',
+            numHands: 2,
+            minHandDetectionConfidence: 0.5,
+            minHandPresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
           }),
         (task) => task.close()
       );
@@ -132,10 +151,37 @@ async function runMediapipe(request: DetectRequest) {
         rig.detector.provider = 'mediapipe.tasks-vision.pose+face';
       }
     }
+    if (hand) {
+      const handResult = hand.detect(request.imageBitmap);
+      const hands = fitHandLandmarkerResultToHands({
+        handResult,
+        canvasWidth: request.canvasWidth,
+        canvasHeight: request.canvasHeight,
+      });
+      rig.handLeft = hands.handLeft;
+      rig.handRight = hands.handRight;
+      const parts = ['pose'];
+      if (face) parts.push('face');
+      parts.push('hand');
+      rig.detector.provider = `mediapipe.tasks-vision.${parts.join('+')}`;
+      if (!rig.handLeft.length && !rig.handRight.length) {
+        const resultShape = handResult && typeof handResult === 'object' ? handResult : {};
+        const landmarksCount = Array.isArray((resultShape as { landmarks?: unknown[] }).landmarks)
+          ? (resultShape as { landmarks: unknown[] }).landmarks.length
+          : 0;
+        const handednessCount = Array.isArray((resultShape as { handednesses?: unknown[] }).handednesses)
+          ? (resultShape as { handednesses: unknown[] }).handednesses.length
+          : Array.isArray((resultShape as { handedness?: unknown[] }).handedness)
+            ? (resultShape as { handedness: unknown[] }).handedness.length
+            : 0;
+        rig.detector.detail = rig.detector.detail || `HandLandmarker ran; no hand passed confidence gating. raw=${landmarksCount}/${handednessCount}`;
+      }
+    }
     return withOpenpose(rig);
   } finally {
     pose.close();
     face?.close();
+    hand?.close();
   }
 }
 

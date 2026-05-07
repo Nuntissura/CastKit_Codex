@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0111-identity-profiles';
+const MANUAL_VERSION = '2026-05-07.wp-0113-hand-keypoints';
 
 const featureGroups = [
   {
@@ -124,7 +124,7 @@ const featureGroups = [
   {
     id: 'pose-rig-workflow',
     title: 'Pose, rigs, workflow prompts, and story beats',
-    wp: ['WP-0107', 'WP-0108', 'WP-0109', 'WP-0110', 'WP-0111'],
+    wp: ['WP-0107', 'WP-0108', 'WP-0109', 'WP-0110', 'WP-0111', 'WP-0113'],
     summary:
       'The Pose and Workflow tabs share CKC characters, images, tags, notes, prompts, story beats, rigs, identity profiles, and ComfyUI workflow lineage through the same database and automation pipeline.',
     commands: [
@@ -160,7 +160,8 @@ const featureGroups = [
     ],
     notes: [
       'Use openPose/openWorkflow for renderer navigation; use backend rig/prompt/beat commands for deterministic data setup.',
-      'PoseKit detection, yaw/pitch/roll head-pose transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Head pose uses intrinsic YXZ order and persists as a quaternion in rig calibration JSON. Local MediaPipe pose + face model assets are bundled for body-18 and face-70 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
+      'PoseKit detection, yaw/pitch/roll head-pose transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Head pose uses intrinsic YXZ order and persists as a quaternion in rig calibration JSON. Local MediaPipe pose + face + hand model assets are bundled for body-18, face-70, and hand-21 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
+      'Hand detection fills hand_left_keypoints_2d and hand_right_keypoints_2d with canonical OpenPose 21-point arrays when MediaPipe HandLandmarker passes confidence gating. The Pose tab shows hands 0/2, renders hand bones in 2D/3D, and exposes left/right hand visibility toggles in Tools / Markers.',
       'Identity profiles store a 512x512 content-hash face reference under images/identity plus deterministic face-70 measurements and replay bridge metadata. Workflow replay can inject a selected profile into CastKitCodexBridge identity inputs when the workflow exposes them.',
       'CKC starts a localhost-only intake endpoint for ComfyUI bridge payloads. automationGetState reports the bound intakePort and whether a token is required.',
       'Prompt and story-beat CRUD is live now and scoped by character when characterId is provided.',

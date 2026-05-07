@@ -3,6 +3,7 @@ import { Pose3DViewport } from '../components/Pose3DViewport';
 import { detectPoseFromImage } from '../../posekit/poseDetectionClient';
 import {
   BODY_18,
+  HAND_21,
   HEAD_POSE_LIMITS,
   createDefaultCalibration,
   createHeadPose,
@@ -124,6 +125,9 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
   }, [draftRig, selectedRig?.pose]);
 
   const rigStats = React.useMemo(() => (activeRig ? getRigStats(activeRig) : null), [activeRig]);
+  const handDetectedCount = (rigStats?.leftHandCount ? 1 : 0) + (rigStats?.rightHandCount ? 1 : 0);
+  const leftHandVisible = HAND_21.every((kp: { id: string }) => calibration.visibility[`hand_left_${kp.id}`] !== false);
+  const rightHandVisible = HAND_21.every((kp: { id: string }) => calibration.visibility[`hand_right_${kp.id}`] !== false);
 
   const refreshCharacters = React.useCallback(async () => {
     const list = await window.ckc.listCharacters({ queryText: '', tagFilters: [] });
@@ -296,7 +300,9 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
       }
       setSelectedRigId(rigId);
       setRightTab('inspector');
-      setStatus(`${detection.fallback ? 'Fallback rig' : 'Pose detected'} in ${detection.durationMs} ms`);
+      const stats = getRigStats(detection.rig);
+      const handCount = (stats.leftHandCount ? 1 : 0) + (stats.rightHandCount ? 1 : 0);
+      setStatus(`${detection.fallback ? 'Fallback rig' : 'Pose detected'} in ${detection.durationMs} ms; hands ${handCount}/2`);
       await refreshCharacter();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -463,6 +469,17 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     });
   }
 
+  function setHandVisible(side: 'left' | 'right', visible: boolean) {
+    const prefix = side === 'left' ? 'hand_left' : 'hand_right';
+    updateCalibration((current) => {
+      const visibility = { ...current.visibility };
+      for (const kp of HAND_21) {
+        visibility[`${prefix}_${kp.id}`] = visible;
+      }
+      return { ...current, visibility };
+    });
+  }
+
   function setReframerField(field: 'scale' | 'offsetX' | 'offsetY' | 'anchor', value: number | string) {
     updateCalibration((current) => ({
       ...current,
@@ -587,6 +604,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
               <span>{headPose.yaw} / {headPose.pitch} / {headPose.roll} deg</span>
               <span>{selectedRig ? selectedRig.status : 'draft'}</span>
               <span>{rigStats ? `${rigStats.visibleBody}/${rigStats.bodyCount}` : 'no pose'}</span>
+              <span data-action="pose-hands-detected">{rigStats ? `hands ${handDetectedCount}/2` : 'hands 0/2'}</span>
             </div>
           </div>
           <div className={styles.previewRow}>
@@ -598,6 +616,8 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
               <strong>{rigStats?.detectorStatus || 'none'}</strong>
               <span>Provider</span>
               <strong>{rigStats?.detectorProvider || 'none'}</strong>
+              <span>Hands</span>
+              <strong>{rigStats ? `${handDetectedCount}/2` : '0/2'}</strong>
             </div>
           </div>
           <div className={styles.filmstrip} aria-label="Images">
@@ -707,6 +727,16 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
                   ) : null}
                   {toolTab === 'markers' ? (
                     <div className={styles.markerList}>
+                      <div className={styles.handToggleRow} data-action="pose-hand-visibility-controls">
+                        <label className={styles.checkRow}>
+                          <input type="checkbox" checked={leftHandVisible} onChange={(event) => setHandVisible('left', event.target.checked)} data-action="pose-toggle-left-hand" />
+                          <span>Left hand</span>
+                        </label>
+                        <label className={styles.checkRow}>
+                          <input type="checkbox" checked={rightHandVisible} onChange={(event) => setHandVisible('right', event.target.checked)} data-action="pose-toggle-right-hand" />
+                          <span>Right hand</span>
+                        </label>
+                      </div>
                       {BODY_18.map((kp: { id: string }) => {
                         const cfg = (calibration.perKeypoint as Record<string, { visible?: boolean; offsetXY?: [number, number] }>)[kp.id] || {};
                         const offset = cfg.offsetXY || [0, 0];

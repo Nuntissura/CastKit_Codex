@@ -84,6 +84,30 @@ export const HAND_CONNECTIONS = [
   [19, 20],
 ];
 
+export const HAND_21 = [
+  { idx: 0, id: 'wrist' },
+  { idx: 1, id: 'thumb_cmc' },
+  { idx: 2, id: 'thumb_mcp' },
+  { idx: 3, id: 'thumb_ip' },
+  { idx: 4, id: 'thumb_tip' },
+  { idx: 5, id: 'index_mcp' },
+  { idx: 6, id: 'index_pip' },
+  { idx: 7, id: 'index_dip' },
+  { idx: 8, id: 'index_tip' },
+  { idx: 9, id: 'middle_mcp' },
+  { idx: 10, id: 'middle_pip' },
+  { idx: 11, id: 'middle_dip' },
+  { idx: 12, id: 'middle_tip' },
+  { idx: 13, id: 'ring_mcp' },
+  { idx: 14, id: 'ring_pip' },
+  { idx: 15, id: 'ring_dip' },
+  { idx: 16, id: 'ring_tip' },
+  { idx: 17, id: 'pinky_mcp' },
+  { idx: 18, id: 'pinky_pip' },
+  { idx: 19, id: 'pinky_dip' },
+  { idx: 20, id: 'pinky_tip' },
+];
+
 // Face 70 taxonomy from the historical OpenPose contract:
 // OpenRepose .product/src/openrepose/openpose_schema.py:84-121.
 // Index = OpenPose face-70 index; value = MediaPipe FaceMesh index.
@@ -105,7 +129,7 @@ export const RENDER_DEFAULTS = {
   bodyKeypointDotRgb: [255, 255, 255],
   faceKeypointDotRgb: [255, 255, 255],
   handKeypointDotRgb: [255, 255, 255],
-  handLineRgb: [255, 255, 0],
+  handLineRgb: [0, 255, 255],
   bodyLineThickness: 4,
   handLineThickness: 2,
   bodyKeypointRadius: 4,
@@ -409,6 +433,85 @@ export function fitFaceLandmarkerResultToFace70({
       estimated: false,
     };
   });
+}
+
+function topHandednessCategory(handedness) {
+  const list = Array.isArray(handedness)
+    ? handedness
+    : Array.isArray(handedness?.categories)
+      ? handedness.categories
+      : [];
+  let best = null;
+  for (const item of list) {
+    const label = String(item?.categoryName || item?.displayName || item?.label || '').toLowerCase();
+    const score = finiteNumber(item?.score ?? item?.confidence, label ? 1 : 0);
+    if (!best || score > best.score) {
+      best = {
+        label,
+        score,
+      };
+    }
+  }
+  return best || { label: '', score: 0 };
+}
+
+function handLandmarkConfidence(lm) {
+  // HandLandmarker's JS image-mode results can expose `visibility: 0` on
+  // valid 2D landmarks. Gate on presence when present; otherwise rely on
+  // handedness confidence from the palm/hand classifier.
+  return clamp(finiteNumber(lm?.presence, 1), 0, 1);
+}
+
+export function fitHandLandmarkerResultToHands({
+  handResult,
+  canvasWidth = 1024,
+  canvasHeight = 1024,
+  minHandDetectionConfidence = 0.5,
+  minLandmarkConfidence = 0.5,
+} = {}) {
+  const canvas = normalizeCanvasSize(canvasWidth, canvasHeight);
+  const landmarksByHand = Array.isArray(handResult?.landmarks) ? handResult.landmarks : [];
+  const worldByHand = Array.isArray(handResult?.worldLandmarks) ? handResult.worldLandmarks : [];
+  const handednesses = Array.isArray(handResult?.handednesses)
+    ? handResult.handednesses
+    : Array.isArray(handResult?.handedness)
+      ? handResult.handedness
+      : [];
+  const out = { handLeft: [], handRight: [] };
+  const scores = { handLeft: -1, handRight: -1 };
+
+  for (let handIndex = 0; handIndex < landmarksByHand.length; handIndex += 1) {
+    const landmarks = Array.isArray(landmarksByHand[handIndex]) ? landmarksByHand[handIndex] : [];
+    if (landmarks.length < HAND_21.length) continue;
+    const handedness = topHandednessCategory(handednesses[handIndex]);
+    const target = handedness.label === 'left' ? 'handLeft' : handedness.label === 'right' ? 'handRight' : null;
+    if (!target || handedness.score < minHandDetectionConfidence) continue;
+
+    const landmarkConfidence =
+      landmarks.reduce((sum, lm) => sum + handLandmarkConfidence(lm), 0) / Math.max(1, Math.min(landmarks.length, HAND_21.length));
+    if (landmarkConfidence < minLandmarkConfidence) continue;
+
+    const world = Array.isArray(worldByHand[handIndex]) ? worldByHand[handIndex] : [];
+    const hand = HAND_21.map((entry) => {
+      const lm = landmarks[entry.idx] || {};
+      const wm = world[entry.idx] || null;
+      return {
+        id: `${target === 'handLeft' ? 'hand_left' : 'hand_right'}_${entry.id}`,
+        x: finiteNumber(lm.x, 0) * canvas.width,
+        y: finiteNumber(lm.y, 0) * canvas.height,
+        z: finiteNumber(wm?.z ?? lm.z, 0) * Math.max(canvas.width, canvas.height),
+        visibility: clamp(Math.min(handedness.score || 1, handLandmarkConfidence(lm)), 0, 1),
+        estimated: false,
+      };
+    });
+
+    if (handedness.score > scores[target]) {
+      out[target] = hand;
+      scores[target] = handedness.score;
+    }
+  }
+
+  return out;
 }
 
 function cloneKeypoint(kp) {
