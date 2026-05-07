@@ -117,8 +117,10 @@ function normalizeConfig(config) {
         cfg.database = {};
     }
     const rawProvider = String(cfg.database.provider || '').trim().toLowerCase();
-    if (!rawProvider || rawProvider === 'sqlite' || rawProvider === 'sqlite3') {
+    if (!rawProvider) {
         cfg.database.provider = 'postgres';
+    } else if (rawProvider === 'sqlite' || rawProvider === 'sqlite3') {
+        cfg.database.provider = 'sqlite';
     }
     if (String(cfg.database.provider || '').trim().toLowerCase() === 'postgres') {
         cfg.database.host = cfg.database.host || '127.0.0.1';
@@ -1434,6 +1436,13 @@ function registerIpcHandlers() {
         try {
             const lib = await ensureLibrary();
             diagnostics = await lib.getDiagnostics({ quick: true });
+            if (!intakeServerHandle) {
+                try {
+                    await startCkcIntakeServer();
+                } catch (err) {
+                    intakeServerError = err;
+                }
+            }
         } catch (err) {
             diagnostics = { ok: false, error: String(err?.message || err || 'Unknown error') };
         }

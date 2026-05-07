@@ -78,7 +78,27 @@ test('posekit workflow: ComfyUI intake stores lineage, dedupes, extracts prompts
   assert.deepEqual(extracted.positive, ['clean portrait lighting']);
 
   let postedBody = null;
+  const replayImageBytes = Buffer.from('comfy-output-image');
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/history/prompt-test') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        'prompt-test': {
+          status: { status_str: 'success', completed: true },
+          outputs: {
+            9: {
+              images: [{ filename: 'ckc-replay-output.png', subfolder: '', type: 'output' }],
+            },
+          },
+        },
+      }));
+      return;
+    }
+    if (req.method === 'GET' && req.url?.startsWith('/view?')) {
+      res.setHeader('Content-Type', 'image/png');
+      res.end(replayImageBytes);
+      return;
+    }
     if (req.method !== 'POST' || req.url !== '/prompt') {
       res.statusCode = 404;
       res.end('{}');
@@ -94,10 +114,17 @@ test('posekit workflow: ComfyUI intake stores lineage, dedupes, extracts prompts
   });
   const port = await listen(server);
   t.after(() => server.close());
-  const replay = await lib.replayWorkflow({ host: `http://127.0.0.1:${port}`, workflowJson: workflow, characterId });
+  const replay = await lib.replayWorkflow({ host: `http://127.0.0.1:${port}`, workflowJson: workflow, characterId, waitForCompletion: true, pollMs: 10 });
   assert.equal(replay.ok, true);
   assert.equal(replay.promptId, 'prompt-test');
   assert.equal(postedBody.prompt['1'].inputs.text, 'clean portrait lighting');
+  assert.equal(replay.historyStatus.completed, true);
+  assert.equal(replay.registeredOutputs.length, 1);
+  assert.equal(replay.registeredOutputs[0].filename, 'ckc-replay-output.png');
+  assert.equal(replay.registeredOutputs[0].deduped, false);
+
+  const afterReplay = await lib.getWorkflowHistory({ characterId });
+  assert.equal(afterReplay.length, 2);
 
   lib.close();
 });

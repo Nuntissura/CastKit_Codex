@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.posekit-comfyui';
+const MANUAL_VERSION = '2026-05-07.wp-0109-live-fallback';
 
 const featureGroups = [
   {
@@ -758,8 +758,8 @@ const commandReference = [
   {
     id: 'replayWorkflow',
     target: 'backend',
-    description: 'Submit workflow JSON to ComfyUI /prompt. Uses configured ComfyUI host unless host is supplied in params.',
-    example: { host: 'http://127.0.0.1:8188', workflowJson: {}, characterId: 'char_001', rigId: 'rig_abc' },
+    description: 'Submit workflow JSON to ComfyUI /prompt. When waitForCompletion is true, poll /history, fetch /view image outputs, and register them under the target character as a fallback for workflows that use SaveImage instead of the CKC bridge node.',
+    example: { host: 'http://127.0.0.1:8188', workflowJson: {}, characterId: 'char_001', rigId: 'rig_abc', waitForCompletion: true },
   },
   {
     id: 'getComfyUIStats',

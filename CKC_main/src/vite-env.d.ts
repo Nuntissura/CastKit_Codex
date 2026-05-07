@@ -840,7 +840,26 @@ interface Window {
       rigId?: string | null;
       openposeRef?: string | null;
       clientId?: string | null;
-    }) => Promise<{ ok: true; promptId: string | null; number: number | null; nodeErrors: Record<string, unknown>; clientId: string }>;
+      waitForCompletion?: boolean;
+      timeoutMs?: number;
+      pollMs?: number;
+    }) => Promise<{
+      ok: true;
+      promptId: string | null;
+      number: number | null;
+      nodeErrors: Record<string, unknown>;
+      clientId: string;
+      historyStatus?: unknown;
+      registeredOutputs?: Array<{
+        nodeId: string;
+        filename: string;
+        subfolder: string;
+        type: string;
+        imageId: string | null;
+        relativePath: string | null;
+        deduped: boolean;
+      }>;
+    }>;
     getComfyUIStats: (params?: { host?: string } | null) => Promise<{ ok: true; stats: unknown }>;
     listPrompts: (params?: { characterId?: string | null; kind?: string | null } | null) => Promise<CKCPrompt[]>;
     upsertPrompt: (params: {

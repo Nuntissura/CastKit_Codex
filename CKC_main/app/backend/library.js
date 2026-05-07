@@ -4128,7 +4128,37 @@ class CKCLibrary {
     return { ok: true, ...this._extractPromptDataFromWorkflow(workflowJson) };
   }
 
-  async replayWorkflow({ host = 'http://127.0.0.1:8188', workflowJson, characterId = null, rigId = null, openposeRef = null, clientId = null } = {}) {
+  _extractComfyHistoryImages(historyEntry) {
+    const outputs = historyEntry?.outputs && typeof historyEntry.outputs === 'object' ? historyEntry.outputs : {};
+    const images = [];
+    for (const [nodeId, output] of Object.entries(outputs)) {
+      const nodeImages = Array.isArray(output?.images) ? output.images : [];
+      for (const image of nodeImages) {
+        if (!image || typeof image !== 'object') continue;
+        const filename = String(image.filename || '').trim();
+        if (!filename) continue;
+        images.push({
+          nodeId,
+          filename,
+          subfolder: String(image.subfolder || ''),
+          type: String(image.type || 'output'),
+        });
+      }
+    }
+    return images;
+  }
+
+  async replayWorkflow({
+    host = 'http://127.0.0.1:8188',
+    workflowJson,
+    characterId = null,
+    rigId = null,
+    openposeRef = null,
+    clientId = null,
+    waitForCompletion = false,
+    timeoutMs = 300000,
+    pollMs = 2000,
+  } = {}) {
     const cid = characterId == null ? null : String(characterId).trim() || null;
     if (cid) await this._assertCharacterExists(cid);
     if (rigId) {
@@ -4139,12 +4169,54 @@ class CKCLibrary {
     const patched = this._injectBridgeNodeInputs(workflowJson, { characterId: cid, rigId, openposeRef });
     const replayClientId = String(clientId || `ckc-replay-${randomId('session_')}`);
     const result = await comfyuiClient.postPrompt({ host, workflowJson: patched, clientId: replayClientId });
+    const promptId = result.prompt_id || result.promptId || null;
+    const registeredOutputs = [];
+    let historyStatus = null;
+
+    if (waitForCompletion && promptId) {
+      const historyEntry = await comfyuiClient.pollHistory({ host, promptId, timeoutMs, pollMs });
+      historyStatus = historyEntry?.status || null;
+      if (cid) {
+        for (const image of this._extractComfyHistoryImages(historyEntry)) {
+          const bytes = await comfyuiClient.getImageBytes({ host, filename: image.filename, subfolder: image.subfolder, type: image.type });
+          const stored = await this.registerComfyUIOutput({
+            schema: 'ckc.intake.comfyui_output@1',
+            character_id: cid,
+            rig_id: rigId || null,
+            openpose_ref: openposeRef || null,
+            image_b64: bytes.toString('base64'),
+            filename_hint: image.filename,
+            workflow_json: patched,
+            metadata: {
+              title: 'comfyui replay',
+              prompt_id: promptId,
+              node_id: image.nodeId,
+              filename: image.filename,
+              subfolder: image.subfolder,
+              type: image.type,
+              replay_client_id: replayClientId,
+              fallback_source: 'history-view',
+            },
+            session_id: replayClientId,
+          });
+          registeredOutputs.push({
+            ...image,
+            imageId: stored.imageId || stored.image_id || null,
+            relativePath: stored.relativePath || stored.relative_path || null,
+            deduped: !!stored.deduped,
+          });
+        }
+      }
+    }
+
     return {
       ok: true,
-      promptId: result.prompt_id || result.promptId || null,
+      promptId,
       number: result.number ?? null,
       nodeErrors: result.node_errors || result.nodeErrors || {},
       clientId: replayClientId,
+      historyStatus,
+      registeredOutputs,
     };
   }
 

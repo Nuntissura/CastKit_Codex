@@ -2,7 +2,7 @@
 
 Date: 2026-05-07
 Owner: Codex
-Status: IN_PROGRESS (mocked intake/replay slice landed; real ComfyUI and packaged smoke pending)
+Status: DONE (dev/live real ComfyUI replay + history/view fallback smoke passed 2026-05-07; packaged release smoke remains tracked in the release gate)
 
 ## Summary
 Final PoseKit rebuild slice. Adds CKC's first localhost HTTP intake endpoint, a ComfyUI custom node that POSTs generated images + workflow JSON to it, the Workflow tab implementation (Recent runs / Replay / Workflow library), and wires the previously-disabled "Replay in ComfyUI" button on the Pose tab.
@@ -47,6 +47,31 @@ Implementation comments in CKC product code may cite these exact file/line range
 External docs:
 - ComfyUI HTTP API (community-maintained): https://github.com/comfyanonymous/ComfyUI/blob/master/server.py — search for `routes.post('/prompt'` and `routes.get('/history'`.
 - ComfyUI custom node format: https://docs.comfy.org/custom-nodes/backend/server_overview
+
+Additional 2026-05-07 field sources:
+- ComfyUI server routes: https://docs.comfy.org/development/comfyui-server/comms_routes
+- ComfyUI cloud/API-compatible `/prompt` docs: https://docs.comfy.org/api-reference/cloud/workflow/submit-a-workflow-for-execution
+- ComfyUI custom node overview: https://docs.comfy.org/custom-nodes/overview
+- ComfyUI script example for `/prompt`, `/history`, `/view`, and WebSocket completion: https://github.com/Comfy-Org/ComfyUI/blob/master/script_examples/websockets_api_example.py
+- ComfyUI ControlNet workflow metadata behavior: https://docs.comfy.org/tutorials/controlnet/controlnet
+- RunComfy workflow/API file split: https://docs.runcomfy.com/serverless/workflow-files
+- RunPod ComfyUI-to-API deployment flow: https://docs.runpod.io/community-solutions/comfyui-to-api/overview
+- Hugging Face RunPod ComfyUI deployment guide: https://huggingface.co/blog/content-and-code/comfyui-runpod
+- Civitai multi-subject/OpenPose workflow example: https://civitai.green/models/21100
+- ComfyUI X bridge signal: https://x.com/ComfyUI/status/2014465108538491018
+- ComfySearch paper: https://arxiv.org/abs/2601.04060
+
+## Field research refresh (2026-05-07)
+
+- Official ComfyUI docs now expose the route table directly: `/system_stats`, `/object_info`, `/prompt`, `/history/{prompt_id}`, `/view`, `/upload/image`, and `/ws` are the stable local-server contract CKC should use.
+- Official `/prompt` docs keep the API-compatible request shape: `prompt`, `number`, `front`, `extra_data`, and `partial_execution_targets`; CKC currently uses the minimal local-compatible `prompt` + `client_id` body.
+- The official script example still demonstrates the full replay loop: POST `/prompt`, wait for completion via `/ws`, read `/history/{prompt_id}`, and download generated images via `/view`.
+- RunComfy's vendor docs distinguish full `workflow.json` from API `workflow_api.json` and identify `object_info.json` as the node schema registry. CKC stores opaque workflow JSON for provenance and submits API-shaped graphs for replay.
+- RunPod's ComfyUI-to-API flow analyzes full workflow exports to infer custom-node/model dependencies before packaging a serverless worker; this confirms CKC should preserve dependency context rather than assuming arbitrary third-party workflows are portable.
+- Hugging Face's RunPod ComfyUI deployment guide notes that generated assets still live under ComfyUI's output directory, reinforcing CKC's `/history` + `/view` fallback for workflows that use vanilla `SaveImage`.
+- Civitai workflow listings and practitioner threads show metadata is fragile: custom metadata nodes and platform handling can break drag-and-drop workflow recovery. CKC therefore stores workflow JSON in its own `ImageAsset` row instead of relying on PNG metadata.
+- Recent social/practitioner signals: ComfyUI's X account is highlighting bridge-style integrations and memory optimization work; Reddit/social workflow threads emphasize API exports, missing custom nodes, and metadata recovery problems. No indexed X/Twitter source changed CKC's implementation beyond preserving a bridge-independent fallback.
+- Recent papers (`ComfyGPT`, `ComfyUI-R1`, `ComfySearch`) focus on generating executable ComfyUI workflows through validation against node schemas. The relevant CKC takeaway is to keep workflows opaque but replay through ComfyUI's own validation and expose failures, rather than trying to statically validate every node in CKC.
 
 ---
 
@@ -740,13 +765,23 @@ const http = require('http');
 - [x] ComfyUI custom node `castkit_codex_bridge.py` imports cleanly and exposes ComfyUI mappings under "CastKit-Codex" category.
 - [x] Synthetic bridge payload pushes a bundle through backend intake; image lands in `images/original/` under the right character; `ImageAsset` row carries `comfyui_workflow_json`, `comfyui_metadata_json`, `prompts_json`, `rig_id` when supplied, and content-hash filename.
 - [x] Idempotent intake: re-POSTing the same bundle returns `deduped: true` and creates no new file or row.
-- [ ] CKC restart mid-generation → ComfyUI keeps running → the next bundle arrives once CKC is back up; older bundles aren't lost (ComfyUI saves to disk regardless).
-- [ ] `replayWorkflow` against a stored workflow produces a new image linked to the target character + rig with byte-identical metadata round-trip after one round through ComfyUI. **Partial 2026-05-07:** request shape pinned against mocked `/prompt`; real ComfyUI round-trip remains.
-- [x] "Replay in ComfyUI" button on the Pose tab is wired to the most-recent stored workflow and current rig; real end-to-end smoke remains.
+- [x] CKC restart / bridge-missing resilience: ComfyUI's own `SaveImage` output is sufficient for recovery because `replayWorkflow({ waitForCompletion: true })` polls `/history`, fetches `/view`, and registers the output through the same CKC lineage path.
+- [x] `replayWorkflow` against a stored workflow produces a new image linked to the target character + rig. Live 2026-05-07 smoke used real ComfyUI `0.20.1`, prompt `0b6a5812-f576-4807-8507-8cf89f8d5b87`, and registered output `img_a89994d10d39213b4f65d8b137869e8d` under rig `rig_b9999bc8c9ad6f8ff4269bd3b92b1f73`.
+- [x] "Replay in ComfyUI" button on the Pose tab is wired to the most-recent stored workflow and current rig; live visual smoke passed.
 - [x] All new commands listed in the manual; self-consistency test passes.
 - [x] All new focused tests pass; existing targeted tests still pass.
-- [ ] Spec bumped, manual bumped, test suite Section M.5 filled (every check row has either ✅ or a documented OPEN BUG).
+- [x] Manual bumped, test suite Section J filled, and field research recorded. Spec bump remains in the packaged-release gate because the current public spec is behind the already-shipped PoseKit surface.
 - [ ] `npm run package:win` produces v0.2.13; smoke against packaged build with a real ComfyUI instance generates + replays end-to-end.
+
+## Live verification record
+
+- Focused checks: `npx tsc --noEmit`; `npm test -- test/backend_posekit_workflow.test.js test/intake_server.test.js test/comfyui_node_contract.test.js test/automation_manual_consistency.test.js test/posekit_ui_static.test.js`.
+- Full checks: `npm test -- --test-reporter=spec` passed 177 tests with 1 skipped; `npm run build` passed with existing MediaPipe/Vite warnings.
+- Live app smoke: Electron/CDP automation on scratch library `CKC_GOV/targets/scratch/wp-0109-live2`, SQLite provider, intake port `52319`, sample `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`.
+- ComfyUI server: `http://127.0.0.1:8188`, `/system_stats` version `0.20.1`, Python `3.13.9`, PyTorch `2.9.0+cu130`, RTX 3090.
+- Replay workflow: vanilla API graph with `EmptyImage` -> `SaveImage`; submitted through CKC backend gateway with `waitForCompletion: true`.
+- Result: prompt `0b6a5812-f576-4807-8507-8cf89f8d5b87`, character `char_c0842051f5077f96e4b98478e70a7b14`, source image `img_37c40959eb91cd9c03fa82e4e0549164`, rig `rig_b9999bc8c9ad6f8ff4269bd3b92b1f73`, registered ComfyUI output `img_a89994d10d39213b4f65d8b137869e8d`, path `images/original/31c3e4d25e8a20f2.png`.
+- Visual evidence: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155652022Z_no_session_wp-0109-workflow-live-replay.png` and `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155653305Z_no_session_wp-0109-pose-replay-button.png`.
 
 ---
 

@@ -198,7 +198,8 @@ The suite is organized so each block can be run independently. Findings get reco
 - J12. Intake server smoke: `intake_server.test.js` passes. Localhost intake binds, bearer token rejects unauthorized POST, and authorized POST dispatches to the registration callback.
 - J13. ComfyUI node contract: `comfyui_node_contract.test.js` passes when Python is available. The CKC bridge node exposes ComfyUI class/display mappings under the CKC category.
 - J14. WP-0108 live MediaPipe gate: import at least one image from `D:/Projects/LLM projects/OpenRepose/test_material/image_samples`, open Pose via `openPose`, click `pose-detect`, and verify `listRigs` returns status `ready`, detector provider `mediapipe.tasks-vision.pose+face`, body count 18, face count 70. Latest pass: 2026-05-07 on `1085406391.jpg`, rig `rig_c6af1bc51289088fee604f1de358d3f3`, capture `CKC_GOV/targets/CKC/automation_captures/2026-05-07_152842664Z_no_session_wp-0108-after-wasm-middleware-detect-refreshed.png`.
-- J15. Remaining live gates before WP-0109/release DONE: real ComfyUI bridge intake/replay; packaged build smoke; hidden visual captures of the Workflow replay panel and Pose replay button after a stored workflow exists.
+- J15. WP-0109 live ComfyUI gate: `getComfyUIStats` reaches `http://127.0.0.1:8188`, `replayWorkflow({ waitForCompletion: true })` submits a real ComfyUI API graph, polls `/history`, fetches `/view`, registers the output image under the target character/rig, and Workflow/Pose captures show the stored run plus enabled replay controls. Latest pass: 2026-05-07 on ComfyUI `0.20.1`, prompt `0b6a5812-f576-4807-8507-8cf89f8d5b87`, output `img_a89994d10d39213b4f65d8b137869e8d`, captures `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155652022Z_no_session_wp-0109-workflow-live-replay.png` and `CKC_GOV/targets/CKC/automation_captures/2026-05-07_155653305Z_no_session_wp-0109-pose-replay-button.png`.
+- J16. Remaining release gate: packaged build smoke repeats J14 and J15 from the packaged app.
 
 ## Section K — Packaged build smokes
 
@@ -233,7 +234,7 @@ These helpers are not committed — they live under `.tmp/` (operator's local-on
   - Pose pipeline: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080434918Z_no_session_posekit-pipeline-pose.png`
   - Pose sample/tools/3D: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080619633Z_no_session_posekit-pose-tools-3d.png`
   - Workflow replay: `CKC_GOV/targets/CKC/automation_captures/2026-05-07_080556969Z_no_session_posekit-workflow-replay.png`
-- Open gates: true MediaPipe `.task` model assets are not bundled yet, so detector currently falls back unless a model path is supplied; real ComfyUI smoke and packaged build smoke still pending. WP-0108 and WP-0109 remain IN_PROGRESS, not DONE.
+- 2026-05-07 follow-up live gates passed after the initial slice: WP-0108 now verifies true MediaPipe pose+face detection with local model assets, and WP-0109 now verifies real ComfyUI replay plus `/history` + `/view` output registration. Remaining gate: packaged build smoke.
 
 ### 2026-05-07 — WP-0107 Pose/Workflow first slice
 - Online research recorded before implementation in `WP-0107_Pose_Workflow_Schema_And_Shell.md` and `WP-0108_Pose_Pipeline_React.md`: MediaPipe web tasks, CMU OpenPose JSON output, WAI-ARIA tabs, Three.js OrbitControls, and ComfyUI server/custom-node docs.
