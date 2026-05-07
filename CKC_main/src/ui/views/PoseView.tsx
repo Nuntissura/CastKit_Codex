@@ -13,7 +13,7 @@ import {
 } from '../../posekit/core.mjs';
 import styles from './poseView.module.css';
 
-type RightTab = 'inspector' | 'tools' | 'library' | 'log';
+type RightTab = 'inspector' | 'tools' | 'library' | 'identity' | 'log';
 type ToolTab = 'calibration' | 'markers' | 'reframer';
 
 type PoseViewProps = {
@@ -90,6 +90,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
   const [character, setCharacter] = React.useState<CKCCharacter | null>(null);
   const [selectedImageId, setSelectedImageId] = React.useState<string | null>(initialImageId);
   const [rigs, setRigs] = React.useState<CKCRig[]>([]);
+  const [identityProfiles, setIdentityProfiles] = React.useState<CKCIdentityProfile[]>([]);
   const [selectedRigId, setSelectedRigId] = React.useState<string | null>(null);
   const [latestWorkflow, setLatestWorkflow] = React.useState<CKCWorkflowHistoryItem | null>(null);
   const [draftRig, setDraftRig] = React.useState<unknown | null>(null);
@@ -139,14 +140,20 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     if (!id) {
       setCharacter(null);
       setRigs([]);
+      setIdentityProfiles([]);
       setSelectedRigId(null);
       setDraftRig(null);
       return;
     }
 
-    const [detail, rigList] = await Promise.all([window.ckc.getCharacter(id), window.ckc.listRigs({ characterId: id })]);
+    const [detail, rigList, profileList] = await Promise.all([
+      window.ckc.getCharacter(id),
+      window.ckc.listRigs({ characterId: id }),
+      window.ckc.listIdentityProfiles({ characterId: id }),
+    ]);
     setCharacter(detail);
     setRigs(Array.isArray(rigList) ? rigList : []);
+    setIdentityProfiles(Array.isArray(profileList) ? profileList : []);
     setSelectedRigId((current) => {
       if (current && rigList.some((rig) => rig.rigId === current)) return current;
       return rigList[0]?.rigId ?? null;
@@ -367,6 +374,46 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     }
   }
 
+  async function createIdentityProfile() {
+    const cid = String(characterId ?? '').trim();
+    const imageId = selectedImage?.id;
+    if (!cid || !imageId) {
+      setError('Select a character image first.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.ckc.createIdentityProfile({
+        characterId: cid,
+        sourceImageId: imageId,
+        sourceRigId: selectedRig?.portraitImageId === imageId ? selectedRig.rigId : null,
+        name: `identity_${identityProfiles.length + 1}`,
+      });
+      setRightTab('identity');
+      setStatus(`Identity profile saved ${result.profileId}`);
+      await refreshCharacter();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteIdentityProfile(profileId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.ckc.deleteIdentityProfile({ profileId });
+      setStatus(`Identity profile deleted ${profileId}`);
+      await refreshCharacter();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function updateCalibration(mutator: (draft: Calibration) => Calibration) {
     setCalibration((current) => {
       const next = mutator(safeCalibration(current, headPose, toolTab));
@@ -430,6 +477,7 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
     { id: 'inspector', label: 'Inspector' },
     { id: 'tools', label: 'Tools' },
     { id: 'library', label: 'Library' },
+    { id: 'identity', label: 'Identity' },
     { id: 'log', label: 'Log' },
   ];
   const toolTabs: Array<{ id: ToolTab; label: string }> = [
@@ -515,6 +563,9 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
         </button>
         <button type="button" className={styles.button} onClick={exportOpenpose} disabled={busy || !activeRig || !selectedRig} data-action="pose-export-openpose">
           Export openpose
+        </button>
+        <button type="button" className={styles.button} onClick={createIdentityProfile} disabled={busy || !selectedImage} data-action="pose-create-identity-profile">
+          Identity
         </button>
         <button type="button" className={styles.button} onClick={replayLatestWorkflow} disabled={busy || !latestWorkflow || !selectedRig} data-action="pose-replay-comfyui">
           Replay
@@ -726,6 +777,35 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
               </div>
             ) : null}
 
+            {rightTab === 'identity' ? (
+              <div className={styles.stack} data-action="pose-identity-panel">
+                <button type="button" className={styles.primaryButton} onClick={createIdentityProfile} disabled={busy || !selectedImage} data-action="pose-identity-create">
+                  Create from image
+                </button>
+                <div className={styles.dataRow}>
+                  <span>Profiles</span>
+                  <strong>{identityProfiles.length}</strong>
+                </div>
+                {identityProfiles.length ? (
+                  identityProfiles.map((profile) => (
+                    <div key={profile.profileId} className={styles.identityItem} data-profile-id={profile.profileId}>
+                      <img src={imageUrl(profile.croppedFaceImageId)} alt={profile.name || profile.profileId} />
+                      <div>
+                        <strong>{profile.name || profile.profileId}</strong>
+                        <span>{profile.sourceRigId || 'no rig'}</span>
+                        <code>{profile.cropRelativePath || profile.croppedFaceImageId}</code>
+                      </div>
+                      <button type="button" className={styles.smallButton} onClick={() => deleteIdentityProfile(profile.profileId)} disabled={busy} data-action="pose-identity-delete">
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.emptyPanel}>No identity profiles</div>
+                )}
+              </div>
+            ) : null}
+
             {rightTab === 'log' ? (
               <div className={styles.stack}>
                 <div className={styles.statusLine}>{status}</div>
@@ -737,6 +817,10 @@ export function PoseView({ initialCharacterId, initialImageId, onSelectCharacter
                 <div className={styles.dataRow}>
                   <span>Images</span>
                   <strong>{character?.images?.length || 0}</strong>
+                </div>
+                <div className={styles.dataRow}>
+                  <span>Identities</span>
+                  <strong>{identityProfiles.length}</strong>
                 </div>
               </div>
             ) : null}

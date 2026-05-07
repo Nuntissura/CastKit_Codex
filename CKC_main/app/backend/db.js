@@ -13,6 +13,7 @@ const POSTGRES_TABLE_ORDER = [
   'ProtectedField',
   'ImageAsset',
   'Rig',
+  'IdentityProfile',
   'Prompt',
   'StoryBeat',
   'RigTag',
@@ -464,6 +465,33 @@ async function ensureSchemaUpgrades(db) {
     CREATE INDEX IF NOT EXISTS idx_rig_character ON Rig(character_id);
     CREATE INDEX IF NOT EXISTS idx_rig_portrait ON Rig(portrait_image_id);
     CREATE INDEX IF NOT EXISTS idx_rig_updated ON Rig(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS IdentityProfile (
+      profile_id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      source_image_id TEXT NOT NULL,
+      source_rig_id TEXT,
+      cropped_face_image_id TEXT NOT NULL,
+      crop_relative_path TEXT,
+      manifest_relative_path TEXT,
+      face_landmarks_json TEXT NOT NULL DEFAULT '[]',
+      feature_measurements_json TEXT NOT NULL DEFAULT '{}',
+      pose_metadata_json TEXT NOT NULL DEFAULT '{}',
+      bridge_payload_json TEXT NOT NULL DEFAULT '{}',
+      deleted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(character_id) REFERENCES Character(character_id) ON DELETE CASCADE,
+      FOREIGN KEY(source_image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE,
+      FOREIGN KEY(source_rig_id) REFERENCES Rig(rig_id) ON DELETE SET NULL,
+      FOREIGN KEY(cropped_face_image_id) REFERENCES ImageAsset(image_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_identity_profile_character ON IdentityProfile(character_id, deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_identity_profile_source_image ON IdentityProfile(source_image_id);
+    CREATE INDEX IF NOT EXISTS idx_identity_profile_source_rig ON IdentityProfile(source_rig_id);
+    CREATE INDEX IF NOT EXISTS idx_identity_profile_crop_image ON IdentityProfile(cropped_face_image_id);
 
     CREATE TABLE IF NOT EXISTS Prompt (
       prompt_id TEXT PRIMARY KEY,

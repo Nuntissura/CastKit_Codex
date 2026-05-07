@@ -16,7 +16,7 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0110-head-pose';
+const MANUAL_VERSION = '2026-05-07.wp-0111-identity-profiles';
 
 const featureGroups = [
   {
@@ -124,9 +124,9 @@ const featureGroups = [
   {
     id: 'pose-rig-workflow',
     title: 'Pose, rigs, workflow prompts, and story beats',
-    wp: ['WP-0107', 'WP-0108', 'WP-0109'],
+    wp: ['WP-0107', 'WP-0108', 'WP-0109', 'WP-0110', 'WP-0111'],
     summary:
-      'The Pose and Workflow tabs share CKC characters, images, tags, notes, prompts, story beats, rigs, and future ComfyUI workflow lineage through the same database and automation pipeline.',
+      'The Pose and Workflow tabs share CKC characters, images, tags, notes, prompts, story beats, rigs, identity profiles, and ComfyUI workflow lineage through the same database and automation pipeline.',
     commands: [
       'openPose',
       'openWorkflow',
@@ -138,6 +138,11 @@ const featureGroups = [
       'setRigPortrait',
       'updateRigPose',
       'exportOpenposePng',
+      'listIdentityProfiles',
+      'getIdentityProfile',
+      'createIdentityProfile',
+      'updateIdentityProfile',
+      'deleteIdentityProfile',
       'registerComfyUIOutput',
       'getWorkflowHistory',
       'extractPromptFromWorkflow',
@@ -156,6 +161,7 @@ const featureGroups = [
     notes: [
       'Use openPose/openWorkflow for renderer navigation; use backend rig/prompt/beat commands for deterministic data setup.',
       'PoseKit detection, yaw/pitch/roll head-pose transforms, openpose JSON, and content-hash openpose PNG export are wired through the backend. Head pose uses intrinsic YXZ order and persists as a quaternion in rig calibration JSON. Local MediaPipe pose + face model assets are bundled for body-18 and face-70 detection; the worker falls back to a deterministic body-18 rig when assets or image bitmap creation fail.',
+      'Identity profiles store a 512x512 content-hash face reference under images/identity plus deterministic face-70 measurements and replay bridge metadata. Workflow replay can inject a selected profile into CastKitCodexBridge identity inputs when the workflow exposes them.',
       'CKC starts a localhost-only intake endpoint for ComfyUI bridge payloads. automationGetState reports the bound intakePort and whether a token is required.',
       'Prompt and story-beat CRUD is live now and scoped by character when characterId is provided.',
     ],
@@ -775,6 +781,36 @@ const commandReference = [
     example: { rigId: 'rig_abc', pngBase64: 'data:image/png;base64,...', width: 1024, height: 1024 },
   },
   {
+    id: 'listIdentityProfiles',
+    target: 'backend',
+    description: 'List non-deleted identity profiles, optionally scoped to one character. Profiles include the cropped face ImageAsset id, manifest path, feature measurements, and replay bridge payload.',
+    example: { characterId: 'char_001' },
+  },
+  {
+    id: 'getIdentityProfile',
+    target: 'backend',
+    description: 'Return one identity profile by profileId. Pass includeDeleted=true only for audit/recovery reads.',
+    example: { profileId: 'idp_abc' },
+  },
+  {
+    id: 'createIdentityProfile',
+    target: 'backend',
+    description: 'Create an identity profile from a rigged portrait. CKC reads the source rig face landmarks, writes a deterministic 512x512 PNG under images/identity, stores measurements, and creates a manifest sidecar under identity_profiles/.',
+    example: { characterId: 'char_001', sourceImageId: 'img_001', sourceRigId: 'rig_abc', name: 'identity_1' },
+  },
+  {
+    id: 'updateIdentityProfile',
+    target: 'backend',
+    description: 'Update identity profile metadata only. The locked crop, landmarks, and measurements are not rewritten.',
+    example: { profileId: 'idp_abc', name: 'front_identity_v2', description: 'front lit reference' },
+  },
+  {
+    id: 'deleteIdentityProfile',
+    target: 'backend',
+    description: 'Soft-delete an identity profile. The cropped face image remains on disk and the ImageAsset row is not deleted.',
+    example: { profileId: 'idp_abc' },
+  },
+  {
     id: 'registerComfyUIOutput',
     target: 'backend',
     description: 'Register one ComfyUI bridge payload: decode image bytes, store the image under the target character, and attach workflow/metadata/prompt lineage.',
@@ -795,8 +831,8 @@ const commandReference = [
   {
     id: 'replayWorkflow',
     target: 'backend',
-    description: 'Submit workflow JSON to ComfyUI /prompt. When waitForCompletion is true, poll /history, fetch /view image outputs, and register them under the target character as a fallback for workflows that use SaveImage instead of the CKC bridge node.',
-    example: { host: 'http://127.0.0.1:8188', workflowJson: {}, characterId: 'char_001', rigId: 'rig_abc', waitForCompletion: true },
+    description: 'Submit workflow JSON to ComfyUI /prompt. When identityProfileId is supplied, CKC injects identity_profile_id/ref/image fields into CastKitCodexBridge nodes that expose those inputs. When waitForCompletion is true, CKC polls /history, fetches /view image outputs, and registers them under the target character as a fallback for workflows that use SaveImage instead of the CKC bridge node.',
+    example: { host: 'http://127.0.0.1:8188', workflowJson: {}, characterId: 'char_001', rigId: 'rig_abc', identityProfileId: 'idp_abc', waitForCompletion: true },
   },
   {
     id: 'getComfyUIStats',

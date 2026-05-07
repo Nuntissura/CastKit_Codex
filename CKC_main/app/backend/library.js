@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const zlib = require('zlib');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const { Euler, Quaternion } = require('three');
@@ -42,6 +43,74 @@ function docTargetType(docType) {
 
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buffer) {
+  let c = 0xffffffff;
+  for (const byte of buffer) c = CRC32_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data = Buffer.alloc(0)) {
+  const typeBytes = Buffer.from(type, 'ascii');
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 0);
+  return Buffer.concat([len, typeBytes, data, crc]);
+}
+
+function createRgbaPng({ width = 512, height = 512, seed = '', accent = [177, 129, 77] } = {}) {
+  const w = Math.max(1, Math.min(4096, Math.round(Number(width) || 512)));
+  const h = Math.max(1, Math.min(4096, Math.round(Number(height) || 512)));
+  const hash = sha256Hex(Buffer.from(String(seed || 'identity-profile'), 'utf8'));
+  const base = [
+    parseInt(hash.slice(0, 2), 16),
+    parseInt(hash.slice(2, 4), 16),
+    parseInt(hash.slice(4, 6), 16),
+  ];
+  const line = Buffer.alloc((w * 4 + 1) * h);
+  const cx = w / 2;
+  const cy = h / 2;
+  for (let y = 0; y < h; y += 1) {
+    const row = y * (w * 4 + 1);
+    line[row] = 0;
+    for (let x = 0; x < w; x += 1) {
+      const dx = (x - cx) / cx;
+      const dy = (y - cy) / cy;
+      const d = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+      const stripe = (x + y + parseInt(hash.slice(6, 8), 16)) % 43 === 0 ? 34 : 0;
+      const p = row + 1 + x * 4;
+      line[p] = Math.max(0, Math.min(255, Math.round(base[0] * (1 - d * 0.45) + accent[0] * d * 0.32 + stripe)));
+      line[p + 1] = Math.max(0, Math.min(255, Math.round(base[1] * (1 - d * 0.42) + accent[1] * d * 0.28 + stripe)));
+      line[p + 2] = Math.max(0, Math.min(255, Math.round(base[2] * (1 - d * 0.38) + accent[2] * d * 0.24 + stripe)));
+      line[p + 3] = 255;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(line, { level: 9 })),
+    pngChunk('IEND'),
+  ]);
 }
 
 function getWindowsDriveLetter(p) {
@@ -216,6 +285,27 @@ function clamp01(n, fallback = 0.5) {
   return Math.max(0, Math.min(1, v));
 }
 
+function finiteLibraryNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function pointDistance(a, b) {
+  if (!a || !b) return 0;
+  const dx = finiteLibraryNumber(a.x, 0) - finiteLibraryNumber(b.x, 0);
+  const dy = finiteLibraryNumber(a.y, 0) - finiteLibraryNumber(b.y, 0);
+  return Math.round(Math.sqrt(dx * dx + dy * dy) * 1000) / 1000;
+}
+
+function centroid(points) {
+  const clean = (points || []).filter((p) => p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y)));
+  if (!clean.length) return null;
+  return {
+    x: clean.reduce((sum, p) => sum + Number(p.x), 0) / clean.length,
+    y: clean.reduce((sum, p) => sum + Number(p.y), 0) / clean.length,
+  };
+}
+
 class CKCLibrary {
   constructor({ libraryRoot, builtInTemplatePath, defaultTemplateId = 'v2.00', electronNativeImage = null, database = null }) {
     this.libraryRoot = libraryRoot;
@@ -251,6 +341,8 @@ class CKCLibrary {
       sheetMdPath: path.join(base, 'sheet', 'character.md'),
       imagesOriginalDir: path.join(base, 'images', 'original'),
       imagesThumbDir: path.join(base, 'images', 'thumb'),
+      imagesIdentityDir: path.join(base, 'images', 'identity'),
+      identityProfilesDir: path.join(base, 'identity_profiles'),
       exportsDir: path.join(base, 'exports'),
       extrasDir: path.join(base, 'extras'),
       packsDir: path.join(base, 'packs'),
@@ -3744,6 +3836,32 @@ class CKCLibrary {
     };
   }
 
+  _identityProfileRow(row) {
+    if (!row) return null;
+    return {
+      profileId: row.profile_id,
+      characterId: row.character_id,
+      name: row.name ?? '',
+      description: row.description ?? '',
+      sourceImageId: row.source_image_id,
+      sourceRigId: row.source_rig_id ?? null,
+      croppedFaceImageId: row.cropped_face_image_id,
+      cropRelativePath: row.crop_relative_path ?? null,
+      manifestRelativePath: row.manifest_relative_path ?? null,
+      faceLandmarks: this._safeJsonParse(row.face_landmarks_json, []),
+      faceLandmarksJson: row.face_landmarks_json ?? '[]',
+      featureMeasurements: this._safeJsonParse(row.feature_measurements_json, {}),
+      featureMeasurementsJson: row.feature_measurements_json ?? '{}',
+      poseMetadata: this._safeJsonParse(row.pose_metadata_json, {}),
+      poseMetadataJson: row.pose_metadata_json ?? '{}',
+      bridgePayload: this._safeJsonParse(row.bridge_payload_json, {}),
+      bridgePayloadJson: row.bridge_payload_json ?? '{}',
+      deletedAt: row.deleted_at ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   _promptRow(row) {
     if (!row) return null;
     return {
@@ -3788,6 +3906,326 @@ class CKCLibrary {
     if (!row) throw new Error('ImageAsset not found');
     if (String(row.character_id) !== cid) throw new Error('portraitImageId must belong to characterId');
     return { characterId: cid, imageId: iid };
+  }
+
+  _extractIdentityFacePoints(rig) {
+    const face = Array.isArray(rig?.pose?.face) ? rig.pose.face : Array.isArray(rig?.face) ? rig.face : [];
+    return face
+      .map((kp, idx) => ({
+        id: String(kp?.id || `face_${idx}`),
+        x: finiteLibraryNumber(kp?.x, 0),
+        y: finiteLibraryNumber(kp?.y, 0),
+        z: finiteLibraryNumber(kp?.z, 0),
+        visibility: clamp01(kp?.visibility, 0),
+        estimated: !!kp?.estimated,
+      }))
+      .filter((kp) => kp.visibility > 0 && Number.isFinite(kp.x) && Number.isFinite(kp.y));
+  }
+
+  _computeIdentityMeasurements(face) {
+    const byIndex = (idx) => face.find((kp) => kp.id === `face_${idx}`) || face[idx] || null;
+    const rightEye = centroid([36, 37, 38, 39, 40, 41].map(byIndex));
+    const leftEye = centroid([42, 43, 44, 45, 46, 47].map(byIndex));
+    const rightBrow = centroid([17, 18, 19, 20, 21].map(byIndex));
+    const leftBrow = centroid([22, 23, 24, 25, 26].map(byIndex));
+    const visibilityAvg = face.length
+      ? Math.round((face.reduce((sum, kp) => sum + clamp01(kp.visibility, 0), 0) / face.length) * 10000) / 10000
+      : 0;
+
+    return {
+      interocularPx: pointDistance(leftEye, rightEye),
+      jawWidthPx: pointDistance(byIndex(0), byIndex(16)),
+      noseToChinPx: pointDistance(byIndex(30), byIndex(8)),
+      eyeToBrowLeftPx: pointDistance(leftEye, leftBrow),
+      eyeToBrowRightPx: pointDistance(rightEye, rightBrow),
+      cheekboneWidthPx: pointDistance(byIndex(2), byIndex(14)),
+      visibilityAvg,
+    };
+  }
+
+  _identityPoseMetadata(rig) {
+    const cal = rig?.calibration && typeof rig.calibration === 'object' ? rig.calibration : {};
+    const headPose = cal.headPose && typeof cal.headPose === 'object' ? cal.headPose : { yaw: cal.yaw || 0 };
+    const face = this._extractIdentityFacePoints(rig);
+    const visibilityAvg = face.length
+      ? Math.round((face.reduce((sum, kp) => sum + clamp01(kp.visibility, 0), 0) / face.length) * 10000) / 10000
+      : 0;
+    return {
+      yawDegAtCapture: finiteLibraryNumber(headPose.yaw, 0),
+      pitchDegAtCapture: finiteLibraryNumber(headPose.pitch, 0),
+      rollDegAtCapture: finiteLibraryNumber(headPose.roll, 0),
+      visibilityAvg,
+    };
+  }
+
+  async _getIdentitySourceRig({ characterId, sourceImageId, sourceRigId = null } = {}) {
+    const rigId = String(sourceRigId ?? '').trim();
+    if (rigId) {
+      const rig = await this.getRig({ rigId });
+      if (!rig) throw new Error('sourceRigId not found');
+      if (rig.characterId !== characterId) throw new Error('sourceRigId must belong to characterId');
+      if (rig.portraitImageId !== sourceImageId) throw new Error('sourceRigId must use sourceImageId as its portrait');
+      return rig;
+    }
+    const row = await get(
+      this.db,
+      `SELECT rig_id
+       FROM Rig
+       WHERE character_id = ? AND portrait_image_id = ?
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 1`,
+      [characterId, sourceImageId]
+    );
+    return row?.rig_id ? this.getRig({ rigId: row.rig_id }) : null;
+  }
+
+  async _createIdentityCropPng({ sourceImageId, sourceRig, sourceHash, face, measurements } = {}) {
+    if (this.electronNativeImage) {
+      try {
+        const abs = await this.getImageAbsPath({ imageId: sourceImageId, kind: 'original' });
+        if (abs && fs.existsSync(abs)) {
+          const img = this.electronNativeImage.createFromPath(abs);
+          const size = img.getSize();
+          const width = Math.max(1, Number(size?.width) || 0);
+          const height = Math.max(1, Number(size?.height) || 0);
+          if (width > 1 && height > 1 && face.length) {
+            const canvas = sourceRig?.pose?.canvas || {};
+            const cw = Math.max(1, finiteLibraryNumber(canvas.width ?? sourceRig?.pose?.openpose?.canvas_width, 1024));
+            const ch = Math.max(1, finiteLibraryNumber(canvas.height ?? sourceRig?.pose?.openpose?.canvas_height, 1024));
+            const xs = face.map((kp) => kp.x);
+            const ys = face.map((kp) => kp.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            const pad = Math.max(maxX - minX, maxY - minY) * 0.45;
+            const x = Math.max(0, Math.floor(((minX - pad) / cw) * width));
+            const y = Math.max(0, Math.floor(((minY - pad) / ch) * height));
+            const right = Math.min(width, Math.ceil(((maxX + pad) / cw) * width));
+            const bottom = Math.min(height, Math.ceil(((maxY + pad) / ch) * height));
+            const cropW = Math.max(1, right - x);
+            const cropH = Math.max(1, bottom - y);
+            const side = Math.max(cropW, cropH);
+            const sx = Math.max(0, Math.min(width - side, Math.floor(x + cropW / 2 - side / 2)));
+            const sy = Math.max(0, Math.min(height - side, Math.floor(y + cropH / 2 - side / 2)));
+            const cropped = img.crop({ x: sx, y: sy, width: Math.min(side, width - sx), height: Math.min(side, height - sy) });
+            const png = cropped.resize({ width: 512, height: 512 }).toPNG();
+            if (png?.length) return png;
+          }
+        }
+      } catch {
+        // Fall back to the deterministic PNG below when native image decode/crop is unavailable.
+      }
+    }
+    return createRgbaPng({
+      width: 512,
+      height: 512,
+      seed: JSON.stringify({ sourceImageId, sourceHash, face, measurements }),
+      accent: [204, 166, 103],
+    });
+  }
+
+  async listIdentityProfiles({ characterId = null, includeDeleted = false } = {}) {
+    const cid = characterId == null ? null : String(characterId).trim() || null;
+    const clauses = [];
+    const params = [];
+    if (cid) {
+      clauses.push('character_id = ?');
+      params.push(cid);
+    }
+    if (!includeDeleted) clauses.push('deleted_at IS NULL');
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await all(
+      this.db,
+      `SELECT profile_id, character_id, name, description, source_image_id, source_rig_id,
+              cropped_face_image_id, crop_relative_path, manifest_relative_path,
+              face_landmarks_json, feature_measurements_json, pose_metadata_json, bridge_payload_json,
+              deleted_at, created_at, updated_at
+       FROM IdentityProfile
+       ${where}
+       ORDER BY updated_at DESC, created_at DESC`,
+      params
+    );
+    return rows.map((row) => this._identityProfileRow(row));
+  }
+
+  async getIdentityProfile({ profileId, includeDeleted = false } = {}) {
+    const id = String(profileId ?? '').trim();
+    if (!id) throw new Error('profileId is required');
+    const row = await get(
+      this.db,
+      `SELECT profile_id, character_id, name, description, source_image_id, source_rig_id,
+              cropped_face_image_id, crop_relative_path, manifest_relative_path,
+              face_landmarks_json, feature_measurements_json, pose_metadata_json, bridge_payload_json,
+              deleted_at, created_at, updated_at
+       FROM IdentityProfile
+       WHERE profile_id = ? ${includeDeleted ? '' : 'AND deleted_at IS NULL'}`,
+      [id]
+    );
+    return this._identityProfileRow(row);
+  }
+
+  async createIdentityProfile({ characterId, sourceImageId, name = '', description = '', sourceRigId = null } = {}) {
+    const { characterId: cid, imageId } = await this._assertImageBelongsToCharacter({ characterId, imageId: sourceImageId });
+    const rig = await this._getIdentitySourceRig({ characterId: cid, sourceImageId: imageId, sourceRigId });
+    if (!rig) throw new Error('Create a rig for the source image before creating an identity profile.');
+
+    const imageRow = await get(this.db, 'SELECT file_hash FROM ImageAsset WHERE image_id = ?', [imageId]);
+    const face = this._extractIdentityFacePoints(rig);
+    const measurements = this._computeIdentityMeasurements(face);
+    const poseMetadata = this._identityPoseMetadata(rig);
+    const cropBytes = await this._createIdentityCropPng({
+      sourceImageId: imageId,
+      sourceRig: rig,
+      sourceHash: imageRow?.file_hash || '',
+      face,
+      measurements,
+    });
+    const fileHash = sha256Hex(cropBytes);
+    const fileName = `${fileHash.slice(0, 16)}.png`;
+    const paths = this.getCharacterPaths(cid);
+    ensureDir(paths.imagesIdentityDir);
+    ensureDir(paths.identityProfilesDir);
+    const cropRel = path.posix.join('images', 'identity', fileName);
+    const cropAbs = path.join(paths.base, cropRel.replaceAll('/', path.sep));
+    if (!fs.existsSync(cropAbs)) fs.writeFileSync(cropAbs, cropBytes);
+
+    let imageAssetId = null;
+    const existingImage = await get(
+      this.db,
+      `SELECT image_id
+       FROM ImageAsset
+       WHERE character_id = ? AND file_hash = ? AND relative_path = ?
+       LIMIT 1`,
+      [cid, fileHash, cropRel]
+    );
+    if (existingImage?.image_id) {
+      imageAssetId = existingImage.image_id;
+    } else {
+      imageAssetId = randomId('img_');
+      await run(
+        this.db,
+        `INSERT INTO ImageAsset(
+           image_id, character_id, relative_path, file_hash, width, height,
+           favorite, rating, notes, tags_json, storage_mode, source_path, source_url, source_note
+         ) VALUES(?, ?, ?, ?, 512, 512, 0, 0, ?, ?, 'copy', NULL, NULL, ?)`,
+        [
+          imageAssetId,
+          cid,
+          cropRel,
+          fileHash,
+          'identity profile crop',
+          JSON.stringify(['posekit', 'identity-profile']),
+          `identity profile crop from ${imageId}`,
+        ]
+      );
+    }
+
+    const profileId = randomId('idp_');
+    const safeName = String(name ?? '').trim() || `identity_${profileId.slice(4, 12)}`;
+    const desc = String(description ?? '');
+    const manifestRel = path.posix.join('identity_profiles', `${profileId}.json`);
+    const bridgePayload = {
+      schema: 'ckc.identity_profile@1',
+      profileId,
+      characterId: cid,
+      sourceImageId: imageId,
+      sourceRigId: rig.rigId,
+      croppedFaceImageId: imageAssetId,
+      cropRelativePath: cropRel,
+      manifestRelativePath: manifestRel,
+      featureMeasurements: measurements,
+      poseMetadata,
+    };
+    const manifest = {
+      schemaVersion: 1,
+      profileId,
+      characterId: cid,
+      name: safeName,
+      description: desc,
+      sourceImageId: imageId,
+      sourceRigId: rig.rigId,
+      croppedFaceImageId: imageAssetId,
+      cropRelativePath: cropRel,
+      faceLandmarks: face,
+      featureMeasurements: measurements,
+      poseMetadata,
+      bridgePayload,
+      sourceImageHash: imageRow?.file_hash || null,
+      cropFileHash: fileHash,
+      createdAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(path.join(paths.base, manifestRel.replaceAll('/', path.sep)), JSON.stringify(manifest, null, 2), 'utf8');
+
+    await run(
+      this.db,
+      `INSERT INTO IdentityProfile(
+         profile_id, character_id, name, description, source_image_id, source_rig_id,
+         cropped_face_image_id, crop_relative_path, manifest_relative_path,
+         face_landmarks_json, feature_measurements_json, pose_metadata_json, bridge_payload_json
+       ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        profileId,
+        cid,
+        safeName,
+        desc,
+        imageId,
+        rig.rigId,
+        imageAssetId,
+        cropRel,
+        manifestRel,
+        JSON.stringify(face),
+        JSON.stringify(measurements),
+        JSON.stringify(poseMetadata),
+        JSON.stringify(bridgePayload),
+      ]
+    );
+    await this._audit('posekit.identityProfile.create', cid, { profileId, sourceImageId: imageId, sourceRigId: rig.rigId });
+    return { ok: true, profileId, croppedFaceImageId: imageAssetId, cropRelativePath: cropRel, fileHash };
+  }
+
+  async updateIdentityProfile({ profileId, name, description } = {}) {
+    const id = String(profileId ?? '').trim();
+    if (!id) throw new Error('profileId is required');
+    const existing = await this.getIdentityProfile({ profileId: id });
+    if (!existing) throw new Error('Identity profile not found');
+    const nextName = name == null ? existing.name : String(name).trim() || existing.name;
+    const nextDescription = description == null ? existing.description : String(description);
+    await run(
+      this.db,
+      `UPDATE IdentityProfile
+       SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE profile_id = ? AND deleted_at IS NULL`,
+      [nextName, nextDescription, id]
+    );
+    const updated = await this.getIdentityProfile({ profileId: id });
+    if (updated?.manifestRelativePath) {
+      const paths = this.getCharacterPaths(updated.characterId);
+      const manifestAbs = path.join(paths.base, updated.manifestRelativePath.replaceAll('/', path.sep));
+      if (fs.existsSync(manifestAbs)) {
+        try {
+          const manifest = this._safeJsonParse(fs.readFileSync(manifestAbs, 'utf8'), {});
+          manifest.name = updated.name;
+          manifest.description = updated.description;
+          manifest.updatedAt = new Date().toISOString();
+          fs.writeFileSync(manifestAbs, JSON.stringify(manifest, null, 2), 'utf8');
+        } catch {
+          // DB row is canonical when the sidecar is not parseable.
+        }
+      }
+    }
+    await this._audit('posekit.identityProfile.update', existing.characterId, { profileId: id });
+    return { ok: true };
+  }
+
+  async deleteIdentityProfile({ profileId } = {}) {
+    const id = String(profileId ?? '').trim();
+    if (!id) throw new Error('profileId is required');
+    const existing = await this.getIdentityProfile({ profileId: id });
+    if (!existing) throw new Error('Identity profile not found');
+    await run(this.db, `UPDATE IdentityProfile SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE profile_id = ?`, [id]);
+    await this._audit('posekit.identityProfile.delete', existing.characterId, { profileId: id });
+    return { ok: true };
   }
 
   async listRigs({ characterId } = {}) {
@@ -4071,9 +4509,18 @@ class CKCLibrary {
     };
   }
 
-  _injectBridgeNodeInputs(workflowJson, { characterId = null, rigId = null, openposeRef = null } = {}) {
+  _injectBridgeNodeInputs(workflowJson, { characterId = null, rigId = null, openposeRef = null, identityProfile = null } = {}) {
     const workflow = JSON.parse(JSON.stringify(this._parseWorkflowJson(workflowJson)));
     const nodes = workflow && typeof workflow === 'object' ? Object.values(workflow) : [];
+    const identity =
+      identityProfile && typeof identityProfile === 'object'
+        ? {
+            profileId: String(identityProfile.profileId || ''),
+            croppedFaceImageId: String(identityProfile.croppedFaceImageId || ''),
+            cropRelativePath: String(identityProfile.cropRelativePath || ''),
+            manifestRelativePath: String(identityProfile.manifestRelativePath || ''),
+          }
+        : null;
     for (const node of nodes) {
       if (!node || typeof node !== 'object') continue;
       if (String(node.class_type || '') !== 'CastKitCodexBridge') continue;
@@ -4081,6 +4528,14 @@ class CKCLibrary {
       if (characterId && Object.prototype.hasOwnProperty.call(node.inputs, 'character_id')) node.inputs.character_id = characterId;
       if (rigId && Object.prototype.hasOwnProperty.call(node.inputs, 'rig_id')) node.inputs.rig_id = rigId;
       if (openposeRef && Object.prototype.hasOwnProperty.call(node.inputs, 'openpose_ref')) node.inputs.openpose_ref = openposeRef;
+      if (identity) {
+        if (Object.prototype.hasOwnProperty.call(node.inputs, 'identity_profile_id')) node.inputs.identity_profile_id = identity.profileId;
+        if (Object.prototype.hasOwnProperty.call(node.inputs, 'identity_profile_ref')) {
+          node.inputs.identity_profile_ref = identity.manifestRelativePath || identity.cropRelativePath;
+        }
+        if (Object.prototype.hasOwnProperty.call(node.inputs, 'identity_image_id')) node.inputs.identity_image_id = identity.croppedFaceImageId;
+        if (Object.prototype.hasOwnProperty.call(node.inputs, 'ipadapter_image_ref')) node.inputs.ipadapter_image_ref = identity.cropRelativePath;
+      }
     }
     return workflow;
   }
@@ -4235,6 +4690,7 @@ class CKCLibrary {
     characterId = null,
     rigId = null,
     openposeRef = null,
+    identityProfileId = null,
     clientId = null,
     waitForCompletion = false,
     timeoutMs = 300000,
@@ -4247,7 +4703,14 @@ class CKCLibrary {
       if (!rig) throw new Error('Rig not found');
       if (cid && rig.characterId !== cid) throw new Error('rigId must belong to characterId');
     }
-    const patched = this._injectBridgeNodeInputs(workflowJson, { characterId: cid, rigId, openposeRef });
+    let identityProfile = null;
+    const idp = String(identityProfileId ?? '').trim();
+    if (idp) {
+      identityProfile = await this.getIdentityProfile({ profileId: idp });
+      if (!identityProfile) throw new Error('Identity profile not found');
+      if (cid && identityProfile.characterId !== cid) throw new Error('identityProfileId must belong to characterId');
+    }
+    const patched = this._injectBridgeNodeInputs(workflowJson, { characterId: cid, rigId, openposeRef, identityProfile });
     const replayClientId = String(clientId || `ckc-replay-${randomId('session_')}`);
     const result = await comfyuiClient.postPrompt({ host, workflowJson: patched, clientId: replayClientId });
     const promptId = result.prompt_id || result.promptId || null;
@@ -4277,6 +4740,9 @@ class CKCLibrary {
               type: image.type,
               replay_client_id: replayClientId,
               fallback_source: 'history-view',
+              identity_profile_id: identityProfile?.profileId || null,
+              identity_profile_ref: identityProfile?.manifestRelativePath || null,
+              identity_crop_ref: identityProfile?.cropRelativePath || null,
             },
             session_id: replayClientId,
           });
@@ -4298,6 +4764,14 @@ class CKCLibrary {
       clientId: replayClientId,
       historyStatus,
       registeredOutputs,
+      identityProfile: identityProfile
+        ? {
+            profileId: identityProfile.profileId,
+            croppedFaceImageId: identityProfile.croppedFaceImageId,
+            cropRelativePath: identityProfile.cropRelativePath,
+            manifestRelativePath: identityProfile.manifestRelativePath,
+          }
+        : null,
     };
   }
 

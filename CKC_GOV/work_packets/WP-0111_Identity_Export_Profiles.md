@@ -2,7 +2,7 @@
 
 Date: 2026-05-07
 Owner: Codex
-Status: PLANNED (depends on WP-0108 stable build)
+Status: DONE (shipped dev/live 2026-05-07)
 
 ## Summary
 Add a new artifact: an "identity profile" bundle per character that captures the locked face/body identity in a form ComfyUI face-swap and IPAdapter workflows consume. Bundle contents: cropped face PNG (canonical pose), face landmark JSON, feature measurements (eye distance, jaw width, nose-to-chin ratio), pose metadata. Stored under each character's folder; queryable from the character sheet; replayable via the Workflow tab as an IPAdapter input.
@@ -141,11 +141,10 @@ Stored on disk as `<libraryRoot>/characters/<characterId>/identity_profiles/<pro
 3. UI: new tab inside the Pose tab's left rail — **Identity** — lists profiles for the active character, shows the cropped face thumbnail, "Create new" button. Click a profile → opens detail with feature measurements + a "Use as IPAdapter source" button that wires it to the Workflow tab's Replay panel.
 4. Workflow tab integration: Replay panel gains an "Identity profile" dropdown alongside the existing rig dropdown. Selected profile's cropped face becomes the IPAdapter input override on replay (injected into ComfyUI bridge node inputs).
 5. Tests:
-   - `test/identity_profile_crud.test.js`
-   - `test/identity_profile_face_crop.test.js` — crop pipeline produces a deterministic 512×512 PNG given the same source + landmarks.
+   - `test/identity_profile_crud.test.js` — CRUD plus deterministic 512×512 crop/content-hash behavior.
    - `test/identity_profile_replay_injection.test.js` — Replay payload carries the profile reference.
-6. Spec bump, manual bump, test suite Section N (new).
-7. Ship as packaged build.
+6. Spec bump, manual bump, test suite Section J update.
+7. Dev/live ship; packaged build smoke remains in the release gate.
 
 ### Out
 - Generated identity (CKC creates the profile from a synthetic source). Profiles are derived from operator-supplied portraits.
@@ -153,10 +152,21 @@ Stored on disk as `<libraryRoot>/characters/<characterId>/identity_profiles/<pro
 - LoRA training pair generation. The profiles are inputs to ComfyUI; LoRA training is a separate pillar (Handshake #20).
 
 ## Acceptance criteria
-- [ ] `createIdentityProfile` produces a valid bundle from any rigged portrait; cropped face PNG is 512×512, content-hash addressed under `images/identity/`.
-- [ ] Feature measurements computed deterministically; same input → same output.
-- [ ] UI lists profiles per character; thumbnails render; create/delete works end-to-end.
-- [ ] Replay panel accepts a profile + injects it into the ComfyUI workflow as an IPAdapter source via the bridge node.
-- [ ] All tests pass.
-- [ ] Spec, manual, test suite bumped.
+- [x] `createIdentityProfile` produces a valid bundle from any rigged portrait; cropped face PNG is 512×512, content-hash addressed under `images/identity/`.
+- [x] Feature measurements computed deterministically; same input → same output.
+- [x] UI lists profiles per character; thumbnails render; create/delete works end-to-end.
+- [x] Replay panel accepts a profile + injects it into the ComfyUI workflow as an IPAdapter source via the bridge node.
+- [x] All tests pass.
+- [x] Spec, manual, test suite bumped.
 - [ ] Packaged build smoke verifies a full pose → identity → replay → ComfyUI generation cycle.
+
+## Implementation result
+
+Shipped in CKC as the native identity-profile core contract: 512×512 cropped face PNG, 70-point face landmarks, deterministic profile measurements, capture-pose metadata, sidecar manifest, DB row, Pose tab list/create/delete UI, Workflow replay selector, and bridge-node identity inputs.
+
+The research section above recommends a larger future profile bundle with ArcFace / InsightFace / EVA-CLIP embedding caches. WP-0111 intentionally stops short of bundling those model runtimes. Downstream ComfyUI nodes can extract embeddings from the CKC cropped face reference today; a later WP can add pinned embedding-cache generation if the operator wants CKC to own those heavyweight dependencies.
+
+Verification:
+- Focused suite: `node --test test/identity_profile_crud.test.js test/identity_profile_replay_injection.test.js test/backend_posekit_workflow.test.js test/posekit_ui_static.test.js test/automation_manual_consistency.test.js` passed.
+- TypeScript: `npx tsc --noEmit` passed.
+- Live automation smoke used `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, created profile `idp_562fb122ff50282c7f697a30ae362fc2`, wrote crop `images/identity/d7f57768109c90a0.png`, and captured `2026-05-07_185915473Z_no_session_wp-0111-identity-panel.png` plus `2026-05-07_185916851Z_no_session_wp-0111-workflow-identity-dropdown.png`.

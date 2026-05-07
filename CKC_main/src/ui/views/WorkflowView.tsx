@@ -52,7 +52,9 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
   const [characterId, setCharacterId] = React.useState<string | null>(initialCharacterId);
   const [character, setCharacter] = React.useState<CKCCharacter | null>(null);
   const [rigs, setRigs] = React.useState<CKCRig[]>([]);
+  const [identityProfiles, setIdentityProfiles] = React.useState<CKCIdentityProfile[]>([]);
   const [selectedRigId, setSelectedRigId] = React.useState<string | null>(null);
+  const [selectedIdentityProfileId, setSelectedIdentityProfileId] = React.useState<string | null>(null);
   const [prompts, setPrompts] = React.useState<CKCPrompt[]>([]);
   const [beats, setBeats] = React.useState<CKCStoryBeatItem[]>([]);
   const [workflowHistory, setWorkflowHistory] = React.useState<CKCWorkflowHistoryItem[]>([]);
@@ -93,20 +95,23 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
     if (!id) {
       setCharacter(null);
       setRigs([]);
+      setIdentityProfiles([]);
       setPrompts([]);
       setBeats([]);
       setWorkflowHistory([]);
       return;
     }
-    const [detail, rigList, promptList, beatList, historyList] = await Promise.all([
+    const [detail, rigList, profileList, promptList, beatList, historyList] = await Promise.all([
       window.ckc.getCharacter(id),
       window.ckc.listRigs({ characterId: id }),
+      window.ckc.listIdentityProfiles({ characterId: id }),
       window.ckc.listPrompts({ characterId: id }),
       window.ckc.listStoryBeats({ characterId: id }),
       window.ckc.getWorkflowHistory({ characterId: id, limit: 50 }),
     ]);
     setCharacter(detail);
     setRigs(Array.isArray(rigList) ? rigList : []);
+    setIdentityProfiles(Array.isArray(profileList) ? profileList : []);
     setPrompts(Array.isArray(promptList) ? promptList : []);
     setBeats(Array.isArray(beatList) ? beatList : []);
     const histories = Array.isArray(historyList) ? historyList : [];
@@ -122,6 +127,10 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
     setSelectedRigId((current) => {
       if (current && rigList.some((rig) => rig.rigId === current)) return current;
       return rigList[0]?.rigId ?? null;
+    });
+    setSelectedIdentityProfileId((current) => {
+      if (current && profileList.some((profile) => profile.profileId === current)) return current;
+      return profileList[0]?.profileId ?? null;
     });
   }, [characterId]);
 
@@ -235,6 +244,7 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
         workflowJson: parsed,
         characterId,
         rigId: selectedRig?.rigId ?? null,
+        identityProfileId: selectedIdentityProfileId,
       });
       setStatus(`Replay submitted ${result.promptId || result.clientId}`);
     } catch (err) {
@@ -318,6 +328,10 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
             <div>
               <span>Runs</span>
               <strong>{workflowHistory.length}</strong>
+            </div>
+            <div>
+              <span>Identities</span>
+              <strong>{identityProfiles.length}</strong>
             </div>
           </div>
         </div>
@@ -445,6 +459,21 @@ export function WorkflowView({ initialCharacterId, onSelectCharacter }: Workflow
                   <span>Stored runs</span>
                   <strong>{workflowHistory.length}</strong>
                 </div>
+                <label className={styles.fieldLabel}>
+                  <span>Identity profile</span>
+                  <select
+                    value={selectedIdentityProfileId ?? ''}
+                    onChange={(event) => setSelectedIdentityProfileId(event.target.value || null)}
+                    data-action="workflow-identity-profile-select"
+                  >
+                    <option value="">None</option>
+                    {identityProfiles.map((profile) => (
+                      <option key={profile.profileId} value={profile.profileId}>
+                        {profile.name || profile.profileId}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className={styles.fieldLabel}>
                   <span>Recent run</span>
                   <select

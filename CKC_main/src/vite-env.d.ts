@@ -169,6 +169,25 @@ type CKCRig = {
   updatedAt: string;
 };
 
+type CKCIdentityProfile = {
+  profileId: string;
+  characterId: string;
+  name: string;
+  description: string;
+  sourceImageId: string;
+  sourceRigId: string | null;
+  croppedFaceImageId: string;
+  cropRelativePath: string | null;
+  manifestRelativePath: string | null;
+  faceLandmarks: unknown[];
+  featureMeasurements: Record<string, unknown>;
+  poseMetadata: Record<string, unknown>;
+  bridgePayload: Record<string, unknown>;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CKCHeadPose = {
   schemaVersion: 1;
   order: 'YXZ';
@@ -856,6 +875,17 @@ interface Window {
       width?: number;
       height?: number;
     }) => Promise<{ ok: true; imageId: string; relativePath: string; fileHash: string; deduped: boolean }>;
+    listIdentityProfiles: (params?: { characterId?: string | null; includeDeleted?: boolean } | null) => Promise<CKCIdentityProfile[]>;
+    getIdentityProfile: (params: { profileId: string; includeDeleted?: boolean }) => Promise<CKCIdentityProfile | null>;
+    createIdentityProfile: (params: {
+      characterId: string;
+      sourceImageId: string;
+      name?: string;
+      description?: string;
+      sourceRigId?: string | null;
+    }) => Promise<{ ok: true; profileId: string; croppedFaceImageId: string; cropRelativePath: string; fileHash: string }>;
+    updateIdentityProfile: (params: { profileId: string; name?: string; description?: string }) => Promise<{ ok: true }>;
+    deleteIdentityProfile: (params: { profileId: string }) => Promise<{ ok: true }>;
     registerComfyUIOutput: (params: unknown) => Promise<unknown>;
     getWorkflowHistory: (params?: { characterId?: string | null; limit?: number } | null) => Promise<CKCWorkflowHistoryItem[]>;
     extractPromptFromWorkflow: (params: { workflowJson: unknown }) => Promise<{ ok: true; positive: string[]; negative: string[]; loras: string[] }>;
@@ -865,6 +895,7 @@ interface Window {
       characterId?: string | null;
       rigId?: string | null;
       openposeRef?: string | null;
+      identityProfileId?: string | null;
       clientId?: string | null;
       waitForCompletion?: boolean;
       timeoutMs?: number;
@@ -876,6 +907,12 @@ interface Window {
       nodeErrors: Record<string, unknown>;
       clientId: string;
       historyStatus?: unknown;
+      identityProfile?: {
+        profileId: string;
+        croppedFaceImageId: string;
+        cropRelativePath: string | null;
+        manifestRelativePath: string | null;
+      } | null;
       registeredOutputs?: Array<{
         nodeId: string;
         filename: string;

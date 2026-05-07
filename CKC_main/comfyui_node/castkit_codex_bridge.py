@@ -42,6 +42,10 @@ class CastKitCodexBridge:
                 "character_id": ("STRING", {"default": ""}),
                 "rig_id": ("STRING", {"default": ""}),
                 "openpose_ref": ("STRING", {"default": ""}),
+                "identity_profile_id": ("STRING", {"default": ""}),
+                "identity_profile_ref": ("STRING", {"default": ""}),
+                "identity_image_id": ("STRING", {"default": ""}),
+                "ipadapter_image_ref": ("STRING", {"default": ""}),
                 "title": ("STRING", {"default": ""}),
                 "yaw_bin": ("STRING", {"default": ""}),
                 "tags": ("STRING", {"default": ""}),
@@ -69,6 +73,10 @@ class CastKitCodexBridge:
         character_id="",
         rig_id="",
         openpose_ref="",
+        identity_profile_id="",
+        identity_profile_ref="",
+        identity_image_id="",
+        ipadapter_image_ref="",
         title="",
         yaw_bin="",
         tags="",
@@ -94,6 +102,10 @@ class CastKitCodexBridge:
         target_character = str(character_id or _env("CKC_INTAKE_CHARACTER")).strip()
         target_rig = str(rig_id or _env("CKC_INTAKE_RIG")).strip() or None
         target_openpose = str(openpose_ref or _env("CKC_INTAKE_OPENPOSE_REF")).strip() or None
+        target_identity_profile = str(identity_profile_id or _env("CKC_INTAKE_IDENTITY_PROFILE")).strip() or None
+        target_identity_ref = str(identity_profile_ref or _env("CKC_INTAKE_IDENTITY_PROFILE_REF")).strip() or None
+        target_identity_image = str(identity_image_id or _env("CKC_INTAKE_IDENTITY_IMAGE")).strip() or None
+        target_ipadapter_ref = str(ipadapter_image_ref or _env("CKC_INTAKE_IPADAPTER_IMAGE_REF")).strip() or None
         token = _env("CKC_INTAKE_TOKEN")
         session_id = _env("CKC_INTAKE_SESSION", "ckc-bridge-%s-%s" % (os.getpid(), int(time.time())))
 
@@ -115,6 +127,7 @@ class CastKitCodexBridge:
                 "character_id": target_character,
                 "rig_id": target_rig,
                 "openpose_ref": target_openpose,
+                "identity_profile_id": target_identity_profile,
                 "image_b64": base64.b64encode(buf.getvalue()).decode("ascii"),
                 "filename_hint": filename,
                 "workflow_json": prompt if prompt is not None else {},
@@ -127,6 +140,10 @@ class CastKitCodexBridge:
                     "cfg": cfg,
                     "steps": steps,
                     "seed": seed,
+                    "identity_profile_id": target_identity_profile,
+                    "identity_profile_ref": target_identity_ref,
+                    "identity_image_id": target_identity_image,
+                    "ipadapter_image_ref": target_ipadapter_ref,
                     "extra_pnginfo": extra_pnginfo if extra_pnginfo is not None else {},
                 },
                 "session_id": session_id,

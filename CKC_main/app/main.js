@@ -679,6 +679,11 @@ async function runBackendAutomationCommand(command, params) {
     if (name === 'setRigPortrait') return lib.setRigPortrait(p);
     if (name === 'updateRigPose') return lib.updateRigPose(p);
     if (name === 'exportOpenposePng') return lib.exportOpenposePng(p);
+    if (name === 'listIdentityProfiles') return lib.listIdentityProfiles(p);
+    if (name === 'getIdentityProfile') return lib.getIdentityProfile(p);
+    if (name === 'createIdentityProfile') return lib.createIdentityProfile(p);
+    if (name === 'updateIdentityProfile') return lib.updateIdentityProfile(p);
+    if (name === 'deleteIdentityProfile') return lib.deleteIdentityProfile(p);
     if (name === 'registerComfyUIOutput') return lib.registerComfyUIOutput(p);
     if (name === 'getWorkflowHistory') return lib.getWorkflowHistory(p);
     if (name === 'extractPromptFromWorkflow') return lib.extractPromptFromWorkflow(p);
@@ -2112,6 +2117,31 @@ function registerIpcHandlers() {
     ipcMain.handle('ckc:exportOpenposePng', async (_evt, params) => {
         const lib = await ensureLibrary();
         return lib.exportOpenposePng(params || {});
+    });
+
+    ipcMain.handle('ckc:listIdentityProfiles', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.listIdentityProfiles(params || {});
+    });
+
+    ipcMain.handle('ckc:getIdentityProfile', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.getIdentityProfile(params || {});
+    });
+
+    ipcMain.handle('ckc:createIdentityProfile', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.createIdentityProfile(params || {});
+    });
+
+    ipcMain.handle('ckc:updateIdentityProfile', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.updateIdentityProfile(params || {});
+    });
+
+    ipcMain.handle('ckc:deleteIdentityProfile', async (_evt, params) => {
+        const lib = await ensureLibrary();
+        return lib.deleteIdentityProfile(params || {});
     });
 
     ipcMain.handle('ckc:registerComfyUIOutput', async (_evt, params) => {

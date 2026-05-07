@@ -27,6 +27,8 @@ test('pose and workflow routes are wired for renderer automation and drawer navi
   assert.match(commandMap, /'updateRigPose'/);
   assert.match(commandMap, /'setRigHeadPose'/);
   assert.match(commandMap, /'exportOpenposePng'/);
+  assert.match(commandMap, /'createIdentityProfile'/);
+  assert.match(commandMap, /'listIdentityProfiles'/);
   assert.match(commandMap, /'getWorkflowHistory'/);
   assert.match(commandMap, /'replayWorkflow'/);
 });
@@ -47,6 +49,8 @@ test('pose and workflow tabs use ARIA tab semantics and stable automation select
   assert.match(pose, /data-action="pose-create-rig"/);
   assert.match(pose, /data-action="pose-detect"/);
   assert.match(pose, /data-action="pose-export-openpose"/);
+  assert.match(pose, /data-action="pose-create-identity-profile"/);
+  assert.match(pose, /data-action="pose-identity-panel"/);
   assert.match(pose, /data-action="pose-replay-comfyui"/);
   assert.match(pose, /data-action="pose-openpose-preview"/);
   assert.match(pose, /data-action="pose-save-calibration"/);
@@ -58,6 +62,7 @@ test('pose and workflow tabs use ARIA tab semantics and stable automation select
   assert.match(workflow, /data-action="workflow-save-prompt"/);
   assert.match(workflow, /data-action="workflow-save-beat"/);
   assert.match(workflow, /data-action="workflow-history-select"/);
+  assert.match(workflow, /data-action="workflow-identity-profile-select"/);
   assert.match(workflow, /data-action="workflow-extract-prompts"/);
   assert.match(workflow, /data-action="workflow-replay-comfyui"/);
 });
