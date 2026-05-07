@@ -5,7 +5,7 @@ Owner: Codex
 Status: PLANNED (depends on WP-0108 stable build)
 
 ## Summary
-Extend the `Rig` data model from one subject per portrait to N subjects per scene. Each subject gets independent body 18 + face 70 + (optional) hands keypoints, independent calibration, independent yaw/pitch/roll head pose. The 3D viewport renders all subjects in scene space; the 2D openpose viewport composites them onto a single canvas. ComfyUI bridge gains a `subject_index` input so workflows can target a specific subject.
+Extend the `Rig` data model from one subject per portrait to N subjects per scene. Each subject gets independent body 18 + face 70 + (optional) hands keypoints, independent calibration, independent yaw/pitch/roll head pose. The 3D viewport renders all subjects in scene space; the 2D openpose viewport composites them onto a single canvas. ComfyUI bridge emits one combined openpose image plus per-subject masks; `subject_index` selects the mask/conditioning slot.
 
 Carry-over citation: derived from OpenRepose `WP-I1-011` (planned, not implemented; design intent only).
 
@@ -123,8 +123,8 @@ type RigData = {
 1. Schema migration: bump `RigData.schemaVersion`; backward-compat adapter at load time.
 2. `src/pose/rig.ts`: every existing function (`fitMediapipeToRig`, `applyYaw`, `applyCalibration`, `exportOpenposeJson`) gains a multi-subject path. Single-subject helpers stay as wrappers (`getSubject(rig, 0)` for the common case).
 3. UI: the Pose tab gains a "Subjects" panel listing detected subjects (or operator-added). Per-subject selection drives which subject the Calibration / Markers / Reframer / head-pose sliders apply to. The 3D viewport always shows all subjects; the 2D viewport composites all subjects.
-4. Detection: when the operator drops a multi-subject image, `mediapipe.PoseLandmarker.detect` runs with `numPoses: 4` (configurable up to 8); each detected pose becomes a `SubjectRig`. Operator can manually add or remove subjects after detection.
-5. ComfyUI bridge: new optional input `subject_index` (default `null` = all subjects, `0..N-1` = single subject). Backend `replayWorkflow` accepts `subjectIndex` parameter.
+4. Detection: when the operator drops a multi-subject image, `PoseLandmarker.detect` runs with `numPoses` capped at 4, default 2, and a UI warning above 3. Each detected pose becomes a `SubjectRig`. Operator can manually add or remove subjects after detection.
+5. ComfyUI bridge: new optional input `subject_index` (default `null` = all subjects, `0..N-1` = one mask/conditioning slot). Backend `replayWorkflow` accepts `subjectIndex` and exports the combined openpose PNG plus per-subject masks.
 6. OpenPose JSON export: standard format already supports multiple `people[]` entries — N subjects → N people entries.
 7. Tests:
    - `test/multi_subject_rig_math.test.js`
@@ -137,14 +137,14 @@ type RigData = {
 ### Out
 - Subject-to-subject relationship inference (e.g. "facing each other"). Geometry is operator-driven.
 - Subject identity matching across frames. Each rig stands alone.
-- Per-subject IPAdapter inputs in the same workflow. The `subject_index` ComfyUI input lets the operator route per-subject; managing N IPAdapter inputs is the operator's workflow choice.
+- Per-subject IPAdapter inputs in the same workflow. The `subject_index` ComfyUI input selects the region mask / conditioning slot; managing N IPAdapter inputs is the operator's workflow choice.
 
 ## Acceptance criteria
 - [ ] Drop a 2-person photo → both subjects detected; both render in 3D + 2D viewports.
 - [ ] Subject picker switches which subject Calibration / Reframer / head-pose sliders apply to.
 - [ ] Per-subject head pose persists; reload restores all subjects' state.
 - [ ] OpenPose JSON export contains N `people[]` entries.
-- [ ] ComfyUI bridge accepts `subject_index`; replay against `subject_index=1` injects only that subject's openpose.
+- [ ] ComfyUI bridge accepts `subject_index`; replay against `subject_index=1` injects the combined openpose image and subject-1 mask/conditioning slot.
 - [ ] Schema migration: existing single-subject rigs load cleanly under the new code.
 - [ ] All tests pass.
 - [ ] Packaged build smoke with a 2-person fixture verifies the full pipeline.

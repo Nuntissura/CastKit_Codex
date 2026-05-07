@@ -9,6 +9,19 @@ Add MediaPipe hand detection to the pose pipeline. Each detected hand contribute
 
 Carry-over citation: derived from OpenRepose `WP-I1-018` (in REVIEW; design intent is locked but operator sign-off pending).
 
+## OpenRepose source audit
+
+The historical `.product` tree already implemented hand support in Python/Qt, but CKC must rebuild it in the WP-0108 TypeScript/WASM pipeline:
+
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_schema.py:114-130` pins body/face/hand keypoint counts and hand connections.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rig.py:44-60` includes hand fit metrics, `:94-100` stores hand arrays on `Rig`, and `:447-522` runs MediaPipe hand detection with Tasks-model preference and legacy fallback.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\rotation.py:19-70` rotates hand world points alongside body/face.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\openpose_serialize.py:23-66` writes `hand_left_keypoints_2d` and `hand_right_keypoints_2d`.
+- `D:\Projects\LLM projects\OpenRepose\.product\src\openrepose\render\draw_openpose.py:240-242` and `:302-318` draw hand skeletons.
+- `D:\Projects\LLM projects\OpenRepose\.gov\workflow\workpackets\WP-I1-018-hand-detection-and-output.md:16` and `:28-35` record the originating work-packet scope.
+
+Implementation comments in CKC product code may cite these exact file/line ranges for recreated constants or behavior. They must not use the historical project name as a product identifier, UI/manual phrase, test name, fixture path, generated artifact path, or export name.
+
 ---
 
 ## Why

@@ -92,7 +92,7 @@ Queries used: "PuLID v2 ComfyUI identity preservation 2025", "InstantID face emb
 | `CKC_GOV/work_packets/WP-0107_Pose_Workflow_Schema_And_Shell.md` | full | Schema foundation. New `IdentityProfile` table mirrors `Rig` shape. |
 | `CKC_main/src/pose/rig.ts` | full (after WP-0108 ships) | Source of face landmarks for the bundle. |
 
-External: OpenRepose `D:\Projects\LLM projects\OpenRepose\` (search for "identity_profile" or "face_lock") for design intent — do not import.
+Historical source audit: no `.product` implementation exists for identity export profiles. `rg "identity_profile|face_lock|face.?swap|IPAdapter" "D:\Projects\LLM projects\OpenRepose\.product"` found no implemented identity-profile surface. The design intent comes from `D:\Projects\LLM projects\OpenRepose\.gov\workflow\workpackets\WP-I1-009-identity-export-profiles.md:16` and `:25-34`, plus CKC's own field research above. Do not cite `.product` for implementation here.
 
 ## Bundle shape (lock this)
 
