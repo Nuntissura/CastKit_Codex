@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "handlers": [
+    {
+      "specVersion": "v00.19",
+      "module": "v00_19.js",
+      "status": "pinned"
+    }
+  ]
+}

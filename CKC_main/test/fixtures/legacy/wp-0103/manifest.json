@@ -1,0 +1,33 @@
+{
+  "fixture_id": "wp-0103",
+  "schema_state": "wp-0103",
+  "schema_migration_cursor": {
+    "migration_key": "image_sourcing",
+    "migration_value": "v00.19"
+  },
+  "character_count": 1,
+  "image_count": 1,
+  "tag_count": 1,
+  "characters": [
+    {
+      "character_id": "char_legacy_wp_0103",
+      "display_name": "Legacy WP-0103",
+      "sample_sheet_field": {
+        "field_id": "CHAR-ID-006",
+        "value": "Reference archivist"
+      },
+      "sample_block_list_value": null,
+      "tags": [
+        "legacy-wp-0103"
+      ],
+      "images": [
+        {
+          "image_id": "img_legacy_wp_0103",
+          "relative_path": "images/original/legacy.png",
+          "file_hash": "4b5c5c92cec3b23e6a294fc0eea43234ef5126c5a64f4c6c531ac8430ab0b844"
+        }
+      ],
+      "known_issues": []
+    }
+  ]
+}

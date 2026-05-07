@@ -208,13 +208,26 @@ The suite is organized so each block can be run independently. Findings get reco
 - K3. Orphan adoption: `adopt_orphan_images.test.js` passes; `adoptOrphanImages` restores tags/rating/favorite/notes/source metadata and is idempotent.
 - K4. Live reset smoke: import `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg`, request Full reset through the backend automation gateway, restart CKC, verify `lastFullResetResult.ran === true`, list the newest orphan manifest, adopt into `__new__`, and capture the recovered character. Latest pass: 2026-05-07, manifest `CKC_GOV/targets/scratch/wp-0105-live/CastKit-Codex-Library/orphans/2026-05-07_182837/manifest.json`, captures `2026-05-07_162707767Z_no_session_wp-0105-before-full-reset.png` and `2026-05-07_162854971Z_no_session_wp-0105-after-adopt-orphans.png`.
 
-## Section L - Packaged build smokes
+## Section L - Forward-compat invariants (WP-0106)
+
+- L1. Frozen fixtures: `legacy_fixture_compatibility.test.js` passes; fixtures `wp-0091`, `wp-0100`, `wp-0103`, and `wp-0104` migrate under the current `CKCLibrary` and round-trip manifest character/image/tag/block-list expectations.
+- L2. Additive migration lint: `migration_invariants.test.js` passes; rejects NOT-NULL-without-default, unapproved drops, sacred provenance renames, and non-idempotent heavy-table index creation.
+- L3. Handler routing pin: `ingestion_handler_routing.test.js` passes; every workflow spec version has a registered handler and `_pinned.json` entry.
+- L4. Template field IDs: `template_field_id_immutability.test.js` passes; the governance and app copies of `CHARACTER_SHEET__v2.00.txt` match and baseline field IDs are not deleted or reused.
+- L5. Re-import idempotency: `ingestion_idempotency.test.js` passes using `D:/Projects/LLM projects/OpenRepose/test_material/image_samples/1085406391.jpg` when present; the second v00.19 accepted-lane run creates no new `ImageAsset` or `IngestionBatch`.
+- L6. Backup traceability: `backup_version_traceability.test.js` passes; backup manifests carry CKC version, migration cursor, provider, counts, and newer-version restores refuse clearly.
+- L7. Spec canon consistency: `spec_canon_consistency.test.js` passes; each registered workflow spec dry-runs through the adapter without unknown lane/spec errors.
+- L8. Index pins: `db_index_invariants.test.js` passes; fresh SQLite schema exposes pinned `ImageAsset` indexes for content hash, sheet version, source task, and review status.
+- L9. Focused command: `npm test -- test/migration_invariants.test.js test/ingestion_handler_routing.test.js test/template_field_id_immutability.test.js test/legacy_fixture_compatibility.test.js test/ingestion_idempotency.test.js test/backup_version_traceability.test.js test/db_index_invariants.test.js test/spec_canon_consistency.test.js`.
+- L10. Latest pass: 2026-05-07, focused WP-0106 suite passed 12 tests.
+
+## Section M - Packaged build smokes
 
 Run after every `npm run package:win`:
-- L1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
-- L2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
-- L3. Launch the portable .exe → repeats sections A, B, C, F, J, and K as a packaged-build smoke.
-- L4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
+- M1. NSIS installer + portable .exe land under `CKC_GOV/targets/CKC/artifacts/releases/vX.Y.Z/` with `manifest.json` + `SHA256SUMS.txt`.
+- M2. Tag `vX.Y.Z` pushed; GitHub Action attaches assets to the GH Release.
+- M3. Launch the portable .exe → repeats sections A, B, C, F, J, K, and L as a packaged-build smoke.
+- M4. Stealth-mode launch on the packaged build succeeds (capture works, no window).
 
 ---
 

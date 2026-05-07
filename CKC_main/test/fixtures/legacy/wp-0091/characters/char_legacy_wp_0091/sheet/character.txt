@@ -1,0 +1,4 @@
+CHARACTER SHEET - (v2.00)
+CHAR-ID-001: CHAR-000091
+CHAR-ID-002: Legacy WP-0091
+CHAR-ID-006: Reference archivist

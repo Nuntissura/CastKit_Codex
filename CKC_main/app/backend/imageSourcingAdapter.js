@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const yaml = require('js-yaml');
 
 const handlerV00_19 = require('./imageSourcingHandlers/v00_19');
@@ -36,6 +37,12 @@ function resolveHandler(specVersion) {
         throw new Error(`No image-sourcing handler registered for spec_version=${specVersion}. Known: ${Object.keys(HANDLERS).join(', ') || '(none)'}`);
     }
     return handler;
+}
+
+function fileSha256Hex(filePath) {
+    const hash = crypto.createHash('sha256');
+    hash.update(fs.readFileSync(filePath));
+    return hash.digest('hex');
 }
 
 // Dispatch entry point. Library binds this through
@@ -81,9 +88,10 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
         batchId: null,
     };
 
-    // Audit batch row (skip in dry-run; the audit is the running record).
     let batchId = null;
-    if (!isDryRun) {
+    const ensureBatch = async () => {
+        if (isDryRun) return null;
+        if (batchId) return batchId;
         const created = await lib.createIngestionBatch({
             characterId,
             sheetVersionId,
@@ -95,7 +103,8 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
         });
         batchId = created.batchId;
         result.batchId = batchId;
-    }
+        return batchId;
+    };
 
     try {
         // ---- Lane: rejected ----
@@ -110,6 +119,7 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
                     });
                     continue;
                 }
+                await ensureBatch();
                 const rej = await lib.createIngestionRejection({
                     batchId,
                     characterId,
@@ -157,6 +167,20 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
                         continue;
                     }
                 }
+                // Pre-check content hashes before opening an audit batch so
+                // re-running an already-ingested task is DB-idempotent.
+                if (reasons.has('content-hash')) {
+                    const fileHash = fileSha256Hex(item.filePath);
+                    const existing = await lib._findImageByContentHash(characterId, fileHash);
+                    if (existing) {
+                        result.skipped.push({
+                            sourcePath: item.filePath,
+                            reason: 'dup-content-hash',
+                            existingImageId: existing.imageId,
+                        });
+                        continue;
+                    }
+                }
 
                 if (isDryRun) {
                     result.imported.push({
@@ -168,6 +192,7 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
                     continue;
                 }
 
+                await ensureBatch();
                 // Real import via the existing importImages machinery
                 // (handles content-hash dedup + hash-addressed filenames
                 // per the identity-decoupling rule).
@@ -210,6 +235,7 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
                     result.scriptsImported.push({ filePath, plan: 'would-copy' });
                     continue;
                 }
+                await ensureBatch();
                 const bytes = fs.readFileSync(filePath);
                 const res = await lib.addCharacterScript({
                     characterId,
@@ -261,7 +287,7 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
             result.appSyncEventsAppended = handler.appendAppSyncEvents(plan.appSyncEventsPath, events);
         }
 
-        if (!isDryRun) {
+        if (!isDryRun && batchId) {
             await lib.finishIngestionBatch({
                 batchId,
                 importedCount: result.imported.length,
@@ -287,6 +313,7 @@ async function runIngestion({ lib, taskRootPath, characterId, sheetVersionId, la
 
 module.exports = {
     HANDLERS,
+    fileSha256Hex,
     readSpecVersion,
     resolveHandler,
     runIngestion,

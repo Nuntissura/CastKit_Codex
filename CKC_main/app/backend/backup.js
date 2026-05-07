@@ -3,6 +3,58 @@ const path = require('path');
 const crypto = require('crypto');
 const { Transform } = require('stream');
 const { pipeline } = require('stream/promises');
+const { get } = require('./db');
+
+function readAppVersion() {
+  try {
+    const pkgPath = path.join(__dirname, '..', '..', 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return String(pkg.version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
+
+function compareSemver(a, b) {
+  const pa = String(a || '0.0.0').split(/[.+-]/)[0].split('.').map((x) => Number(x) || 0);
+  const pb = String(b || '0.0.0').split(/[.+-]/)[0].split('.').map((x) => Number(x) || 0);
+  for (let i = 0; i < 3; i++) {
+    const av = pa[i] || 0;
+    const bv = pb[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+  return 0;
+}
+
+async function safeCount(db, tableName) {
+  try {
+    const row = await get(db, `SELECT COUNT(*) AS c FROM ${tableName}`);
+    return Number(row?.c || 0);
+  } catch {
+    return null;
+  }
+}
+
+async function getSchemaMigrationCursor(db) {
+  try {
+    const row = await get(
+      db,
+      `SELECT migration_key, migration_value, updated_at
+       FROM CkcDbMigration
+       ORDER BY updated_at DESC, migration_key DESC
+       LIMIT 1`
+    );
+    if (!row) return null;
+    return {
+      migration_key: row.migration_key == null ? null : String(row.migration_key),
+      migration_value: row.migration_value == null ? '' : String(row.migration_value),
+      updated_at: row.updated_at == null ? null : String(row.updated_at),
+    };
+  } catch {
+    return null;
+  }
+}
 
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
@@ -265,10 +317,18 @@ async function createLibraryBackup({
 
   files.sort((a, b) => String(a.path).localeCompare(String(b.path)));
   const shaLines = files.map((f) => `${f.sha256}  ${f.path}`);
+  const schemaMigrationCursor = await getSchemaMigrationCursor(db);
+  const appVersion = readAppVersion();
 
   const manifest = {
     kind: 'ckc_library_backup',
     version: 1,
+    ckc_app_version: appVersion,
+    schema_migration_cursor: schemaMigrationCursor,
+    created_at: createdAt,
+    db_provider: db?.provider || db?.dialect || 'sqlite',
+    image_count: await safeCount(db, 'ImageAsset'),
+    character_count: await safeCount(db, 'Character'),
     createdAt,
     source: {
       libraryRoot: srcRoot,
@@ -313,6 +373,11 @@ async function validateLibraryBackup({ backupDir, onProgress = null, isCancelled
   const kind = String(manifest?.kind ?? '').trim();
   const version = Number(manifest?.version);
   if (kind !== 'ckc_library_backup' || version !== 1) throw new Error('Not a CKC library backup (unsupported manifest)');
+  const backupVersion = String(manifest?.ckc_app_version || '').trim();
+  const currentVersion = readAppVersion();
+  if (backupVersion && compareSemver(backupVersion, currentVersion) > 0) {
+    throw new Error(`Backup was created by newer CKC ${backupVersion}; installed CKC is ${currentVersion}`);
+  }
 
   const entries = parseSha256Sums(fs.readFileSync(checksumsPath, 'utf8'));
   if (entries.length === 0) throw new Error('SHA256SUMS.txt has no entries');

@@ -1,0 +1,5266 @@
+{
+  "schemaVersion": 1,
+  "templateId": "v2.00",
+  "source": "CKC_GOV/templates/character_sheet_templates/CHARACTER_SHEET__v2.00.txt",
+  "generatedBy": "WP-0106",
+  "fieldCount": 751,
+  "fields": [
+    {
+      "id": "ANM-BLK-001",
+      "label": "Animal",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Animal_Comparison_Block"
+    },
+    {
+      "id": "ANM-BLK-002",
+      "label": "Match_Strength",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Animal_Comparison_Block"
+    },
+    {
+      "id": "ANM-BLK-003",
+      "label": "Aspect",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Animal_Comparison_Block"
+    },
+    {
+      "id": "ANM-BLK-004",
+      "label": "Why",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Animal_Comparison_Block"
+    },
+    {
+      "id": "BTN-BLK-001",
+      "label": "Trigger_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-002",
+      "label": "Trigger_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-003",
+      "label": "Stimulus",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-004",
+      "label": "Channel",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-005",
+      "label": "Immediate_Reaction",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-006",
+      "label": "Aftereffect",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-007",
+      "label": "Escalation_Risk",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "BTN-BLK-008",
+      "label": "Observable_Tells",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Trigger_Block"
+    },
+    {
+      "id": "CAM-BLK-001",
+      "label": "Lens_Comfort",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Camera_Behavior_Block"
+    },
+    {
+      "id": "CAM-BLK-002",
+      "label": "Gaze_Targeting",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Camera_Behavior_Block"
+    },
+    {
+      "id": "CAM-BLK-003",
+      "label": "Pose_Transition_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Camera_Behavior_Block"
+    },
+    {
+      "id": "CAM-BLK-004",
+      "label": "Angle_Seeking_Behavior",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Camera_Behavior_Block"
+    },
+    {
+      "id": "CAM-BLK-005",
+      "label": "Microexpression_Control",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Camera_Behavior_Block"
+    },
+    {
+      "id": "CHAR-APP-001",
+      "label": "Skin_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-002",
+      "label": "Skin_Undertone",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-003",
+      "label": "Skin_Finish_Under_Lights",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-004",
+      "label": "Distinguishing_Features",
+      "type": "block_list",
+      "blockSchemaName": "Feature_Block",
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-005",
+      "label": "Eye_Color",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-006",
+      "label": "Hair_Color_Natural",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-007",
+      "label": "Hair_Color_Current",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-008",
+      "label": "Hair_Style_Default",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-009",
+      "label": "Body_Hair_Distribution",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-010",
+      "label": "Grooming_General",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-011",
+      "label": "Belly_Button_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-APP-012",
+      "label": "Belly_Button_Piercing",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "APPEARANCE DETAILS"
+    },
+    {
+      "id": "CHAR-ARC-001",
+      "label": "Life_Motto",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-002",
+      "label": "Personal_Commandment",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-003",
+      "label": "Core_Want",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-004",
+      "label": "Core_Need",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-005",
+      "label": "Greatest_Fear",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-006",
+      "label": "Shame_Source",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-007",
+      "label": "Pride_Source",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-008",
+      "label": "Line_They_Wont_Cross",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-009",
+      "label": "Stress_Regression_Mode",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARC-010",
+      "label": "Growth_Vector",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "MOTTO & ARC CONTROL"
+    },
+    {
+      "id": "CHAR-ARCHE-001",
+      "label": "Animal_Comparison_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ARCHETYPAL / SYMBOLIC TAGS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-ARCHE-002",
+      "label": "Animal_Comparisons",
+      "type": "block_list",
+      "blockSchemaName": "Animal_Comparison_Block",
+      "section": "ARCHETYPAL / SYMBOLIC TAGS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-ARCHE-010",
+      "label": "Zodiac_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ARCHETYPAL / SYMBOLIC TAGS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-ARCHE-011",
+      "label": "Zodiac_Systems",
+      "type": "block_list",
+      "blockSchemaName": "Zodiac_Block",
+      "section": "ARCHETYPAL / SYMBOLIC TAGS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-001",
+      "label": "Audience_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-002",
+      "label": "Public_Figure_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-003",
+      "label": "Fandom_Name_Primary",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-004",
+      "label": "Fandom_Names_Alt",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-005",
+      "label": "Follower_Group_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-006",
+      "label": "Audience_Size_Estimate",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-007",
+      "label": "Audience_Loyalty",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-008",
+      "label": "Audience_Tone",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-AUD-009",
+      "label": "Audience_Interaction_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "AUDIENCE & FOLLOWING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-001",
+      "label": "Religion_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-002",
+      "label": "Religion_Affiliation",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-003",
+      "label": "Denomination_Sect",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-004",
+      "label": "Practice_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-005",
+      "label": "Spirituality_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-006",
+      "label": "Religious_Constraints",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BEL-007",
+      "label": "Public_vs_Private_Faith",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BELIEF & RELIGION (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BKG-001",
+      "label": "Origin_Summary",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-002",
+      "label": "Upbringing_Context",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-003",
+      "label": "Formative_Events",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-004",
+      "label": "Education_Training",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-005",
+      "label": "Career_Path_Summary",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-006",
+      "label": "Current_Life_Context",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-007",
+      "label": "Current_Constraints",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-008",
+      "label": "Core_Values",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-009",
+      "label": "Short_Term_Goals",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-010",
+      "label": "Long_Term_Goals",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-011",
+      "label": "Secrets_Contradictions",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BKG-012",
+      "label": "Stress_Coping_Methods",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BACKGROUND & CONTEXT"
+    },
+    {
+      "id": "CHAR-BRD-001",
+      "label": "Breast_Motion_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BREAST DYNAMICS (MOTION)"
+    },
+    {
+      "id": "CHAR-BRD-002",
+      "label": "Breast_Bounce_Amplitude",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BREAST DYNAMICS (MOTION)"
+    },
+    {
+      "id": "CHAR-BRD-003",
+      "label": "Breast_Bounce_Damping",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BREAST DYNAMICS (MOTION)"
+    },
+    {
+      "id": "CHAR-BRD-004",
+      "label": "Breast_Motion_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BREAST DYNAMICS (MOTION)"
+    },
+    {
+      "id": "CHAR-BRD-005",
+      "label": "Support_Default",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BREAST DYNAMICS (MOTION)"
+    },
+    {
+      "id": "CHAR-BRS-001",
+      "label": "Breast_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BRS-002",
+      "label": "Breast_Size_Descriptor",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BRS-003",
+      "label": "Breast_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BRS-004",
+      "label": "Breast_Placement",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BRS-005",
+      "label": "Breast_Firmness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BRS-006",
+      "label": "Nipple_Areola_Read",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CHEST / BREAST DETAILS (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-BTN-001",
+      "label": "Triggers_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TRIGGERS MAP (PUSH / PULL INPUTS) (BLOCKS)"
+    },
+    {
+      "id": "CHAR-BTN-002",
+      "label": "Triggers",
+      "type": "block_list",
+      "blockSchemaName": "Trigger_Block",
+      "section": "TRIGGERS MAP (PUSH / PULL INPUTS) (BLOCKS)"
+    },
+    {
+      "id": "CHAR-COS-001",
+      "label": "Lipstick_Use",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-COS-002",
+      "label": "Lipstick_Color_Palette",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-COS-003",
+      "label": "Lipstick_Finish",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-COS-004",
+      "label": "Nail_Length",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-COS-005",
+      "label": "Nail_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-COS-006",
+      "label": "Nail_Color_Palette",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "COSMETICS & NAILS (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-DEX-001",
+      "label": "Handedness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-002",
+      "label": "Manual_Dexterity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-003",
+      "label": "Fine_Motor_Control",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-004",
+      "label": "Gross_Motor_Coordination",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-005",
+      "label": "Balance_Stability",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-006",
+      "label": "Spatial_Awareness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-007",
+      "label": "Tool_Competence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-008",
+      "label": "Typical_Accidents",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DEX-009",
+      "label": "Signature_Competence_Tells",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "DEXTERITY & COORDINATION"
+    },
+    {
+      "id": "CHAR-DQR-001",
+      "label": "Descriptor_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-DQR-002",
+      "label": "List_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-DQR-003",
+      "label": "Enum_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-DQR-004",
+      "label": "Optionality_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-DQR-005",
+      "label": "Blocks_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-DQR-006",
+      "label": "Score_10_Standard",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "DATA QUALITY RULES"
+    },
+    {
+      "id": "CHAR-EYE-001",
+      "label": "Eye_Profile",
+      "type": "block",
+      "blockSchemaName": "Eye_Profile_Block",
+      "section": "FACE PROFILE (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-EZS-001",
+      "label": "Erogenous_Sensitivity_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "EROGENOUS ZONE SENSITIVITY (BLOCKS)"
+    },
+    {
+      "id": "CHAR-EZS-002",
+      "label": "Erogenous_Zones",
+      "type": "block_list",
+      "blockSchemaName": "Erogenous_Zone_Block",
+      "section": "EROGENOUS ZONE SENSITIVITY (BLOCKS)"
+    },
+    {
+      "id": "CHAR-FACE-001",
+      "label": "Face_Profile_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FACE PROFILE (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-FACE-002",
+      "label": "Face_Profile",
+      "type": "block",
+      "blockSchemaName": "Face_Profile_Block",
+      "section": "FACE PROFILE (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-FAM-001",
+      "label": "Family_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FAMILY & KIN (BLOCKS)"
+    },
+    {
+      "id": "CHAR-FAM-002",
+      "label": "Parent_Names_And_Ethnicity",
+      "type": "block_list",
+      "blockSchemaName": "Parent_Min_Block",
+      "section": "FAMILY & KIN (BLOCKS)"
+    },
+    {
+      "id": "CHAR-FAM-003",
+      "label": "Siblings",
+      "type": "block_list",
+      "blockSchemaName": "Sibling_Block",
+      "section": "FAMILY & KIN (BLOCKS)"
+    },
+    {
+      "id": "CHAR-FAM-004",
+      "label": "Notable_Family_Members",
+      "type": "block_list",
+      "blockSchemaName": "Family_Member_Block",
+      "section": "FAMILY & KIN (BLOCKS)"
+    },
+    {
+      "id": "CHAR-FLAW-001",
+      "label": "Character_Flaws",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "FLAWS, HABITS, GOSSIP"
+    },
+    {
+      "id": "CHAR-FLAW-002",
+      "label": "Bad_Habits",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "FLAWS, HABITS, GOSSIP"
+    },
+    {
+      "id": "CHAR-FLAW-003",
+      "label": "Toxic_Patterns",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "FLAWS, HABITS, GOSSIP"
+    },
+    {
+      "id": "CHAR-GOS-001",
+      "label": "Gossip_Rumors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "FLAWS, HABITS, GOSSIP"
+    },
+    {
+      "id": "CHAR-HAIR-001",
+      "label": "Preferred_Hair_Do_Default",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-002",
+      "label": "Preferred_Hair_Do_Up",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-003",
+      "label": "Preferred_Hair_Do_Down",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-004",
+      "label": "Bangs_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-005",
+      "label": "Part_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-006",
+      "label": "Styling_Tools_Habit",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HAIR-007",
+      "label": "Hair_Accessories",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "HAIR STYLING (PREFERENCES)"
+    },
+    {
+      "id": "CHAR-HLT-001",
+      "label": "Health_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "HEALTH & DISABILITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-HLT-002",
+      "label": "Conditions",
+      "type": "block_list",
+      "blockSchemaName": "Condition_Block",
+      "section": "HEALTH & DISABILITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-HLT-003",
+      "label": "Meds_And_Aids",
+      "type": "block_list",
+      "blockSchemaName": "Support_Block",
+      "section": "HEALTH & DISABILITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-HLT-004",
+      "label": "Accessibility_Needs",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "HEALTH & DISABILITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-HLT-005",
+      "label": "Pain_Fatigue_Baseline",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "HEALTH & DISABILITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-ID-001",
+      "label": "Character_ID",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-002",
+      "label": "Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-002A",
+      "label": "Real_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-002B",
+      "label": "Stage_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-002C",
+      "label": "Nickname(s)",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-002D",
+      "label": "Term_of_Endearment (Koosnaam)",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-003",
+      "label": "Age",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-004",
+      "label": "Fictional_Status",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-005",
+      "label": "Affiliation / Group",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-006",
+      "label": "Primary_Role",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-ID-007",
+      "label": "Secondary_Roles",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "IDENTITY"
+    },
+    {
+      "id": "CHAR-IDP-001",
+      "label": "Identity_Profile_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "IDENTITY PROFILE BLOCKS (REAL/STAGE/ALIAS OVERRIDES)"
+    },
+    {
+      "id": "CHAR-IDP-002",
+      "label": "Identity_Profile_Blocks",
+      "type": "block_list",
+      "blockSchemaName": "Identity_Profile_Block",
+      "section": "IDENTITY PROFILE BLOCKS (REAL/STAGE/ALIAS OVERRIDES)"
+    },
+    {
+      "id": "CHAR-INTA-001",
+      "label": "Intimate_Anatomy_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "INTIMATE ANATOMY (OPTIONAL, ADULT)"
+    },
+    {
+      "id": "CHAR-INTA-002",
+      "label": "Pubic_Hair_Grooming",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "INTIMATE ANATOMY (OPTIONAL, ADULT)"
+    },
+    {
+      "id": "CHAR-INTA-003",
+      "label": "Pubic_Hair_Style_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "INTIMATE ANATOMY (OPTIONAL, ADULT)"
+    },
+    {
+      "id": "CHAR-INTA-010",
+      "label": "Vulva_Profile",
+      "type": "block",
+      "blockSchemaName": "Vulva_Block",
+      "section": "INTIMATE ANATOMY (OPTIONAL, ADULT)"
+    },
+    {
+      "id": "CHAR-INTA-011",
+      "label": "Penis_Profile",
+      "type": "block",
+      "blockSchemaName": "Penis_Block",
+      "section": "INTIMATE ANATOMY (OPTIONAL, ADULT)"
+    },
+    {
+      "id": "CHAR-ITEM-001",
+      "label": "Special_Items",
+      "type": "block_list",
+      "blockSchemaName": "Item_Block",
+      "section": "SPECIAL ITEMS (BLOCKS)"
+    },
+    {
+      "id": "CHAR-KIN-001",
+      "label": "Walk_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-002",
+      "label": "Step_Cadence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-003",
+      "label": "Hip_Sway_Amplitude",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-004",
+      "label": "Hip_Tilt_During_Walk",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-005",
+      "label": "Pelvic_Tilt_Resting",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-006",
+      "label": "Hip_Posterior_Projection",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-007",
+      "label": "Shoulder_Swing",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-008",
+      "label": "Posture_Default",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-KIN-009",
+      "label": "Signature_Walk_Tells",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "KINEMATICS & GAIT (IMAGE/ANIMATION)"
+    },
+    {
+      "id": "CHAR-LANG-001",
+      "label": "Languages_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LANGUAGE PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-LANG-002",
+      "label": "Languages",
+      "type": "block_list",
+      "blockSchemaName": "Language_Block",
+      "section": "LANGUAGE PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-LAY-001",
+      "label": "Wardrobe_Layer_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "WARDROBE LAYER MODEL (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-LAY-002",
+      "label": "Wardrobe_Layers_Default",
+      "type": "block_list",
+      "blockSchemaName": "Layer_Block",
+      "section": "WARDROBE LAYER MODEL (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-LIFE-001",
+      "label": "Daily_Rituals",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-LIFE-002",
+      "label": "Sleep_Routine",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-LIFE-003",
+      "label": "Home_Aesthetic",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-LIFE-004",
+      "label": "Orderliness_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-LIFE-005",
+      "label": "Vices",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-LIFE-006",
+      "label": "Money_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LIFESTYLE & HOME (LOW BLOAT, HIGH REUSE)"
+    },
+    {
+      "id": "CHAR-MARK-001",
+      "label": "Marks_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MARKS MODEL (FRECKLES / MOLES / SCARS / ETC.)"
+    },
+    {
+      "id": "CHAR-MARK-002",
+      "label": "Marks",
+      "type": "block_list",
+      "blockSchemaName": "Mark_Block",
+      "section": "MARKS MODEL (FRECKLES / MOLES / SCARS / ETC.)"
+    },
+    {
+      "id": "CHAR-MEAS-001",
+      "label": "Height_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-002",
+      "label": "Weight_kg",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-003",
+      "label": "Shoulder_Width_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-004",
+      "label": "Chest_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-005",
+      "label": "Waist_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-006",
+      "label": "Hip_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-007",
+      "label": "Inseam_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-008",
+      "label": "Neck_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-009",
+      "label": "Thigh_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-010",
+      "label": "Calf_Circumference_cm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-011",
+      "label": "Hand_Size",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-012",
+      "label": "Shoe_Size_EU",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MEAS-013",
+      "label": "Proportions_Notes",
+      "type": "block_list",
+      "blockSchemaName": "Proportion_Block",
+      "section": "BODY MEASUREMENTS (ATOMIC)"
+    },
+    {
+      "id": "CHAR-MOUTH-001",
+      "label": "Mouth_Profile",
+      "type": "block",
+      "blockSchemaName": "Mouth_Profile_Block",
+      "section": "FACE PROFILE (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-NOSE-001",
+      "label": "Nose_Profile",
+      "type": "block",
+      "blockSchemaName": "Nose_Profile_Block",
+      "section": "FACE PROFILE (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-OBJ-001",
+      "label": "Objectification_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-002",
+      "label": "Display_Priority",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-003",
+      "label": "Camera_Awareness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-004",
+      "label": "Preferred_Display_Angles",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-005",
+      "label": "Movement_Bias",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-006",
+      "label": "Audience_Signaling",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-OBJ-010",
+      "label": "Performance_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-011",
+      "label": "Performance_Personas",
+      "type": "block_list",
+      "blockSchemaName": "Performance_Persona_Block",
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-012",
+      "label": "Pose_Library",
+      "type": "block_list",
+      "blockSchemaName": "Pose_Block",
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-013",
+      "label": "Camera_Behavior",
+      "type": "block",
+      "blockSchemaName": "Camera_Behavior_Block",
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-014",
+      "label": "Audience_Feedback_Loop",
+      "type": "block",
+      "blockSchemaName": "Feedback_Loop_Block",
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-015",
+      "label": "Self_Objectification_Level",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-016",
+      "label": "“Performance_Off”_Tell",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION & PERFORMANCE (DEPTH)"
+    },
+    {
+      "id": "CHAR-OBJ-020",
+      "label": "Objectification_Mechanics_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "OBJECTIFICATION MECHANICS (BLOCKS)"
+    },
+    {
+      "id": "CHAR-OBJ-021",
+      "label": "Objectification_Vectors",
+      "type": "block_list",
+      "blockSchemaName": "Objectification_Vector_Block",
+      "section": "OBJECTIFICATION MECHANICS (BLOCKS)"
+    },
+    {
+      "id": "CHAR-OBJ-022",
+      "label": "Objectification_Contexts",
+      "type": "block_list",
+      "blockSchemaName": "Objectification_Context_Block",
+      "section": "OBJECTIFICATION MECHANICS (BLOCKS)"
+    },
+    {
+      "id": "CHAR-OBJ-023",
+      "label": "Objectification_Why",
+      "type": "block_list",
+      "blockSchemaName": "Objectification_Why_Block",
+      "section": "OBJECTIFICATION MECHANICS (BLOCKS)"
+    },
+    {
+      "id": "CHAR-ORG-001",
+      "label": "Birthplace",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-002",
+      "label": "Raised_In",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-003",
+      "label": "Ethnic_Background",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-004",
+      "label": "Ancestry_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-005",
+      "label": "Citizen_Of",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-006",
+      "label": "Residency_Status",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-007",
+      "label": "Current_Base",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-ORG-008",
+      "label": "Cultural_Affiliations",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ORIGINS & LEGAL / CULTURAL IDENTITY"
+    },
+    {
+      "id": "CHAR-PART-001",
+      "label": "Modes_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "INTERNAL MODES (BEHAVIOR SWITCHES) (BLOCKS)"
+    },
+    {
+      "id": "CHAR-PART-002",
+      "label": "Modes",
+      "type": "block_list",
+      "blockSchemaName": "Mode_Block",
+      "section": "INTERNAL MODES (BEHAVIOR SWITCHES) (BLOCKS)"
+    },
+    {
+      "id": "CHAR-PHY-001",
+      "label": "Build",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PHY-002",
+      "label": "Primary_Visual_Anchors",
+      "type": "block_list",
+      "blockSchemaName": "Visual_Anchor_Block",
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PHY-003",
+      "label": "Movement_Quality",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PHY-004",
+      "label": "Clothing_Tension_Points",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PHY-005",
+      "label": "Stamina_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PHY-006",
+      "label": "Physical_Durability",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PHYSICAL PROFILE"
+    },
+    {
+      "id": "CHAR-PREF-001",
+      "label": "Likes",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-002",
+      "label": "Dislikes",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-003",
+      "label": "Food_Favorites",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-004",
+      "label": "Food_Dislikes_Allergies",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-005",
+      "label": "Drinks_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-006",
+      "label": "Pets",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-007",
+      "label": "Favorite_Color",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-008",
+      "label": "Comforts_Soothers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-009",
+      "label": "Irritants_Annoyances",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-010",
+      "label": "Stress_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PREF-020",
+      "label": "Music_Mood_Anchors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PREFERENCES & AVERSIONS"
+    },
+    {
+      "id": "CHAR-PSY-001",
+      "label": "Baseline_Temperament",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-002",
+      "label": "Core_Drives",
+      "type": "block_list",
+      "blockSchemaName": "Drive_Block",
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-003",
+      "label": "Self_Awareness_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-004",
+      "label": "Motivational_Driver",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-005",
+      "label": "Privacy_vs_Performance_Index",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-006",
+      "label": "Innocence_as_Weapon",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERSONALITY & PSYCHOLOGY (CORE)"
+    },
+    {
+      "id": "CHAR-PSY-010",
+      "label": "Big5_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010A",
+      "label": "Big_5_Openness",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010B",
+      "label": "Big_5_Conscientiousness",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010C",
+      "label": "Big_5_Extraversion",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010D",
+      "label": "Big_5_Agreeableness",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010E",
+      "label": "Big_5_Neuroticism",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010F",
+      "label": "Big5_Summary_1L",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-010G",
+      "label": "Big5_Behavior_Translation_1L",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-011",
+      "label": "Attachment_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-012",
+      "label": "Emotion_Regulation_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-013",
+      "label": "Defense_Mechanisms",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-014",
+      "label": "Validation_Seeking_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-015",
+      "label": "Control_Need_Level",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-016",
+      "label": "Impulsivity_Level",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-017",
+      "label": "Empathy_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-018",
+      "label": "Self_Esteem_Baseline",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-019",
+      "label": "Shame_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-020",
+      "label": "Pride_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-021",
+      "label": "Cognitive_Distortions",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-022",
+      "label": "Conflict_Escalation_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-023",
+      "label": "Deescalation_Tools",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-024",
+      "label": "Self_Justification_Story",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-025",
+      "label": "Vulnerability_Window",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-026",
+      "label": "Intimacy_Anxieties",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-030",
+      "label": "MBTI_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-031",
+      "label": "MBTI_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-032",
+      "label": "MBTI_Description_1L",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-PSY-033",
+      "label": "MBTI_Behavior_Translation_1L",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "PSYCHOLOGY DEPTH (ATOMIC KNOBS)"
+    },
+    {
+      "id": "CHAR-REL-001",
+      "label": "Romantic_Status",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "RELATIONSHIP STATUS (ROMANTIC)"
+    },
+    {
+      "id": "CHAR-REL-002",
+      "label": "Partner_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "RELATIONSHIP STATUS (ROMANTIC)"
+    },
+    {
+      "id": "CHAR-REL-003",
+      "label": "Relationship_Stability",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "RELATIONSHIP STATUS (ROMANTIC)"
+    },
+    {
+      "id": "CHAR-REP-001",
+      "label": "Scandal_Controversy_Log",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "FLAWS, HABITS, GOSSIP"
+    },
+    {
+      "id": "CHAR-ROM-001",
+      "label": "Romance_Focus",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-002",
+      "label": "Relationship_Objective",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-003",
+      "label": "Commitment_Threshold",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-004",
+      "label": "Pursuit_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-005",
+      "label": "Conflict_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-006",
+      "label": "Repair_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-007",
+      "label": "Trust_Builders",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-008",
+      "label": "Trust_Breakers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-009",
+      "label": "Dealbreakers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-010",
+      "label": "What_They_Need_To_Hear",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-011",
+      "label": "What_They_Need_To_See",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-ROM-012",
+      "label": "Public_vs_Private_Romance",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROMANCE & RELATIONSHIP DYNAMICS"
+    },
+    {
+      "id": "CHAR-RP-001",
+      "label": "Roleplay_Interest_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-002",
+      "label": "Roleplay_Context",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-003",
+      "label": "Roleplay_Initiation_Pattern",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-004",
+      "label": "Roleplay_Identity_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-005",
+      "label": "Roleplay_Identity_Count",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-006",
+      "label": "Identity_Switch_Fluidity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-007",
+      "label": "Roleplay_Alias_List",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-008",
+      "label": "Alias_Dominance",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-009",
+      "label": "Alias_Persistence_After_Play",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-010",
+      "label": "Identity_Inversion_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-011",
+      "label": "Canon_Personality_Override",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-012",
+      "label": "Alias_Behavior_Divergence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-013",
+      "label": "Roleplay_Exit_Strictness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-RP-014",
+      "label": "Roleplay_Activation_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "ROLEPLAY & IDENTITY LAYERING"
+    },
+    {
+      "id": "CHAR-SCN-001",
+      "label": "Camera_Awareness_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-002",
+      "label": "Pose_Holding_Tolerance",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-003",
+      "label": "Movement_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-004",
+      "label": "Eye_Contact_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-005",
+      "label": "Voice_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-006",
+      "label": "Touch_Intensity_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-007",
+      "label": "Pace_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-008",
+      "label": "Prop_Comfort",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-009",
+      "label": "Mirror_Comfort",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCN-010",
+      "label": "Aftermath_Tone",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENE PERFORMANCE PROFILE (REUSABLE SCRIPT KNOBS)"
+    },
+    {
+      "id": "CHAR-SCNT-001",
+      "label": "Baseline_Scent",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SCNT-002",
+      "label": "Fragrance_Use",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SCNT-003",
+      "label": "Scent_Intensity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SCNT-004",
+      "label": "Heat_Sweat_Scent_Shift",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SCNT-005",
+      "label": "Scent_Notes",
+      "type": "block_list",
+      "blockSchemaName": "Scent_Note_Block",
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SCNT-006",
+      "label": "Memory_Scent_Association",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "SCENT PROFILE (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SENS-001",
+      "label": "Primary_Sensory_Input",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SENSORY PRIORITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SENS-002",
+      "label": "Secondary_Sensory_Input",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SENSORY PRIORITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SENS-003",
+      "label": "Sensory_Attention_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SENSORY PRIORITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SENS-004",
+      "label": "First_Noticed_In_Room",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SENSORY PRIORITY (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SEX-001",
+      "label": "Sex_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SEXUALITY & EXPLICIT CONTENT MODULE (ADULT, OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SEX-002",
+      "label": "Sex_Profile",
+      "type": "block",
+      "blockSchemaName": "Sex_Profile_Block",
+      "section": "SEXUALITY & EXPLICIT CONTENT MODULE (ADULT, OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SEX-003",
+      "label": "Sex_Acts",
+      "type": "block_list",
+      "blockSchemaName": "Sex_Act_Block",
+      "section": "SEXUALITY & EXPLICIT CONTENT MODULE (ADULT, OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SEX-004",
+      "label": "Sex_Limits",
+      "type": "block",
+      "blockSchemaName": "Sex_Limits_Block",
+      "section": "SEXUALITY & EXPLICIT CONTENT MODULE (ADULT, OPTIONAL)"
+    },
+    {
+      "id": "CHAR-SHP-001",
+      "label": "Ass_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SHP-002",
+      "label": "Ass_Firmness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SHP-003",
+      "label": "Leg_Length_Ratio",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SHP-004",
+      "label": "Leg_Silhouette",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SHP-005",
+      "label": "Calf_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SHP-006",
+      "label": "Hip_Waist_Ratio_Read",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BODY SHAPE DETAILS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-SOC-001",
+      "label": "First_Impression",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-002",
+      "label": "Reputation_Summary",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-003",
+      "label": "Perceived_Strengths",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-004",
+      "label": "Perceived_Flaws",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-005",
+      "label": "Common_Misreadings",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-006",
+      "label": "Social_Positioning",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-007",
+      "label": "Boundary_Signals",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-020",
+      "label": "Social_Class_Read",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOC-021",
+      "label": "Status_Anxiety_Level",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "EXTERNAL PERCEPTION & SOCIAL SIGNALS"
+    },
+    {
+      "id": "CHAR-SOCG-001",
+      "label": "Social_Graph_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-002",
+      "label": "Allies",
+      "type": "block_list",
+      "blockSchemaName": "Social_Link_Block",
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-003",
+      "label": "Rivals",
+      "type": "block_list",
+      "blockSchemaName": "Social_Link_Block",
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-004",
+      "label": "Enemies",
+      "type": "block_list",
+      "blockSchemaName": "Social_Link_Block",
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-005",
+      "label": "Mentors",
+      "type": "block_list",
+      "blockSchemaName": "Social_Link_Block",
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-006",
+      "label": "Dependents",
+      "type": "block_list",
+      "blockSchemaName": "Social_Link_Block",
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-SOCG-010",
+      "label": "Social_Link_ID_Rule",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "SOCIAL GRAPH (BLOCKS)"
+    },
+    {
+      "id": "CHAR-STY-001",
+      "label": "Primary_Style_Keywords",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-002",
+      "label": "Default_Outfit",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-003",
+      "label": "Color_Palette_Bias",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-004",
+      "label": "Fit_Silhouette_Bias",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-005",
+      "label": "Signature_Pieces",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-006",
+      "label": "Accessory_Signatures",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-007",
+      "label": "Footwear_Default",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-008",
+      "label": "Outerwear_Default",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-009",
+      "label": "Underwear_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-010",
+      "label": "Grooming_Hair_Makeup_Tendencies",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-011",
+      "label": "Clothing_Removal_Pattern",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-020",
+      "label": "“Armor”_Outfit",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-021",
+      "label": "Signature_Look_By_Context",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-STY-022",
+      "label": "Jewelry_Trinket_Meanings",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "STYLE & WARDROBE (GLOBAL DEFAULTS)"
+    },
+    {
+      "id": "CHAR-TAC-001",
+      "label": "Tactile_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TACTILE SIGNATURE (OPTIONAL, NON-EXPLICIT)"
+    },
+    {
+      "id": "CHAR-TAC-002",
+      "label": "Tactile_Surfaces",
+      "type": "block_list",
+      "blockSchemaName": "Tactile_Surface_Block",
+      "section": "TACTILE SIGNATURE (OPTIONAL, NON-EXPLICIT)"
+    },
+    {
+      "id": "CHAR-TAC-003",
+      "label": "Tactile_Mention_Rule",
+      "type": "rule",
+      "blockSchemaName": null,
+      "section": "TACTILE SIGNATURE (OPTIONAL, NON-EXPLICIT)"
+    },
+    {
+      "id": "CHAR-TIME-001",
+      "label": "Time_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-002",
+      "label": "Chronological_Age_Years",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-003",
+      "label": "Biological_Age_Years",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-004",
+      "label": "Apparent_Age_Years",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-005",
+      "label": "Age_Presentation",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-006",
+      "label": "Time_Anomaly_Tags",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-TIME-007",
+      "label": "Time_Anomaly_Notes",
+      "type": "paragraph",
+      "blockSchemaName": null,
+      "section": "TEMPORAL TRACKING (OPTIONAL)"
+    },
+    {
+      "id": "CHAR-VIS-001",
+      "label": "Prompt_Anchors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "VISUAL PROMPT ANCHORS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-VIS-002",
+      "label": "Negative_Anchors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "VISUAL PROMPT ANCHORS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-VIS-003",
+      "label": "Lighting_Best",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "VISUAL PROMPT ANCHORS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-VIS-004",
+      "label": "Camera_Lens_Look",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "VISUAL PROMPT ANCHORS (IMAGE-GEN READY)"
+    },
+    {
+      "id": "CHAR-WRK-001",
+      "label": "Official_Occupation_Title",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-002",
+      "label": "Official_Employer_Org",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-003",
+      "label": "Occupation_Domain",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-004",
+      "label": "Employment_Status",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-005",
+      "label": "Income_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-006",
+      "label": "Side_Hustles_Model",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "CHAR-WRK-007",
+      "label": "Side_Hustles",
+      "type": "block_list",
+      "blockSchemaName": "Hustle_Block",
+      "section": "WORK & OCCUPATION"
+    },
+    {
+      "id": "DRV-BLK-001",
+      "label": "Drive_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-002",
+      "label": "Rank",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-003",
+      "label": "Intensity",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-004",
+      "label": "Expression_Pattern",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-005",
+      "label": "Drive_Conflicts_With",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-006",
+      "label": "Satisfied_By",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "DRV-BLK-007",
+      "label": "Threatened_By",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Drive_Block"
+    },
+    {
+      "id": "EYE-BLK-001",
+      "label": "Eye_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-002",
+      "label": "Eye_Size",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-003",
+      "label": "Canthal_Tilt",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-004",
+      "label": "Iris_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-005",
+      "label": "Sclera_Clarity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-006",
+      "label": "Lashes",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-007",
+      "label": "Brows_Thickness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EYE-BLK-008",
+      "label": "Brows_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Eye_Profile_Block"
+    },
+    {
+      "id": "EZN-BLK-001",
+      "label": "Zone_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "EZN-BLK-002",
+      "label": "Sensitivity_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "EZN-BLK-003",
+      "label": "Preferred_Stimulation_Modes",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "EZN-BLK-004",
+      "label": "Overstimulation_Threshold",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "EZN-BLK-005",
+      "label": "After_Sensitivity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "EZN-BLK-006",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Erogenous_Zone_Block"
+    },
+    {
+      "id": "FCE-BLK-001",
+      "label": "Face_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-002",
+      "label": "Forehead_Height",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-003",
+      "label": "Forehead_Width",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-004",
+      "label": "Cheekbones",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-005",
+      "label": "Jawline",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-006",
+      "label": "Chin",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-007",
+      "label": "Chin_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-008",
+      "label": "Symmetry",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-009",
+      "label": "Resting_Expression",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FCE-BLK-010",
+      "label": "Distinct_Face_Anchors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Face_Profile_Block"
+    },
+    {
+      "id": "FDB-BLK-001",
+      "label": "Reads_Reactions",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feedback_Loop_Block"
+    },
+    {
+      "id": "FDB-BLK-002",
+      "label": "Reinforcement_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feedback_Loop_Block"
+    },
+    {
+      "id": "FDB-BLK-003",
+      "label": "Escalation_When_Praised",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feedback_Loop_Block"
+    },
+    {
+      "id": "FDB-BLK-004",
+      "label": "Collapse_When_Ignored",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feedback_Loop_Block"
+    },
+    {
+      "id": "FDB-BLK-005",
+      "label": "Recovery_Methods",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feedback_Loop_Block"
+    },
+    {
+      "id": "FMB-BLK-001",
+      "label": "Relation",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FMB-BLK-002",
+      "label": "Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FMB-BLK-003",
+      "label": "Character_ID",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FMB-BLK-004",
+      "label": "Relationship_Quality",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FMB-BLK-005",
+      "label": "Why_Notable",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FMB-BLK-006",
+      "label": "Visibility_In_Life",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Family_Member_Block"
+    },
+    {
+      "id": "FT-BLK-001",
+      "label": "Feature_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "FT-BLK-002",
+      "label": "Feature_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "FT-BLK-003",
+      "label": "Location",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "FT-BLK-004",
+      "label": "Prominence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "FT-BLK-005",
+      "label": "ImageGen_Use",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "FT-BLK-006",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Feature_Block"
+    },
+    {
+      "id": "GEN-CGL-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-CGL-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-CGL-003",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-CGL-004",
+      "label": "Pulsation_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-CGL-005",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-CHD-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_HOOD_PERCEPTION"
+    },
+    {
+      "id": "GEN-CHD-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_HOOD_PERCEPTION"
+    },
+    {
+      "id": "GEN-CHD-003",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_HOOD_PERCEPTION"
+    },
+    {
+      "id": "GEN-CHD-004",
+      "label": "Swelling_Excited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_HOOD_PERCEPTION"
+    },
+    {
+      "id": "GEN-CHD-005",
+      "label": "Touch_Intensity_Invited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "CLITORAL_HOOD_PERCEPTION"
+    },
+    {
+      "id": "GEN-FRN-001",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FRENULUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-FRN-002",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FRENULUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-FRN-003",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FRENULUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-FRN-004",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FRENULUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-FRN-005",
+      "label": "Touch_Intensity_Invited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "FRENULUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-GLA-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-GLA-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-GLA-003",
+      "label": "Friction_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-GLA-004",
+      "label": "Pulsation_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-GLA-005",
+      "label": "Swelling_Excited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "GLANS_PERCEPTION"
+    },
+    {
+      "id": "GEN-GSP-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "G_SPOT_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-GSP-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "G_SPOT_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-GSP-003",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "G_SPOT_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-GSP-004",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "G_SPOT_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-GSP-005",
+      "label": "Change_Under_Stimulation",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "G_SPOT_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-LMA-001",
+      "label": "Visual_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MAJORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMA-002",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MAJORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMA-003",
+      "label": "Moisture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MAJORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMA-004",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MAJORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMA-005",
+      "label": "Compliance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MAJORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMI-001",
+      "label": "Visual_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MINORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMI-002",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MINORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMI-003",
+      "label": "Moisture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MINORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMI-004",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MINORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-LMI-005",
+      "label": "Friction_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "LABIA_MINORA_PERCEPTION"
+    },
+    {
+      "id": "GEN-MON-001",
+      "label": "Visual_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MONS_PUBIS_PERCEPTION"
+    },
+    {
+      "id": "GEN-MON-002",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MONS_PUBIS_PERCEPTION"
+    },
+    {
+      "id": "GEN-MON-003",
+      "label": "Temperature_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MONS_PUBIS_PERCEPTION"
+    },
+    {
+      "id": "GEN-MON-004",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MONS_PUBIS_PERCEPTION"
+    },
+    {
+      "id": "GEN-MON-005",
+      "label": "Emotional_Response_Elicited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "MONS_PUBIS_PERCEPTION"
+    },
+    {
+      "id": "GEN-PER-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERINEUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-PER-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERINEUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-PER-003",
+      "label": "Temperature_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERINEUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-PER-004",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERINEUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-PER-005",
+      "label": "Touch_Intensity_Invited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PERINEUM_PERCEPTION"
+    },
+    {
+      "id": "GEN-PRO-001",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PROSTATE_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-PRO-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PROSTATE_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-PRO-003",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PROSTATE_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-PRO-004",
+      "label": "Pulsation_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PROSTATE_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-PRO-005",
+      "label": "Change_Under_Stimulation",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PROSTATE_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-PTP-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PENILE_TIP_PERCEPTION"
+    },
+    {
+      "id": "GEN-PTP-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PENILE_TIP_PERCEPTION"
+    },
+    {
+      "id": "GEN-PTP-003",
+      "label": "Moisture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PENILE_TIP_PERCEPTION"
+    },
+    {
+      "id": "GEN-PTP-004",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PENILE_TIP_PERCEPTION"
+    },
+    {
+      "id": "GEN-PTP-005",
+      "label": "Response_Speed_To_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "PENILE_TIP_PERCEPTION"
+    },
+    {
+      "id": "GEN-SHF-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SHAFT_PERCEPTION"
+    },
+    {
+      "id": "GEN-SHF-002",
+      "label": "Firmness_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SHAFT_PERCEPTION"
+    },
+    {
+      "id": "GEN-SHF-003",
+      "label": "Elasticity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SHAFT_PERCEPTION"
+    },
+    {
+      "id": "GEN-SHF-004",
+      "label": "Friction_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SHAFT_PERCEPTION"
+    },
+    {
+      "id": "GEN-SHF-005",
+      "label": "Compliance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "SHAFT_PERCEPTION"
+    },
+    {
+      "id": "GEN-TES-001",
+      "label": "Texture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TESTICLES_PERCEPTION"
+    },
+    {
+      "id": "GEN-TES-002",
+      "label": "Sensitivity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TESTICLES_PERCEPTION"
+    },
+    {
+      "id": "GEN-TES-003",
+      "label": "Temperature_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TESTICLES_PERCEPTION"
+    },
+    {
+      "id": "GEN-TES-004",
+      "label": "Pressure_Tolerance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TESTICLES_PERCEPTION"
+    },
+    {
+      "id": "GEN-TES-005",
+      "label": "Emotional_Response_Elicited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "TESTICLES_PERCEPTION"
+    },
+    {
+      "id": "GEN-VCA-001",
+      "label": "Internal_Feeling_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VCA-002",
+      "label": "Tightness_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VCA-003",
+      "label": "Elasticity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VCA-004",
+      "label": "Friction_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VCA-005",
+      "label": "Compliance_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VCA-006",
+      "label": "Pulsation_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_CANAL_PERCEPTION (INTERNAL)"
+    },
+    {
+      "id": "GEN-VOP-001",
+      "label": "Moisture_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "GEN-VOP-002",
+      "label": "Elasticity_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "GEN-VOP-003",
+      "label": "Friction_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "GEN-VOP-004",
+      "label": "Tightness_Perception",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "GEN-VOP-005",
+      "label": "Discharge_Level_Normal",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "GEN-VOP-006",
+      "label": "Discharge_Level_Excited",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "VAGINAL_OPENING_PERCEPTION"
+    },
+    {
+      "id": "HLT-BLK-001",
+      "label": "Condition_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-002",
+      "label": "Category",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-003",
+      "label": "Visibility",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-004",
+      "label": "Severity",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-005",
+      "label": "Onset",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-006",
+      "label": "Limitations",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-007",
+      "label": "Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HLT-BLK-008",
+      "label": "Mitigations",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Condition_Block"
+    },
+    {
+      "id": "HUS-BLK-001",
+      "label": "Hustle_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "HUS-BLK-002",
+      "label": "Hustle_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "HUS-BLK-003",
+      "label": "Time_Commitment",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "HUS-BLK-004",
+      "label": "Visibility",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "HUS-BLK-005",
+      "label": "Motivation",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "HUS-BLK-006",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Hustle_Block"
+    },
+    {
+      "id": "IDP-BLK-001",
+      "label": "Identity_Label",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-002",
+      "label": "Persona_Summary",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-003",
+      "label": "Public_Facing_Behavior",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-004",
+      "label": "Private_Behavior",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-010",
+      "label": "Likes_Override",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-011",
+      "label": "Dislikes_Override",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-020",
+      "label": "Clothing_Tendencies",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-021",
+      "label": "Default_Outfit",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-022",
+      "label": "Outerwear_Default",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-023",
+      "label": "Underwear_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-024",
+      "label": "Wardrobe_Layers",
+      "type": "block_list",
+      "blockSchemaName": "Layer_Block",
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-025",
+      "label": "Special_Items_Override",
+      "type": "block_list",
+      "blockSchemaName": "Item_Block",
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-030",
+      "label": "Scent_Override",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "IDP-BLK-031",
+      "label": "Scent_Notes_Override",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Identity_Profile_Block"
+    },
+    {
+      "id": "ITM-BLK-001",
+      "label": "Item_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-002",
+      "label": "Category",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-003",
+      "label": "Material",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-004",
+      "label": "Color",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-005",
+      "label": "Wear_Carry_Location",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-006",
+      "label": "Visibility",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-007",
+      "label": "Condition",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-008",
+      "label": "Meaning_Story",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "ITM-BLK-009",
+      "label": "Loss_Impact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Item_Block"
+    },
+    {
+      "id": "LAN-BLK-001",
+      "label": "Language",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-002",
+      "label": "Proficiency_Speaking",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-003",
+      "label": "Proficiency_Listening",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-004",
+      "label": "Proficiency_Reading",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-005",
+      "label": "Proficiency_Writing",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-006",
+      "label": "Accent_Dialect",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-007",
+      "label": "Code_Switching_Tendency",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAN-BLK-008",
+      "label": "Voice_Tells_When_Stressed",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Language_Block"
+    },
+    {
+      "id": "LAY-BLK-001",
+      "label": "Layer_Name",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-002",
+      "label": "Typical_Items",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-003",
+      "label": "Fabrics_Textures",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-004",
+      "label": "Colors",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-005",
+      "label": "Fit_Silhouette",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-006",
+      "label": "Fasteners_Removal_Ease",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-007",
+      "label": "Sentimental_Items",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "LAY-BLK-008",
+      "label": "Situation_Overrides",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Layer_Block"
+    },
+    {
+      "id": "MRK-BLK-001",
+      "label": "Mark_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-002",
+      "label": "Location",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-003",
+      "label": "Size_mm",
+      "type": "integer",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-004",
+      "label": "Color",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-005",
+      "label": "Texture",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-006",
+      "label": "Prominence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-007",
+      "label": "Visibility_Under_Light",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MRK-BLK-008",
+      "label": "Meaning_Story",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mark_Block"
+    },
+    {
+      "id": "MTH-BLK-001",
+      "label": "Lip_Fullness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mouth_Profile_Block"
+    },
+    {
+      "id": "MTH-BLK-002",
+      "label": "Cupid_Bow",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mouth_Profile_Block"
+    },
+    {
+      "id": "MTH-BLK-003",
+      "label": "Smile_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mouth_Profile_Block"
+    },
+    {
+      "id": "MTH-BLK-004",
+      "label": "Teeth_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mouth_Profile_Block"
+    },
+    {
+      "id": "NOS-BLK-001",
+      "label": "Bridge_Height",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Nose_Profile_Block"
+    },
+    {
+      "id": "NOS-BLK-002",
+      "label": "Nose_Length",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Nose_Profile_Block"
+    },
+    {
+      "id": "NOS-BLK-003",
+      "label": "Tip_Shape",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Nose_Profile_Block"
+    },
+    {
+      "id": "NOS-BLK-004",
+      "label": "Nostrils",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Nose_Profile_Block"
+    },
+    {
+      "id": "OBJC-BLK-001",
+      "label": "Context",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJC-BLK-002",
+      "label": "Audience",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJC-BLK-003",
+      "label": "Typical_Trigger",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJC-BLK-004",
+      "label": "Typical_Response",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJC-BLK-005",
+      "label": "Aftermath",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJC-BLK-006",
+      "label": "Risk_Level",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Context_Block"
+    },
+    {
+      "id": "OBJV-BLK-001",
+      "label": "Vector",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJV-BLK-002",
+      "label": "Focus_Target",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJV-BLK-003",
+      "label": "Intensity",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJV-BLK-004",
+      "label": "Control_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJV-BLK-005",
+      "label": "Payoff",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJV-BLK-006",
+      "label": "Cost",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Vector_Block"
+    },
+    {
+      "id": "OBJW-BLK-001",
+      "label": "Driver",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Why_Block"
+    },
+    {
+      "id": "OBJW-BLK-002",
+      "label": "Consciousness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Why_Block"
+    },
+    {
+      "id": "OBJW-BLK-003",
+      "label": "Origin",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Why_Block"
+    },
+    {
+      "id": "OBJW-BLK-004",
+      "label": "Reinforcement_Loop",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Objectification_Why_Block"
+    },
+    {
+      "id": "ORA-GIV-001",
+      "label": "Willingness_To_Give",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-002",
+      "label": "Preferred_Recipient",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-003",
+      "label": "Mouth_Skill_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-004",
+      "label": "Tongue_Pressure_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-005",
+      "label": "Tongue_Movement_Pattern",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-006",
+      "label": "Suction_Strength",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-007",
+      "label": "Kiss_Tempo",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-008",
+      "label": "Hand_And_Finger_Use_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-009",
+      "label": "Gentle_Nibbling_Enabled",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-010",
+      "label": "Stroking_And_Sliding_Enabled",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-011",
+      "label": "Pinching_Or_Popping_Enabled",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-012",
+      "label": "Playfulness_Tone",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-013",
+      "label": "Other_Desires_Notes",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-014",
+      "label": "Gives_Anal_Contact",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-015",
+      "label": "Anal_Methods_Given",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-016",
+      "label": "Perineum_Stim_Intensity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-017",
+      "label": "Internal_Target_Given",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-018",
+      "label": "Pace_Control_Given",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-019",
+      "label": "Duration_Tolerance_Given",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-020",
+      "label": "Pressure_Adjustment_Responsiveness",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-021",
+      "label": "Gag_Reflex_Management",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-022",
+      "label": "Saliva_Usage_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-023",
+      "label": "Verbalization_While_Giving",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-024",
+      "label": "Eye_Contact_Usage",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-GIV-025",
+      "label": "Finish_Preference_Given",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — GIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-001",
+      "label": "Willingness_To_Receive",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-002",
+      "label": "Preferred_Giver",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-003",
+      "label": "Body_Awareness_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-004",
+      "label": "Lip_Relaxation_State",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-005",
+      "label": "Throat_Openness_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-006",
+      "label": "Swallowing_Response_Frequency",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-007",
+      "label": "Breathing_Pattern_During",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-008",
+      "label": "Playfulness_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-009",
+      "label": "Anal_Opening_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-010",
+      "label": "Anal_Licking_Response",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-011",
+      "label": "Anal_Fingering_Response",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-012",
+      "label": "Anal_Toy_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-013",
+      "label": "Other_Desires_Notes",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-014",
+      "label": "Target_Anatomy",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-015",
+      "label": "Target_Sensitivity_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-016",
+      "label": "Target_Focus_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-017",
+      "label": "Target_Rhythm_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-018",
+      "label": "Target_Pain_Threshold",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-019",
+      "label": "Target_External_Touch_Integration",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-020",
+      "label": "Preferred_Pace_Control",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-021",
+      "label": "Duration_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-022",
+      "label": "Sensitivity_Change_Over_Time",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-023",
+      "label": "Saliva_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-024",
+      "label": "Verbal_Feedback_Response",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-025",
+      "label": "Eye_Contact_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "ORA-REC-026",
+      "label": "Finish_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "ORAL — RECEIVING PROFILE (OPTIONAL)"
+    },
+    {
+      "id": "PEN-BLK-001",
+      "label": "Length_cm_Erect",
+      "type": "number",
+      "blockSchemaName": null,
+      "section": "BLOCK:Penis_Block"
+    },
+    {
+      "id": "PEN-BLK-002",
+      "label": "Girth_cm_Erect",
+      "type": "number",
+      "blockSchemaName": null,
+      "section": "BLOCK:Penis_Block"
+    },
+    {
+      "id": "PEN-BLK-003",
+      "label": "Circumcision_Status",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Penis_Block"
+    },
+    {
+      "id": "PEN-BLK-004",
+      "label": "Aesthetic_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Penis_Block"
+    },
+    {
+      "id": "PFM-BLK-001",
+      "label": "Parent_Label",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Parent_Min_Block"
+    },
+    {
+      "id": "PFM-BLK-002",
+      "label": "Parent_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Parent_Min_Block"
+    },
+    {
+      "id": "PFM-BLK-003",
+      "label": "Parent_Character_ID",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Parent_Min_Block"
+    },
+    {
+      "id": "PFM-BLK-004",
+      "label": "Parent_Ethnic_Background",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Parent_Min_Block"
+    },
+    {
+      "id": "POS-BLK-001",
+      "label": "Pose_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "POS-BLK-002",
+      "label": "Purpose",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "POS-BLK-003",
+      "label": "Best_Angles",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "POS-BLK-004",
+      "label": "Hold_Tolerance",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "POS-BLK-005",
+      "label": "Difficulty",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "POS-BLK-006",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Pose_Block"
+    },
+    {
+      "id": "PPS-BLK-001",
+      "label": "Persona_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-002",
+      "label": "Activation_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-003",
+      "label": "Default_Expression_Set",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-004",
+      "label": "Movement_Style",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-005",
+      "label": "Voice_Style",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-006",
+      "label": "Wardrobe_Link",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-007",
+      "label": "Makeup_Hair_Link",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PPS-BLK-008",
+      "label": "Weaknesses",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Performance_Persona_Block"
+    },
+    {
+      "id": "PRP-BLK-001",
+      "label": "Region",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Proportion_Block"
+    },
+    {
+      "id": "PRP-BLK-002",
+      "label": "Read",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Proportion_Block"
+    },
+    {
+      "id": "PRP-BLK-003",
+      "label": "Degree",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Proportion_Block"
+    },
+    {
+      "id": "PRP-BLK-004",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Proportion_Block"
+    },
+    {
+      "id": "PRT-BLK-001",
+      "label": "Mode_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-002",
+      "label": "Mode_Function",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-003",
+      "label": "Mode_Objective",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-004",
+      "label": "Mode_Triggers",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-005",
+      "label": "Observable_Tells",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-006",
+      "label": "Side_Effects_Costs",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-007",
+      "label": "Calming_Inputs",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "PRT-BLK-008",
+      "label": "Activation_Conditions",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Mode_Block"
+    },
+    {
+      "id": "SCN-BLK-001",
+      "label": "Note",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SCN-BLK-002",
+      "label": "Source",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SCN-BLK-003",
+      "label": "Intensity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SCN-BLK-004",
+      "label": "Persistence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SCN-BLK-005",
+      "label": "Context",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SCN-BLK-006",
+      "label": "Association",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Scent_Note_Block"
+    },
+    {
+      "id": "SEX-BLK-001",
+      "label": "Role_Mode",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-002",
+      "label": "Power_Dynamics",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-003",
+      "label": "Pace_Tempo_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-004",
+      "label": "Touch_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-005",
+      "label": "Erogenous_Zones_Primary",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-006",
+      "label": "Erogenous_Zones_Secondary",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-007",
+      "label": "Arousal_Triggers_Sensory",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-008",
+      "label": "Arousal_Triggers_Contextual",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-009",
+      "label": "Arousal_Triggers_Verbal",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-010",
+      "label": "Fantasies_Core",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-011",
+      "label": "Kinks_Fetishes",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-012",
+      "label": "Favorite_Positions_Giving",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-013",
+      "label": "Favorite_Positions_Receiving",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-014",
+      "label": "Vocalization_Profile",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-015",
+      "label": "Dirty_Talk_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-016",
+      "label": "Dirty_Talk_Topics",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-017",
+      "label": "Orgasm_Cues",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-018",
+      "label": "Orgasm_Pattern",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-019",
+      "label": "Aftercare_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-020",
+      "label": "Sexual_Endurance_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-021",
+      "label": "Recovery_Time",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-022",
+      "label": "Repeat_Rounds_Typical",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-030",
+      "label": "Sexual_Expertise_Level",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-031",
+      "label": "Sexual_Expertise_Tags",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-032",
+      "label": "Squirt_Frequency",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SEX-BLK-033",
+      "label": "Squirt_Intensity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Profile_Block"
+    },
+    {
+      "id": "SIB-BLK-001",
+      "label": "Sibling_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SIB-BLK-002",
+      "label": "Sibling_Character_ID",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SIB-BLK-003",
+      "label": "Sibling_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SIB-BLK-004",
+      "label": "Relationship_Quality",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SIB-BLK-005",
+      "label": "Notability_Tag",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SIB-BLK-006",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sibling_Block"
+    },
+    {
+      "id": "SLK-BLK-001",
+      "label": "Target_Name",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-002",
+      "label": "Target_Character_ID",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-003",
+      "label": "Link_Type",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-004",
+      "label": "Intensity",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-005",
+      "label": "Contact_Frequency",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-006",
+      "label": "Conflict_Source",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-007",
+      "label": "Leverage",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-008",
+      "label": "Public_Visibility",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SLK-BLK-009",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Social_Link_Block"
+    },
+    {
+      "id": "SUP-BLK-001",
+      "label": "Support_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Support_Block"
+    },
+    {
+      "id": "SUP-BLK-002",
+      "label": "Frequency",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Support_Block"
+    },
+    {
+      "id": "SUP-BLK-003",
+      "label": "Effect",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Support_Block"
+    },
+    {
+      "id": "SXA-BLK-001",
+      "label": "Act_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-002",
+      "label": "Preference_Polarity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-002A",
+      "label": "Preference_Strength",
+      "type": "score_10",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-003",
+      "label": "Prerequisites",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-004",
+      "label": "Intensity_Preference",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-005",
+      "label": "Trigger_Phrases",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXA-BLK-006",
+      "label": "No_Go_Conditions",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Act_Block"
+    },
+    {
+      "id": "SXL-BLK-001",
+      "label": "Hard_Limits",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Limits_Block"
+    },
+    {
+      "id": "SXL-BLK-002",
+      "label": "Soft_Limits",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Limits_Block"
+    },
+    {
+      "id": "SXL-BLK-003",
+      "label": "Consent_Style",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Limits_Block"
+    },
+    {
+      "id": "SXL-BLK-004",
+      "label": "Safety_Preferences",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Sex_Limits_Block"
+    },
+    {
+      "id": "TSC-BLK-001",
+      "label": "Surface_Label",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "TSC-BLK-002",
+      "label": "Touch_Preset",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "TSC-BLK-003",
+      "label": "Intensity",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "TSC-BLK-004",
+      "label": "Mention_Priority",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "TSC-BLK-005",
+      "label": "Feel_To_Others_1L",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "TSC-BLK-006",
+      "label": "Feel_To_Self_1L",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Tactile_Surface_Block"
+    },
+    {
+      "id": "VAN-BLK-001",
+      "label": "Anchor_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Visual_Anchor_Block"
+    },
+    {
+      "id": "VAN-BLK-002",
+      "label": "Category",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Visual_Anchor_Block"
+    },
+    {
+      "id": "VAN-BLK-003",
+      "label": "Prominence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Visual_Anchor_Block"
+    },
+    {
+      "id": "VAN-BLK-004",
+      "label": "Stability",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Visual_Anchor_Block"
+    },
+    {
+      "id": "VAN-BLK-005",
+      "label": "Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Visual_Anchor_Block"
+    },
+    {
+      "id": "VUL-BLK-001",
+      "label": "Labia_Prominence",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Vulva_Block"
+    },
+    {
+      "id": "VUL-BLK-002",
+      "label": "Labia_Asymmetry",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Vulva_Block"
+    },
+    {
+      "id": "VUL-BLK-003",
+      "label": "Labia_Size",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Vulva_Block"
+    },
+    {
+      "id": "VUL-BLK-004",
+      "label": "Clitoral_Hood_Read",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Vulva_Block"
+    },
+    {
+      "id": "VUL-BLK-005",
+      "label": "Aesthetic_Notes",
+      "type": "descriptor",
+      "blockSchemaName": null,
+      "section": "BLOCK:Vulva_Block"
+    },
+    {
+      "id": "ZOD-BLK-001",
+      "label": "System",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Zodiac_Block"
+    },
+    {
+      "id": "ZOD-BLK-002",
+      "label": "Sign_Label",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Zodiac_Block"
+    },
+    {
+      "id": "ZOD-BLK-003",
+      "label": "Element_Modifier",
+      "type": "string",
+      "blockSchemaName": null,
+      "section": "BLOCK:Zodiac_Block"
+    },
+    {
+      "id": "ZOD-BLK-004",
+      "label": "Rising_Moon_Notes",
+      "type": "list",
+      "blockSchemaName": null,
+      "section": "BLOCK:Zodiac_Block"
+    },
+    {
+      "id": "ZOD-BLK-005",
+      "label": "Relevance",
+      "type": "enum",
+      "blockSchemaName": null,
+      "section": "BLOCK:Zodiac_Block"
+    }
+  ]
+}

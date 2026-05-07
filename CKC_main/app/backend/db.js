@@ -418,6 +418,7 @@ async function ensureSchemaUpgrades(db) {
   // ImageAsset: allow duplicates (no unique index), plus optional tags and reference-mode.
   await run(db, 'DROP INDEX IF EXISTS idx_image_dedupe');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_file_hash ON ImageAsset(file_hash)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_added_at ON ImageAsset(added_at)');
   await ensureColumn(db, 'ImageAsset', 'tags_json', "TEXT NOT NULL DEFAULT '[]'");
@@ -432,6 +433,7 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', "review_status", "TEXT NOT NULL DEFAULT 'accepted'");
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_review_status ON ImageAsset(character_id, review_status)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_review_status_character ON ImageAsset(review_status, character_id)');
 
   // WP-0107 / PoseKit: rig, prompt, story-beat, and workflow attachment
   // fields. Columns are nullable so historical ImageAsset rows stay valid.
@@ -512,6 +514,7 @@ async function ensureSchemaUpgrades(db) {
   await ensureColumn(db, 'ImageAsset', 'source_contact_sheet_ref', 'TEXT');
   await ensureColumn(db, 'ImageAsset', 'sheet_version_id', 'TEXT');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_source_selection ON ImageAsset(character_id, source_dataset_id, source_task_id, source_contact_sheet_ref)');
+  await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_source_task ON ImageAsset(source_dataset_id, source_task_id)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_source_url ON ImageAsset(character_id, source_url)');
   await run(db, 'CREATE INDEX IF NOT EXISTS idx_image_sheet_version ON ImageAsset(sheet_version_id)');
 
@@ -786,7 +789,23 @@ async function ensureSchemaUpgrades(db) {
       meta_value TEXT NOT NULL,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS CkcDbMigration (
+      migration_key TEXT PRIMARY KEY,
+      migration_value TEXT NOT NULL DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `
+  );
+  await run(
+    db,
+    `INSERT INTO CkcDbMigration(migration_key, migration_value, updated_at)
+     VALUES(?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(migration_key) DO UPDATE SET
+       migration_value = excluded.migration_value,
+       updated_at = CURRENT_TIMESTAMP`,
+    ['ckc_schema', 'v1']
   );
 
   // Global full-text search (SQLite FTS5). This must be best-effort: some sqlite builds may lack FTS5.
@@ -1036,6 +1055,7 @@ async function initPostgresSchema(db) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash);
+    CREATE INDEX IF NOT EXISTS idx_image_file_hash ON ImageAsset(file_hash);
     CREATE INDEX IF NOT EXISTS idx_image_character_id ON ImageAsset(character_id);
     CREATE INDEX IF NOT EXISTS idx_image_added_at ON ImageAsset(added_at);
     CREATE INDEX IF NOT EXISTS idx_image_tags_json ON ImageAsset(tags_json);
@@ -1339,6 +1359,7 @@ async function initSchema(db) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_image_hash ON ImageAsset(character_id, file_hash);
+    CREATE INDEX IF NOT EXISTS idx_image_file_hash ON ImageAsset(file_hash);
 
     CREATE TABLE IF NOT EXISTS TemplateSpinOff (
       spinoff_id TEXT PRIMARY KEY,

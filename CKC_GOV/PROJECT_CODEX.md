@@ -46,7 +46,7 @@ The downstream production goal is photorealistic explicit adult output, includin
 Read these first (order matters):
 1. Project Codex (this file): `<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md`
 2. Task board (status): `<CKC_ROOT>\\CKC_GOV\\taskboard\\TASK_BOARD.md`
-3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.069.md`
+3. Current spec (requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\CastKit_Codex_Spec_v00.070.md`
 4. Session dump (verbatim requirements): `<CKC_ROOT>\\CKC_GOV\\spec\\SESSION_DUMP_2026-02-10.md`
 5. UI style guidebook: `<CKC_ROOT>\\CKC_GOV\\references\\style_guide\\UI_STYLE_GUIDE.md`
 
@@ -113,7 +113,7 @@ Expected structure:
 Path: `<CKC_ROOT>\\CKC_GOV`
 
 - `spec/`
-- `CastKit_Codex_Spec_v00.069.md` — current spec (update with every addition)
+- `CastKit_Codex_Spec_v00.070.md` — current spec (update with every addition)
   - `SESSION_DUMP_2026-02-10.md` — latest-iteration requirements (truth)
   - `archive_spec/` — older spec versions (append-only archive)
 - `templates/`
@@ -336,16 +336,16 @@ CKC's database, on-disk artifacts, and ingestion contracts must evolve so that d
 
 This rule binds every WP that touches schema, ingestion, or data layout. The invariants:
 
-1. **Schema migrations are additive.** New columns are added with `NULL` default or a sensible literal default; never `NOT NULL` on an existing populated table without a backfill. New tables are added clean. Renames and drops require a deprecation window (one minor release marked deprecated in a `roadmap` block, then drop) plus a `ckcdbmigration` row that records the move.
-2. **`ensureSchemaUpgrades` is idempotent.** Re-running migrations on a current DB is a no-op. Running migrations on an N-version-old DB walks every intermediate step in order; no migration may assume the previous one ran in the same process.
-3. **Field IDs in character templates are immutable.** A retired field ID (e.g. `CHAR-DQR-006`) is never reused for a different concept. New fields use new IDs. The template version bumps when fields are added/removed/reordered; FieldValue rows from old template versions still load when a character is opened.
-4. **Image bytes are the durable layer.** Image files under `characters/<id>/images/{original,thumb}/` are content-hash-addressed and never renamed by future WPs. Folder structure changes (rare) ship with a "scan disk and rebuild ImageAsset rows" path; image files themselves are never moved or renamed by automated migrations without an undo manifest.
-5. **Ingestion handlers are pinned per spec_version.** A task initialized under `v00.19` is forever routed to the `v00_19.js` handler; CKC keeps that handler maintained even as `v00.20+` ships its own handler. Removing an old handler requires (a) a migration script that re-stamps every in-flight task to a newer version, AND (b) operator approval per the spec's own `migration_policy`.
-6. **Provenance columns are sacred.** `ImageAsset.source_dataset_id`, `source_task_id`, `source_run_id`, `source_contact_sheet_ref`, `sheet_version_id`, `file_hash` are the recovery surface. Any future WP that drops one of those columns must first prove (test + docs) that the recovery flow it enables still works without it.
-7. **Re-import is idempotent.** Running `ingestImageSourcingTask` on the same task folder twice produces the same DB state. Dedup keys (`content-hash`, `selection`, `url`) defined in WP-0100 are stable across CKC versions; future dedup additions are append-only.
-8. **Backups are version-traceable.** Every `createLibraryBackup` / Postgres dump records the spec_version, schema migration cursor, and CKC app version it was taken under. Restore on a newer DB walks the migration chain forward; restore on an older DB refuses with a clear error.
-9. **Bulk ingestion scales linearly.** Indexes on `(character_id, file_hash)`, `(sheet_version_id)`, `(source_dataset_id, source_task_id)`, and `(review_status, character_id)` are pinned. Ingesting another 15k-image batch must not require a full table rewrite; new indexes on existing columns ship as `CREATE INDEX CONCURRENTLY` migrations on Postgres.
-10. **Test coverage**: every WP that touches schema or ingestion ships with at least one regression test exercising **a frozen-old fixture** (a small SQL/JSONL snapshot from a prior schema) to prove the new code reads it correctly. The fixtures live under `CKC_main/test/fixtures/legacy/` and are append-only.
+1. **Schema migrations are additive.** New columns are added with `NULL` default or a sensible literal default; never `NOT NULL` on an existing populated table without a backfill. New tables are added clean. Renames and drops require a deprecation window (one minor release marked deprecated in a `roadmap` block, then drop) plus a `ckcdbmigration` row that records the move. Enforced by `CKC_main/test/migration_invariants.test.js`.
+2. **`ensureSchemaUpgrades` is idempotent.** Re-running migrations on a current DB is a no-op. Running migrations on an N-version-old DB walks every intermediate step in order; no migration may assume the previous one ran in the same process. Enforced by `CKC_main/test/legacy_fixture_compatibility.test.js`.
+3. **Field IDs in character templates are immutable.** A retired field ID (e.g. `CHAR-DQR-006`) is never reused for a different concept. New fields use new IDs. The template version bumps when fields are added/removed/reordered; FieldValue rows from old template versions still load when a character is opened. Enforced by `CKC_main/test/template_field_id_immutability.test.js`.
+4. **Image bytes are the durable layer.** Image files under `characters/<id>/images/{original,thumb}/` are content-hash-addressed and never renamed by future WPs. Folder structure changes (rare) ship with a "scan disk and rebuild ImageAsset rows" path; image files themselves are never moved or renamed by automated migrations without an undo manifest. Enforced by `CKC_main/test/legacy_fixture_compatibility.test.js` and reset-mode tests.
+5. **Ingestion handlers are pinned per spec_version.** A task initialized under `v00.19` is forever routed to the `v00_19.js` handler; CKC keeps that handler maintained even as `v00.20+` ships its own handler. Removing an old handler requires (a) a migration script that re-stamps every in-flight task to a newer version, AND (b) operator approval per the spec's own `migration_policy`. Enforced by `CKC_main/test/ingestion_handler_routing.test.js`.
+6. **Provenance columns are sacred.** `ImageAsset.source_dataset_id`, `source_task_id`, `source_run_id`, `source_contact_sheet_ref`, `sheet_version_id`, `file_hash` are the recovery surface. Any future WP that drops one of those columns must first prove (test + docs) that the recovery flow it enables still works without it. Enforced by `CKC_main/test/migration_invariants.test.js` and `CKC_main/test/ingestion_idempotency.test.js`.
+7. **Re-import is idempotent.** Running `ingestImageSourcingTask` on the same task folder twice produces the same DB state. Dedup keys (`content-hash`, `selection`, `url`) defined in WP-0100 are stable across CKC versions; future dedup additions are append-only. Enforced by `CKC_main/test/ingestion_idempotency.test.js`.
+8. **Backups are version-traceable.** Every `createLibraryBackup` / Postgres dump records the spec_version, schema migration cursor, and CKC app version it was taken under. Restore on a newer DB walks the migration chain forward; restore on an older DB refuses with a clear error. Enforced by `CKC_main/test/backup_version_traceability.test.js`.
+9. **Bulk ingestion scales linearly.** Indexes on `(character_id, file_hash)`, `(sheet_version_id)`, `(source_dataset_id, source_task_id)`, and `(review_status, character_id)` are pinned. Ingesting another 15k-image batch must not require a full table rewrite; new indexes on existing columns ship as `CREATE INDEX CONCURRENTLY` migrations on Postgres. Enforced by `CKC_main/test/db_index_invariants.test.js`.
+10. **Test coverage**: every WP that touches schema or ingestion ships with at least one regression test exercising **a frozen-old fixture** (a small SQL/JSONL snapshot from a prior schema) to prove the new code reads it correctly. The fixtures live under `CKC_main/test/fixtures/legacy/` and are append-only. Enforced by `CKC_main/test/legacy_fixture_compatibility.test.js`.
 
 When in doubt, the rule is **"a 75k-image collection imported under today's contract must still open, search, export, and re-attach after every future WP."** If a proposed change cannot satisfy that, it is reshaped or shelved.
 

@@ -16,13 +16,13 @@ const {
   classifyAutomationCommand,
 } = require('./automationCommandMap');
 
-const MANUAL_VERSION = '2026-05-07.wp-0105-reset-modes';
+const MANUAL_VERSION = '2026-05-07.wp-0106-compat-invariants';
 
 const featureGroups = [
   {
     id: 'storage-and-governance',
     title: 'Storage, governance, and operating model',
-    wp: ['WP-0001', 'WP-0008', 'WP-0009', 'WP-0020', 'WP-0021', 'WP-0091', 'WP-0092'],
+    wp: ['WP-0001', 'WP-0008', 'WP-0009', 'WP-0020', 'WP-0021', 'WP-0091', 'WP-0092', 'WP-0106'],
     summary:
       'CKC is governed from CKC_GOV and product code lives in CKC_main. PostgreSQL is the current/default database provider; libraryRoot still holds images, exports, templates, and per-character files.',
     commands: [
@@ -41,6 +41,7 @@ const featureGroups = [
       'Do not introduce spaces in generated file or folder names.',
       'Use PostgreSQL dumps for database backup; filesystem mirror alone is not a database backup.',
       'Reset modes are explicit: Update/Reinstall preserve data, Light reset wipes preferences, Full reset writes an orphan manifest and keeps image bytes under images/original and images/thumb.',
+      'Schema and ingestion compatibility is executable: legacy fixtures, additive migration linting, handler routing pins, template field-ID immutability, idempotent task re-import, backup version traceability, spec/adapter consistency, and ImageAsset index pins are covered by WP-0106 tests.',
     ],
   },
   {

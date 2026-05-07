@@ -8786,6 +8786,17 @@ class CKCLibrary {
     return row ? { imageId: row.image_id } : null;
   }
 
+  async _findImageByContentHash(characterId, fileHash) {
+    if (!this.db) dbNotReady('_findImageByContentHash');
+    if (!characterId || !fileHash) return null;
+    const row = await get(
+      this.db,
+      `SELECT image_id FROM ImageAsset WHERE character_id = ? AND file_hash = ? LIMIT 1`,
+      [String(characterId), String(fileHash)]
+    );
+    return row ? { imageId: row.image_id } : null;
+  }
+
   // Internal: import a single image file with provenance + review_status
   // + tags. Returns { skipped: true, existingImageId } when content-hash
   // already exists for this character (dup-content-hash).

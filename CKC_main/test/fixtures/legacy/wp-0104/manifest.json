@@ -1,0 +1,36 @@
+{
+  "fixture_id": "wp-0104",
+  "schema_state": "wp-0104",
+  "schema_migration_cursor": {
+    "migration_key": "image_sourcing",
+    "migration_value": "v00.19"
+  },
+  "character_count": 1,
+  "image_count": 1,
+  "tag_count": 1,
+  "characters": [
+    {
+      "character_id": "char_legacy_wp_0104",
+      "display_name": "Legacy WP-0104",
+      "sample_sheet_field": {
+        "field_id": "CHAR-ID-006",
+        "value": "Reference archivist"
+      },
+      "sample_block_list_value": {
+        "field_id": "CHAR-WRK-007",
+        "value": "[{\"HUS-BLK-001\":\"Archive curation\",\"HUS-BLK-002\":\"creative\",\"HUS-BLK-003\":\"5/10\",\"HUS-BLK-004\":\"hidden\",\"HUS-BLK-005\":\"[\\\"archive\\\"]\",\"HUS-BLK-006\":\"long term context\"}]"
+      },
+      "tags": [
+        "legacy-wp-0104"
+      ],
+      "images": [
+        {
+          "image_id": "img_legacy_wp_0104",
+          "relative_path": "images/original/legacy.png",
+          "file_hash": "4b5c5c92cec3b23e6a294fc0eea43234ef5126c5a64f4c6c531ac8430ab0b844"
+        }
+      ],
+      "known_issues": []
+    }
+  ]
+}
