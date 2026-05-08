@@ -57,12 +57,17 @@ Get-Content -Encoding utf8 "<CKC_ROOT>\\CKC_GOV\\PROJECT_CODEX.md"
 
 Daily workflow (MUST):
 1. Pick/create a Work Packet in `CKC_GOV/work_packets/` and add/update its row in `CKC_GOV/taskboard/TASK_BOARD.md`.
-2. **Commit + push immediately** so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
-3. Implement the WP (keep scope tight).
-4. Verify locally (`npm test`, `npx tsc --noEmit`, and build/package as relevant).
-5. Update Task Board + Spec (spec version bump + archive). Governance stays in `CKC_GOV/` only — do not mirror into `CKC_main/docs/`.
-6. Commit + push (`origin/main`) again. Commit messages include the WP id (`WP-xxxx: ...`).
-7. Run the NAS mirror backup script.
+2. Read the deferred implementation contract at `<CKC_ROOT>\\CKC_GOV\\build_rules.md` and check it off inside the WP. This file is read when creating/implementing a WP, not during session startup.
+3. **Commit + push immediately** so the intended work (WP + Task Board) is safely stored on GitHub before any coding starts.
+4. Implement the WP (keep scope tight).
+5. Verify locally (`npm test`, `npx tsc --noEmit`, and build/package as relevant).
+6. Update Task Board + Spec (spec version bump + archive). Governance stays in `CKC_GOV/` only — do not mirror into `CKC_main/docs/`.
+7. Commit + push (`origin/main`) again. Commit messages include the WP id (`WP-xxxx: ...`).
+8. Run the NAS mirror backup script.
+
+### Deferred implementation contract
+
+`CKC_GOV/build_rules.md` is binding for WP drafting, implementation, verification, build, package, and ship work. It is intentionally NOT part of the startup read list to avoid session bloat. Agents read it only once a Work Packet is being created, reviewed, implemented, or verified.
 
 ## Golden rules
 - Keep CKC work under `<CKC_ROOT>` unless the operator explicitly asks for an external path.
@@ -122,6 +127,7 @@ Path: `<CKC_ROOT>\\CKC_GOV`
   - `TASK_BOARD.md` — the single source of truth for work status
 - `work_packets/`
   - `WP-*.md` — scoped work packets (what/why/how/acceptance)
+- `build_rules.md` — deferred implementation/build contract; read when drafting or implementing a WP, not at session startup
 - `scripts/`
   - `backup_to_mir.ps1` — mirror active CKC `libraryRoot` (fallback: `<CKC_ROOT>`) to NAS (ROBOCOPY `/MIR`)
   - `register_backup_task.ps1` — scheduled task helper (runs backup every 30 min while logged in)
