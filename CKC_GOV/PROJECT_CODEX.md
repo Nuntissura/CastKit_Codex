@@ -208,73 +208,12 @@ Set these env vars before running npm/electron builds:
   powershell -NoProfile -ExecutionPolicy Bypass -File "<CKC_ROOT>\\CKC_GOV\\scripts\\postgres_restore.ps1" -DumpPath "<dump-file>" -ConnectionString $env:CKC_POSTGRES_URL
   ```
 - SQLite is legacy/fallback only. Do not create migration work unless the operator explicitly says a live SQLite library must be preserved.
-- **PostgreSQL-first testing rule.** PostgreSQL is the first target for tests. Any test that touches `CKCLibrary`, migrations, persistence, automation sessions, IPC-backed backend commands, reset/backup behavior, workflow replay, ingestion, or multi-agent/concurrent operation MUST run against PostgreSQL first. SQLite-only passing tests are not sufficient evidence for CKC behavior because CKC is operated by multiple LLM/operator agents and depends on PostgreSQL concurrency, transactions, locking, and dialect behavior.
-- SQLite tests are allowed only when they are explicitly scoped as:
-  - legacy fixture compatibility,
-  - old-library import/migration reads,
-  - pure fallback-boundary coverage,
-  - or temporary transitional tests named as such in the WP.
-- New WPs must not add fresh SQLite-only backend coverage for product behavior. If PostgreSQL is unavailable, report the environment blocker rather than silently certifying product behavior through SQLite.
 
-### Background LLM automation
-- CKC exposes an internal manual and control plane through Electron IPC/preload, not a public network API.
-- LLM agents should use:
-  - `window.ckc.automationGetManual({ format: "json" })`
-  - `window.ckc.automationCreateSession(...)`
-  - `window.ckc.automationHeartbeat(...)`
-  - `window.ckc.automationAcquireLease(...)`
-  - `window.ckc.automationRunCommand(...)`
-  - `window.ckc.automationCaptureToFile(...)`
-- Start hidden/unfocusable automation mode with:
-  ```powershell
-  $env:CKC_AUTOMATION_BACKGROUND="1"
-  ```
-- Capture files are written under:
-  - `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\automation_captures\\` in repo/dev mode
-  - `<libraryRoot>\\automation_captures\\` as packaged/fallback mode
-- Automation must not use OS-level keyboard injection, cursor movement, focus stealing, or foregrounding as its normal path.
-
-### Visual debugging requirement
-- Visual debugging is available and required when working on the CKC app UI or diagnosing GUI failures.
-- Use the Browser Use in-app browser plugin for local browser targets such as `localhost`/`127.0.0.1` whenever that tool is available.
-- For Electron-only behavior, use CKC automation captures, Electron/Chrome DevTools Protocol inspection, or screenshots as the fallback visual evidence path.
-- Do not rely only on process status, successful builds, or logs for UI-facing work. Verify the rendered app visually and check renderer console/runtime errors before calling app/UI work done.
-
-### Agent must drive the app when testing (binding)
-The agent (LLM/operator helper running in the repo) is required to interact with the running CKC app rather than reason about behavior from code alone whenever testing, verifying, or demonstrating a feature, fix, or workflow.
-
-- Launch dev mode with the Chrome DevTools Protocol exposed so the agent can drive the renderer end-to-end. Recommended invocation:
-  ```powershell
-  cd "<CKC_ROOT>\\CKC_main"
-  $env:CKC_POSTGRES_URL="postgres://castkit_codex:castkit_codex@127.0.0.1:55432/castkit_codex"
-  $env:CKC_DB_PROVIDER="postgres"
-  npx vite --port 5173
-  # in a second shell, once Vite is ready:
-  npx electron . --remote-debugging-port=9222
-  ```
-- The agent connects to the CDP port (default 9222), evaluates JS in the renderer (`window.ckc.automation*`), captures screenshots via `window.ckc.automationCaptureToFile`, and reads console logs via the CDP `Runtime.consoleAPICalled` event.
-- For programmatic verification the agent uses the wired automation surface defined in `CKC_main/app/backend/automationCommandMap.js` (e.g. `automationRunCommand`, `getRendererUIState`, `ingestImageSourcingTask` dry-runs, `addCharacterScript`, etc.) — never assume code works without exercising it.
-- For UI verification the agent uses `automationCaptureToFile` (writes PNG + JSON sidecar under `CKC_GOV/targets/CKC/automation_captures/`) and inspects the resulting image. Process status, build success, and unit-test passes are not substitutes for a capture.
-- When background-mode invariants are being checked, launch with `CKC_AUTOMATION_BACKGROUND=1`. The captures still work because the renderer paints offscreen.
-- Tests that exercise the app (smoke flows, regression checks) should be scripted through the automation surface so they replay deterministically and produce captures the operator can inspect.
-- **This rule binds every feature, test, demo, smoke, regression check, and bug fix that touches CKC** — not just new WPs. Every existing surface (sheet editor, library list, character creation, image import, tagging, exports, moodboards, intake sorter, docs mode, reference window, command palette, etc.) is expected to be driven through the automation surface when verifying behavior; if a surface lacks an automation hook for what the agent needs to verify, the agent files it as a gap (roadmap entry in the manual) rather than skipping verification.
-- It is not an option to skip live verification because tests pass or because the PC is busy. The agent surfaces the constraint and waits if the environment cannot run the live check, but it does NOT silently certify a feature without running it.
-
-### CKC test suite is a binding governance document (must stay current)
-The test suite at `CKC_GOV/test_suites/CKC_TEST_SUITE.md` is the canonical, repeatable list of checks for the running CKC application. It is part of the product's governance, not a one-off WP.
-
-- **Every addition, expansion, or large refactor of CKC must update the test suite in the same change** — add new check rows for new features, mark existing rows deprecated when behavior changes, update the agent-driven script section so the suite stays runnable end-to-end.
-- New automation commands → new check rows under their section (Boot/Manual/Automation/Stealth/Image-sourcing/Sheet/Library/Image-meta).
-- New UI surfaces → new check rows describing both the visual state and the CDP-driven verification.
-- Bugs surfaced during inspection → either fix and remove the row, or tag the row "OPEN BUG" with the date so the next pass picks it up.
-- Findings from each inspection pass go into the `Findings (latest pass)` block at the bottom, dated.
-- The agent runs the suite by attaching CDP, executing the scripts described inline, and updating the findings block. The suite is meant to be reproducible on a clean clone with the dev environment described in `### How to run the suite`.
-
-This rule binds in addition to the code-truth, in-app-manual, and live-verification rules above.
+PostgreSQL-first testing, app-driving automation, visual verification, internal-manual maintenance, and test-suite maintenance rules are deferred implementation rules. They live in `<CKC_ROOT>\\CKC_GOV\\build_rules.md` and must be read when drafting, implementing, verifying, building, packaging, or shipping a WP.
 
 ### Research-first methodology (binding)
 
-**Before implementing any non-trivial WP, the planner runs a field-research pass and records what it found in the WP body.** The cost is real (an extra hour or three of cycles per WP); the value is staying current with the field — surfacing prior art, libraries, papers, or workflows that could change or simplify the approach. Applies to every WP that touches a new technique, a new library, an external integration, or a domain CKC hasn't worked in before. Trivial changes (typo fixes, doc-only edits, mechanical refactors with no design choice, schema column additions that follow established patterns) are exempt.
+**Every WP must account for field research before implementation.** Non-trivial WPs run a field-research pass and record what was found in the WP body. Trivial changes (typo fixes, doc-only edits, mechanical refactors with no design choice, schema column additions that follow established patterns) may mark research as not applicable with a short rationale. The cost is real (an extra hour or three of cycles per WP); the value is staying current with the field — surfacing prior art, libraries, papers, or workflows that could change or simplify the approach.
 
 **Sources to canvas** (depth scales with WP risk; cover at least 4 of these for a feature WP, at least 6 for a research / architecture WP):
 
@@ -303,7 +242,7 @@ This rule binds in addition to the code-truth, in-app-manual, and live-verificat
   - The canonical docs for every library the WP introduces or extends (Vite, Electron, Three.js, mediapipe, ComfyUI, ControlNet, Postgres, etc.).
   - W3C / IETF / industry standards if the WP touches a protocol or interchange format.
 
-**Output artifact** — every applicable WP gains a `## Field research / prior art` section, before `## Scope`. It records:
+**Output artifact** — every WP gains a `## Field research / prior art` section, before `## Scope`. Non-trivial WPs record research; trivial WPs mark research as not applicable with rationale. The section records:
 
 1. **What was searched** — sources canvassed, search terms used, date of the pass.
 2. **What was found** — the 3-7 most relevant hits (paper / repo / blog / discussion). One-line cite each: `<title> (<source>, <date>) — <URL>`.
@@ -362,58 +301,7 @@ This rule binds every WP that touches schema, ingestion, or data layout. The inv
 
 When in doubt, the rule is **"a 75k-image collection imported under today's contract must still open, search, export, and re-attach after every future WP."** If a proposed change cannot satisfy that, it is reshaped or shelved.
 
-### Updating the in-app manual is a hard requirement (binding)
-The in-app LLM/operator manual at `CKC_main/app/backend/automationManual.js` is part of the product, not a side artifact. Every CKC change that touches an automation command, an IPC channel, a feature group described in the manual, a roadmap item, the safety contract, the quick-start sequence, or the operating contract MUST update the manual in the same commit.
-
-- Adding a wired automation command without the matching `commandReference` entry + feature-group `commands` list update is a contract violation; the self-consistency test fails CI when it happens, but the rule applies even when the test would pass (e.g. moving a roadmap entry without updating the prose).
-- Removing or renaming a command requires removing/renaming it in the manual in the same commit.
-- Adding a new feature in CKC that is not yet automation-callable still requires a feature-group entry with the surface in `roadmap` so the LLM/operator knows it exists and how to drive it later.
-- Bumping `MANUAL_VERSION` is required when any of the above happens.
-- The in-app Help drawer (`HelpModal`) renders the same manual operators see; if you would not want the operator to read what you wrote, rewrite it.
-
-This rule is in addition to the code-truth + self-consistency test rule above; together they make the manual the canonical, code-truth, always-current reference.
-
-### Versioning + release policy (MUST)
-- Every **distributable build** must be tied to a git tag (`vX.Y.Z`) on `main` (SemVer), so every build is traceable to code.
-- Publish official builds as **GitHub Release assets** (immutable, off-machine backup).
-- Local artifacts still land under `CKC_GOV/targets/CKC/artifacts/` for convenience, with per-build checksums/manifest (`manifest.json` + `SHA256SUMS.txt`) and `LATEST_BUILD.txt` updated.
-
-Commands:
-- `npm run package:win` — **default**: bumps patch version, commits, tags `vX.Y.Z`, packages, and pushes commit+tag.
-- `npm run package:win:raw` — packaging only (no version bump/tag/push). Use for quick local debugging.
-
-### Packaging (Windows)
-Build a portable `.exe` and NSIS installer `.exe` using:
-```powershell
-cd "<CKC_ROOT>\\CKC_main"
-npm run package:win
-```
-
-This writes versioned outputs under:
-- Release (tagged): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\releases\\vX.Y.Z\\`
-- Dev/debug (`package:win:raw`): `<CKC_ROOT>\\CKC_GOV\\targets\\CKC\\artifacts\\dev\\<buildId>\\`
-
-### Publishing a GitHub Release (recommended)
-Do **not** commit `.exe` artifacts into `CKC_main` git history. Instead, publish them as a GitHub Release.
-
-There is a workflow in the repo that builds Windows artifacts on tag push:
-- `.github/workflows/release-win.yml` (triggers on tags like `v1.2.3`)
-
-Recommended flow:
-```powershell
-cd "<CKC_ROOT>\\CKC_main"
-npm run package:win
-```
-This bumps patch version, commits, tags `vX.Y.Z`, packages locally, and pushes commit+tag.
-The pushed tag triggers GitHub Actions to attach the installer + portable `.exe` to the GitHub Release.
-
-Manual alternative (only if you really want to manage tags yourself):
-```powershell
-cd "<CKC_ROOT>\\CKC_main"
-git tag vX.Y.Z
-git push origin vX.Y.Z
-npm run package:win:raw
-```
+Internal-manual maintenance, packaging, release, and GitHub Release procedures are implementation/build rules. See `<CKC_ROOT>\\CKC_GOV\\build_rules.md`.
 
 ## Working process
 ### Taskboard

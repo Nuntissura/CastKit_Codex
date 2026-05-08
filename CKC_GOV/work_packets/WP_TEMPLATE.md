@@ -13,6 +13,15 @@ One paragraph describing what ships.
 ## Why
 What problem this solves; link to spec/session dump sections.
 
+## Field research / prior art
+- Research applicability: REQUIRED | NOT APPLICABLE
+- Sources checked:
+  -
+- Findings:
+  -
+- Impact on WP design:
+  -
+
 ## Scope
 ### In
 - 
